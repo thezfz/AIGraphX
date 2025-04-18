@@ -1,0 +1,74 @@
+# environment.yml (v2.1 - Adding collect_data dependencies)
+# Conda environment definition for AIGraphX v1.0
+# Prioritizes Conda for core ML/Data/Binary dependencies.
+
+name: AIGraphX # 环境名称
+
+channels:
+  - pytorch   # For PyTorch, Faiss-GPU, CUDA
+  - nvidia    # For CUDA components if needed by PyTorch
+  - conda-forge # Wider range of packages, potentially newer versions
+  - defaults
+
+dependencies:
+  # --- Python Version ---
+  - python=3.11
+
+  # --- Core ML/AI Stack (Managed by Conda for stability) ---
+  - numpy<2.0                  # CRITICAL: For Faiss compatibility
+  - pytorch::pytorch>=2.2.0    # From pytorch channel, ensures compatibility
+  - pytorch::torchvision>=0.17.0
+  - pytorch::torchaudio>=2.2.0
+  - pytorch::pytorch-cuda=12.1 # CRITICAL: Installs CUDA 12.1 runtime via Conda
+  - pytorch::faiss-gpu=1.10.0    # CRITICAL: Install Faiss GPU 1.10.0 directly from pytorch channel
+
+  # --- Data Layer (Partially Conda, Psycopg via Pip) ---
+  - conda-forge::neo4j-python-driver>=5.21.0 # Neo4j driver from conda-forge
+
+  # --- Hugging Face Ecosystem (Try Conda first, fallback to Pip if needed) ---
+  # conda-forge usually has up-to-date versions
+  - conda-forge::huggingface_hub>=0.25.0 # CRITICAL: Get AsyncHfApi
+  - conda-forge::transformers>=4.40.0 # Let Conda resolve compatible version
+  - conda-forge::sentence-transformers>=3.0.0 # Recommended latest stable 3.x
+  - conda-forge::tokenizers # Usually a dependency of transformers
+
+  # --- Web Framework (Managed by Conda/conda-forge) ---
+  - conda-forge::fastapi>=0.111.0
+  - conda-forge::uvicorn[standard]>=0.29.0 # standard extras might pull some deps via pip implicitly
+  - conda-forge::pydantic>=2.7.1
+  - conda-forge::python-dotenv>=1.0.0
+
+  # --- Utilities & API Clients (conda-forge preferred) ---
+  - conda-forge::tenacity>=8.2.0      # Added for retry logic
+  - conda-forge::aiolimiter>=1.1.0    # Added for async rate limiting
+  - conda-forge::arxiv>=2.1.0         # Added for ArXiv API client
+  - conda-forge::regex                # Added explicitly, although 're' is standard, 'regex' might be faster/more features if needed elsewhere
+  - conda-forge::loguru>=0.7.0        # ADDED: Loguru logger
+
+  # --- Pip Installation (For packages Conda doesn't provide well or specific versions) ---
+  - pip # Include pip itself
+
+  - pip:
+    # CRITICAL: Install psycopg v3 with binary extras via Pip as Conda channels lack it
+    - "psycopg[binary]>=3.1,<3.2"
+    # Add psycopg-pool, keeping version consistent
+    - "psycopg-pool>=3.1,<3.2"
+    # ADDED: Asyncpg dependency (seems it was used in postgres_repo.py)
+    - "asyncpg>=0.29.0"
+    # ADDED: Alembic for PostgreSQL schema migrations
+    - "alembic>=1.13.1"
+    # ADDED: pydantic-settings for config management
+    - "pydantic-settings>=2.3.0"
+
+    # --- Development Dependencies ---
+    - pytest>=8.2.1
+    - pytest-asyncio>=0.23.7
+    # ADDED: pytest-mock for mocker fixture
+    - "pytest-mock>=3.14.0"
+    - httpx>=0.27.0 # Keep httpx here as it's also a dev dependency for testing
+    # ADDED: asgi-lifespan for managing FastAPI lifespan in async tests
+    - "asgi-lifespan>=2.1.0"
+    - pytest-cov>=5.0.0
+    - ruff[format]>=0.4.5 # Linter + Formatter
+    - mypy>=1.10.0
+    #- black>=24.4.2
