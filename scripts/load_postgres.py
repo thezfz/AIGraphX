@@ -36,17 +36,6 @@ CHECKPOINT_FILE = "data/pg_load_checkpoint.txt"
 CHECKPOINT_INTERVAL = 100  # How often to save checkpoint (in lines)
 BATCH_SIZE = 50  # How many records to process in one DB transaction
 
-# Define tables to be truncated on reset
-TRUNCATE_TABLES = [
-    "model_paper_links",
-    # "pwc_methods", # Assuming methods table exists if needed
-    "pwc_repositories",
-    "pwc_datasets",
-    "pwc_tasks",
-    "hf_models",
-    "papers",
-]
-
 # --- Logging Setup ---
 logging.basicConfig(
     level=logging.INFO,
@@ -448,132 +437,133 @@ async def process_batch(
     return processed_in_batch
 
 
-async def main(input_file_path: str, reset_checkpoint: bool) -> None:
-    """Main function to orchestrate the data loading process."""
-    processed_count = _load_checkpoint(reset_checkpoint)
-    start_line = processed_count
-    total_lines_processed = processed_count
-    batch: List[Tuple[int, Dict[str, Any]]] = []
-    lines_since_last_checkpoint = 0
+async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> None:
+    """Main function to load data from JSONL into PostgreSQL."""
+    logger.info(f"Starting data load from: {input_file_path}")
+    logger.info(f"Reset Checkpoint: {reset_checkpoint}")
+    logger.info(f"Reset Database (ignored by script, handled by tests): {reset_db}")
+
+    pool = None
+    processed_count = 0
+    batch_count = 0
+    error_count = 0
+    current_batch: List[Tuple[int, Dict[str, Any]]] = []
+    start_line = _load_checkpoint(reset_checkpoint) # Resetting only affects checkpoint file now
+
+    # reset_db flag is now only informational for logging
+    # Database truncation/cleanup is expected to be handled externally (e.g., by test fixtures)
 
     try:
-        if DATABASE_URL is None:
-            logger.error("DATABASE_URL is not set. Check your environment variables.")
-            sys.exit(1)
+        # Initialize Connection Pool
+        logger.info(f"Initializing database pool for {DATABASE_URL}...")
+        if not DATABASE_URL:
+            logger.critical("DATABASE_URL not configured. Exiting.")
+            return
 
-        logger.info(f"Attempting to connect to database: {DATABASE_URL.split('@')[-1]}")
-        async with AsyncConnectionPool(
-            conninfo=DATABASE_URL, min_size=PG_POOL_MIN_SIZE, max_size=PG_POOL_MAX_SIZE
-        ) as pool:
-            logger.info("DB pool created via async context manager.")
+        pool = AsyncConnectionPool(
+            conninfo=DATABASE_URL,
+            min_size=PG_POOL_MIN_SIZE,
+            max_size=PG_POOL_MAX_SIZE,
+            open=True,  # Open pool on creation
+            # Increase timeout if needed for long transactions or slow DB
+            # timeout=60.0,
+        )
+        logger.info("Database pool initialized.")
 
-            if reset_checkpoint:
-                logger.warning("Reset flag. TRUNCATING tables...")
-                async with pool.connection() as conn, conn.transaction():
-                    for table in TRUNCATE_TABLES:
-                        try:
-                            await conn.execute(
-                                f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"
+        # Process Input File
+        with open(input_file_path, "r") as infile:
+            for i, line in enumerate(infile):
+                line_num = i + 1
+                if line_num <= start_line:
+                    continue  # Skip already processed lines
+
+                try:
+                    data = json.loads(line)
+                    if not isinstance(data, dict) or not data.get("hf_model_id"):
+                        logger.warning(
+                            f"Skipping line {line_num}: Invalid format or missing 'hf_model_id'. Content: {line.strip()}"
+                        )
+                        error_count += 1
+                        continue
+
+                    current_batch.append((line_num, data))
+
+                    if len(current_batch) >= BATCH_SIZE:
+                        batch_start_line = current_batch[0][0]
+                        logger.info(
+                            f"Processing batch starting at line {batch_start_line} (size: {len(current_batch)})..."
+                        )
+                        async with pool.connection() as conn: # Get connection for batch
+                            lines_processed_in_batch = await process_batch(
+                                conn, current_batch
                             )
-                            logger.info(f"Truncated table: {table}")
-                        except Exception as e:
-                            logger.error(f"Error truncating table {table}: {e}")
-                            raise
-                logger.info("Tables truncated.")
+                        processed_count += lines_processed_in_batch
+                        batch_count += 1
+                        current_batch = []
+                        if batch_count % (CHECKPOINT_INTERVAL // BATCH_SIZE) == 0:
+                            _save_checkpoint(line_num)
 
-            logger.info(
-                f"Starting processing from line {start_line + 1} of {input_file_path}"
-            )
-            records_in_current_batch = 0
-            try:
-                with open(input_file_path, "r", encoding="utf-8") as infile:
-                    for line_num, line in enumerate(infile, 1):
-                        if line_num <= start_line:
-                            continue
+                except json.JSONDecodeError:
+                    logger.error(
+                        f"Skipping line {line_num}: Invalid JSON. Content: {line.strip()}"
+                    )
+                    error_count += 1
+                except Exception as e:
+                    logger.error(
+                        f"Error processing line {line_num}: {e}. Content: {line.strip()}",
+                        exc_info=True,
+                    )
+                    error_count += 1
+                    # Optionally break or implement retry logic here
 
-                        line = line.strip()
-                        if not line:
-                            continue
-
-                        try:
-                            model_record = json.loads(line)
-                            batch.append((line_num, model_record))
-                            records_in_current_batch += 1
-
-                            if records_in_current_batch >= BATCH_SIZE:
-                                async with pool.connection() as conn:
-                                    processed_in_batch = await process_batch(
-                                        conn, batch
-                                    )
-                                    total_lines_processed += processed_in_batch
-                                    lines_since_last_checkpoint += len(batch)
-                                    logger.info(
-                                        f"Processed batch ending line {line_num}. Total processed: {total_lines_processed}"
-                                    )
-                                batch = []
-                                records_in_current_batch = 0
-
-                                if lines_since_last_checkpoint >= CHECKPOINT_INTERVAL:
-                                    _save_checkpoint(total_lines_processed)
-                                    lines_since_last_checkpoint = 0
-
-                        except json.JSONDecodeError:
-                            logger.error(
-                                f"Failed JSON parse line {line_num}: {line[:100]}... Skipping."
-                            )
-                        # Catch specific DB errors during batch processing? or rely on process_batch?
-
-                    if batch:  # Process final batch
-                        async with pool.connection() as conn:
-                            processed_in_batch = await process_batch(conn, batch)
-                            total_lines_processed += processed_in_batch
-                            logger.info(
-                                f"Processed final batch of {len(batch)}. Total processed: {total_lines_processed}"
-                            )
-
+            # Process the last partial batch
+            if current_batch:
+                batch_start_line = current_batch[0][0]
                 logger.info(
-                    f"Finished file. Total lines processed across runs: {total_lines_processed}"
+                    f"Processing final batch starting at line {batch_start_line} (size: {len(current_batch)})..."
                 )
-                _save_checkpoint(total_lines_processed)
+                async with pool.connection() as conn:
+                    lines_processed_in_batch = await process_batch(conn, current_batch)
+                processed_count += lines_processed_in_batch
 
-            except FileNotFoundError:
-                logger.error(f"Input file not found: {input_file_path}")
-                sys.exit(1)
-            # Let other file IO errors propagate up to the outer try/except
+            # Final checkpoint save
+            # Corrected condition: Save checkpoint if we processed any new lines
+            final_line_num = i + 1 # Use the actual last line number read
+            if final_line_num > start_line:
+                _save_checkpoint(final_line_num)
 
-    except psycopg.Error as db_err:
-        logger.exception(f"Database connection or operational error: {db_err}")
-        sys.exit(1)
+    except FileNotFoundError:
+        logger.critical(f"Input file not found: {input_file_path}")
     except Exception as e:
-        logger.exception(f"An unexpected error occurred in main: {e}")
-        sys.exit(1)
-    # Pool is closed automatically by async with
+        logger.critical(f"An unexpected error occurred: {e}", exc_info=True)
+    finally:
+        if pool:
+            await pool.close()
+            logger.info("Database pool closed.")
+        logger.info(f"Data loading finished. Total lines processed successfully: {processed_count}. Total errors: {error_count}.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Load Hugging Face model data into PostgreSQL."
+        description="Load AI Graph X data from JSONL file into PostgreSQL."
     )
     parser.add_argument(
-        "-f",
-        "--file",
+        "--input-file",
         type=str,
         default=DEFAULT_INPUT_JSONL_FILE,
         help=f"Path to the input JSONL file (default: {DEFAULT_INPUT_JSONL_FILE})",
     )
     parser.add_argument(
-        "--reset",
+        "--reset-checkpoint",
         action="store_true",
-        help="Reset checkpoint and truncate tables before loading.",
+        help="Ignore existing checkpoint and start loading from the beginning of the input file.",
     )
+    parser.add_argument(
+        "--reset-db",
+        action="store_true",
+        help="DEPRECATED/IGNORED: Database reset is handled externally (e.g., tests). This flag is ignored.",
+    )
+
     args = parser.parse_args()
 
-    logger.info(f"Starting data load from: {args.file}")
-    if args.reset:
-        logger.warning(
-            "RESET flag is active. Checkpoint will be ignored and tables truncated."
-        )
-
-    asyncio.run(main(input_file_path=args.file, reset_checkpoint=args.reset))
-
-    logger.info("Data loading process finished.")
+    asyncio.run(main(args.input_file, args.reset_db, args.reset_checkpoint))

@@ -19,7 +19,6 @@ from scripts.load_postgres import (
     insert_model_paper_link,
     insert_pwc_relation,
     insert_pwc_repositories,
-    TRUNCATE_TABLES,
     CHECKPOINT_FILE,
     DEFAULT_INPUT_JSONL_FILE,
 )
@@ -165,7 +164,7 @@ async def test_load_postgres_integration_success(
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
     # 3. Run the script main function
-    await load_pg_main(input_file_path=str(input_file), reset_checkpoint=False)
+    await load_pg_main(input_file_path=str(input_file), reset_db=False, reset_checkpoint=False)
 
     # 4. Assert database state using the repository
     async with repo.pool.connection() as conn:
@@ -247,7 +246,7 @@ async def test_load_postgres_integration_resume(
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
     # Run the script
-    await load_pg_main(input_file_path=str(input_file), reset_checkpoint=False)
+    await load_pg_main(input_file_path=str(input_file), reset_db=False, reset_checkpoint=False)
 
     # Assert database state: Only model 2 should have been processed this run
     async with repo.pool.connection() as conn:
@@ -269,6 +268,7 @@ async def test_load_postgres_integration_resume(
             assert model2[0] == "author2"
 
     # Assert checkpoint saved correctly
+    mock_load.assert_called_once_with(False)
     mock_save.assert_called_with(2)
 
 
@@ -283,45 +283,25 @@ async def test_load_postgres_integration_reset(
     input_file = tmp_path / "test_input_reset.jsonl"
     input_file.write_text(SAMPLE_MODEL_LINE_1 + "\n")  # Only one line for simplicity
     checkpoint_path = tmp_path / "checkpoint_reset.txt"
-    # REMOVED: Do not create dummy checkpoint file for reset test
-    # checkpoint_path.write_text("10")
-
-    # Insert some dummy data to check if TRUNCATE works
-    async with repo.pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                "INSERT INTO hf_models (hf_model_id, hf_author) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                ("dummy-model", "dummy-author"),
-            )
-            await conn.commit()
 
     # Patch checkpoint file path and save function
     mocker.patch("scripts.load_postgres.CHECKPOINT_FILE", str(checkpoint_path))
-    # REMOVED: Patch for _load_checkpoint
+    # Patch load checkpoint to simulate reset (it won't find a file)
+    mock_load = mocker.patch("scripts.load_postgres._load_checkpoint", return_value=0) # Reset starts from 0
     mock_save = mocker.patch("scripts.load_postgres._save_checkpoint")
-    # REMOVED: Patch for os.remove as checkpoint file shouldn't exist initially
-    # mock_remove = mocker.patch("os.remove")
 
     # Patch the DATABASE_URL used by the script
-    # Fetch the URL *inside* the test function
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if not test_db_url:
         pytest.skip("TEST_DATABASE_URL not configured.")
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
-    # Run the script with reset=True
-    await load_pg_main(input_file_path=str(input_file), reset_checkpoint=True)
+    # Run the script with reset_checkpoint=True (reset_db flag is ignored by script now)
+    await load_pg_main(input_file_path=str(input_file), reset_db=True, reset_checkpoint=True)
 
-    # Assert database state: Only model 1 should exist, dummy model should be gone
+    # Assert database state: Only model 1 (from input file) should exist
     async with repo.pool.connection() as conn:
         async with conn.cursor() as cur:
-            # Dummy model should be gone due to TRUNCATE
-            await cur.execute(
-                "SELECT 1 FROM hf_models WHERE hf_model_id = %s", ("dummy-model",)
-            )
-            dummy = await cur.fetchone()
-            assert dummy is None
-
             # Model 1 (from input file) should exist because reset starts from line 1
             await cur.execute(
                 "SELECT hf_author FROM hf_models WHERE hf_model_id = %s",
@@ -331,9 +311,16 @@ async def test_load_postgres_integration_reset(
             assert model1 is not None  # Assert model 1 IS found
             assert model1[0] == "author1"
 
-    # REMOVED: Assertion for os.remove call
-    # mock_remove.assert_called_once_with(str(checkpoint_path))
-    # Assert checkpoint save starts from 1 after reset
+    # Assert checkpoint handling
+    mock_load.assert_called_once_with(True) # Check reset_checkpoint=True was passed
+    # Check that the final line number (1+1=2) was attempted to be saved
+    # Note: Script saves the *next* line number to start from.
+    # If input has 1 line, loop finishes with i=0, final_line_num=1.
+    # Need to re-evaluate the save checkpoint logic/assertion slightly.
+    # Let's check the final save logic again.
+    # If file has 1 line, i=0. final_line_num = i+1 = 1.
+    # start_line = 0. Condition final_line_num > start_line (1 > 0) is true.
+    # Should call _save_checkpoint(1).
     mock_save.assert_called_with(1)
 
 

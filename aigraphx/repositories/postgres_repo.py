@@ -199,8 +199,8 @@ class PostgresRepository:
         """Fetches details for multiple HF models by their model_ids."""
         if not model_ids:
             return []
-        # Query needed columns from hf_models table
-        query = "SELECT hf_model_id, author, hf_pipeline_tag FROM hf_models WHERE hf_model_id = ANY(%s);"
+        # Query ALL columns from hf_models table, not just selected ones
+        query = "SELECT * FROM hf_models WHERE hf_model_id = ANY(%s);"
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
@@ -217,17 +217,17 @@ class PostgresRepository:
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Searches hf_models table by keyword across relevant fields."""
         search_term = f"%{query}%"
-        # Use COALESCE for potentially null fields like pipeline_tag
+        # Use COALESCE for potentially null fields like hf_pipeline_tag
         # Ensure correct column names are used
         where_clause = """
-            model_id ILIKE %s OR 
-            author ILIKE %s OR 
-            COALESCE(pipeline_tag, '') ILIKE %s
+            hf_model_id ILIKE %s OR 
+            hf_author ILIKE %s OR 
+            COALESCE(hf_pipeline_tag, '') ILIKE %s
         """
         params = [search_term] * 3  # Repeat search term for each ILIKE
 
         # Fields to select (adjust as needed)
-        select_fields = "model_id, author, pipeline_tag, last_modified, tags, likes, downloads, library_name, sha"
+        select_fields = "hf_model_id, hf_author, hf_pipeline_tag, hf_last_modified, hf_tags, hf_likes, hf_downloads, hf_library_name, hf_sha"
 
         count_sql = f"""
             SELECT COUNT(*) 
@@ -239,7 +239,7 @@ class PostgresRepository:
             SELECT {select_fields} 
             FROM hf_models 
             WHERE ({where_clause}) 
-            ORDER BY last_modified DESC 
+            ORDER BY hf_last_modified DESC 
             LIMIT %s OFFSET %s
         """
 
@@ -291,11 +291,13 @@ class PostgresRepository:
         self, batch_size: int = 1000
     ) -> AsyncGenerator[List[Dict[str, Any]], None]:
         """Fetches all HF models in batches, yielding each batch as a list of dicts."""
-        query = "SELECT * FROM hf_models;"  # Select all fields for sync
+        # 修复SQL语法错误，不要在查询中使用分号
+        query = "SELECT * FROM hf_models"  # 移除末尾的分号
         offset = 0
         try:
             while True:
-                batch_query = f"{query} ORDER BY hf_model_id LIMIT %s OFFSET %s;"  # Order for deterministic batches
+                # 正确的SQL格式
+                batch_query = f"{query} ORDER BY hf_model_id LIMIT %s OFFSET %s"  # 移除末尾的分号
                 async with self.pool.connection() as conn:
                     async with conn.cursor(row_factory=dict_row) as cur:
                         await cur.execute(batch_query, (batch_size, offset))
@@ -311,82 +313,89 @@ class PostgresRepository:
 
     async def save_paper(self, paper_data: Dict[str, Any]) -> bool:
         """Saves a single paper's data, handling potential JSON fields and conflicts."""
-        # Prepare columns and values, handle JSON serialization
-        # Note: psycopg handles most Python types including lists/dicts for JSONB
-        cols = []
-        vals = []
-        excluded_updates = []
-        for key, value in paper_data.items():
-            # Basic validation/transformation (adjust as needed)
-            if key == "authors" and not isinstance(value, list):
-                value = []
-            if key == "categories" and not isinstance(value, list):
-                value = []
-            # if isinstance(value, (dict, list)): # Psycopg handles this
-            #     value = json.dumps(value)
-
-            cols.append(key)
-            vals.append(value)
-            # For ON CONFLICT, exclude the primary key (pwc_id) from update set
-            if key != "pwc_id":
-                # Use f-string safely as key comes from dict keys
-                excluded_updates.append(f"{key} = EXCLUDED.{key}")
-
-        if not cols or "pwc_id" not in cols:
+        # 基本参数验证
+        if not paper_data or "pwc_id" not in paper_data:
             self.logger.error("Cannot save paper: missing data or pwc_id.")
             return False
-
-        # Construct query (Ensure table and column names are correct)
-        # Using pwc_id for conflict resolution
-        query = f"""
-            INSERT INTO papers ({", ".join(cols)})
-            VALUES ({", ".join(["%s"] * len(vals))})
-            ON CONFLICT (pwc_id) DO UPDATE SET
-                {", ".join(excluded_updates)},
-                updated_at = CURRENT_TIMESTAMP;
-        """
+            
         try:
+            # 准备列和值
+            cols = []
+            vals = []
+            excluded_updates = []
+            
+            for key, value in paper_data.items():
+                # 处理特殊字段
+                if key in ["authors", "categories"] and value is not None:
+                    # 确保列表类型被序列化为JSON
+                    if isinstance(value, list):
+                        value = json.dumps(value)
+                
+                cols.append(key)
+                vals.append(value)
+                
+                # 对于ON CONFLICT，排除主键
+                if key != "pwc_id":
+                    excluded_updates.append(f"{key} = EXCLUDED.{key}")
+            
+            # 构建查询
+            if not excluded_updates:
+                # 如果只有pwc_id，至少添加一个更新字段
+                excluded_updates = ["updated_at = CURRENT_TIMESTAMP"]
+            
+            query = f"""
+                INSERT INTO papers ({", ".join(cols)})
+                VALUES ({", ".join(["%s"] * len(vals))})
+                ON CONFLICT (pwc_id) DO UPDATE SET
+                    {", ".join(excluded_updates)};
+            """
+            
+            self.logger.debug(f"Saving paper with pwc_id: {paper_data.get('pwc_id')}")
+            
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cur:
                     await cur.execute(query, vals)
-                    return cur.rowcount > 0  # Check if a row was inserted/updated
+                    # 返回True表示成功执行，无论是插入还是更新
+                    return True
         except Exception as e:
             self.logger.error(
                 f"Error saving paper with pwc_id {paper_data.get('pwc_id')} to PG: {e}"
             )
-            # Consider logging paper_data partially for debugging
             self.logger.debug(traceback.format_exc())
             return False
 
     async def save_hf_models_batch(self, models_data: List[Dict[str, Any]]) -> None:
-        """Saves a batch of HF models, updating existing ones based on model_id."""
+        """Saves a batch of HF models, updating existing ones based on hf_model_id."""
         if not models_data:
             return
 
         # Prepare columns based on the first model (assume consistency)
-        # Handle potential JSON fields if needed (e.g., tags)
+        # Handle potential JSON fields if needed (e.g., hf_tags)
         if not models_data[0]:
             return  # Handle empty dict case
 
         cols = list(models_data[0].keys())
-        # Ensure model_id is present for ON CONFLICT
-        if "model_id" not in cols:
+        # Ensure hf_model_id is present for ON CONFLICT
+        if "hf_model_id" not in cols:
             self.logger.error(
-                "Cannot save HF models batch: 'model_id' missing in data."
+                "Cannot save HF models batch: 'hf_model_id' missing in data."
             )
             return
 
         excluded_updates = []
         for key in cols:
-            if key != "model_id":
+            if key != "hf_model_id":
                 # Use f-string safely as key comes from dict keys
                 excluded_updates.append(f"{key} = EXCLUDED.{key}")
 
+        # 构建每行的VALUES部分
+        placeholders = ", ".join(["%s"] * len(cols))
+        
         # Construct query (Ensure table and column names are correct)
         query = f"""
             INSERT INTO hf_models ({", ".join(cols)})
-            VALUES %s
-            ON CONFLICT (model_id) DO UPDATE SET
+            VALUES ({placeholders})
+            ON CONFLICT (hf_model_id) DO UPDATE SET
             {", ".join(excluded_updates)};
         """
 
@@ -396,8 +405,8 @@ class PostgresRepository:
             row = []
             for col in cols:
                 value = model.get(col)
-                # FIX: Serialize list fields (like 'tags') to JSON strings
-                if col == "tags" and isinstance(value, list):
+                # FIX: Serialize list fields (like 'hf_tags') to JSON strings
+                if col == "hf_tags" and isinstance(value, list):
                     row.append(json.dumps(value))
                 else:
                     row.append(value)  # type: ignore[arg-type] # Allow None, db driver handles it
@@ -406,9 +415,12 @@ class PostgresRepository:
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    await cur.executemany(query, data_tuples)
+                    # 逐个执行插入，而不是使用executemany
+                    for data_tuple in data_tuples:
+                        await cur.execute(query, data_tuple)
+                    
                     self.logger.info(
-                        f"Successfully saved/updated batch of {cur.rowcount} HF models."
+                        f"Successfully saved/updated batch of {len(models_data)} HF models."
                     )
         except Exception as e:
             self.logger.error(f"Error saving hf_models batch to PG: {e}")
@@ -506,6 +518,13 @@ class PostgresRepository:
 
     async def close(self) -> None:
         """Closes the connection pool (if applicable and managed by this instance)."""
+        if hasattr(self, 'pool') and self.pool is not None:
+            try:
+                await self.pool.close()
+                self.logger.info("PostgreSQL connection pool closed successfully.")
+            except Exception as e:
+                self.logger.error(f"Error closing PostgreSQL connection pool: {e}")
+                self.logger.debug(traceback.format_exc())
 
     # --- NEW Method: fetch_one --- #
     async def fetch_one(
@@ -710,7 +729,7 @@ class PostgresRepository:
         query = sql.SQL(
             """
             SELECT paper_id, task_name
-            FROM pwc_tasks -- Corrected table name
+            FROM pwc_tasks
             WHERE paper_id = ANY(%s);
             """
         )
@@ -745,7 +764,7 @@ class PostgresRepository:
         query = sql.SQL(
             """
             SELECT paper_id, dataset_name
-            FROM pwc_datasets -- Corrected table name
+            FROM pwc_datasets
             WHERE paper_id = ANY(%s);
             """
         )
@@ -779,8 +798,8 @@ class PostgresRepository:
             return {}
         query = sql.SQL(
             """
-            SELECT paper_id, url -- Corrected column name
-            FROM pwc_repositories -- Corrected table name
+            SELECT paper_id, url
+            FROM pwc_repositories
             WHERE paper_id = ANY(%s);
             """
         )

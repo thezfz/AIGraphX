@@ -12,7 +12,7 @@ from psycopg.rows import dict_row
 from dotenv import load_dotenv
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import date
+from datetime import date as date_type
 import unittest
 import numpy as np
 from psycopg.connection_async import AsyncConnection
@@ -45,7 +45,7 @@ test_paper_data_1 = {
     "title": "Test Paper One",
     "summary": "Summary one.",
     "pdf_url": "http://example.com/pdf/1",  # String URL
-    "published_date": date(2024, 1, 1),  # date object
+    "published_date": date_type(2024, 1, 1),  # date object
     "authors": ["Author A", "Author B"],  # List of strings
     "area": "Computer Vision",  # Keep if area is in the final model/table
     "primary_category": "cs.CV",
@@ -61,7 +61,7 @@ test_paper_data_2 = {
     "title": "Test Paper Two",
     "summary": None,
     "pdf_url": None,  # None is valid for Optional[HttpUrl]
-    "published_date": date(2024, 2, 15),  # date object
+    "published_date": date_type(2024, 2, 15),  # date object
     "authors": ["Author D"],  # List of strings
     "area": "NLP",
     "primary_category": "cs.CL",
@@ -77,7 +77,7 @@ test_paper_data_3 = {
     "title": "Test Paper Three (CV)",
     "summary": "Summary three.",
     "pdf_url": "http://example.com/pdf/3",  # String URL
-    "published_date": date(2023, 12, 25),  # date object
+    "published_date": date_type(2023, 12, 25),  # date object
     "authors": ["Author A", "Author E"],  # List of strings
     "area": "Computer Vision",
     "primary_category": "cs.CV",
@@ -93,7 +93,7 @@ test_paper_data_4 = {
     "title": "Old NLP Paper",
     "summary": "An older NLP paper.",
     "pdf_url": None,
-    "published_date": date(2022, 5, 10),  # date object
+    "published_date": date_type(2022, 5, 10),  # date object
     "authors": ["Author F"],  # List of strings
     "area": "NLP",
     "primary_category": "cs.CL",
@@ -116,7 +116,7 @@ async def test_get_papers_details_by_ids(repository: PostgresRepository) -> None
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -131,7 +131,7 @@ async def test_get_papers_details_by_ids(repository: PostgresRepository) -> None
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -146,7 +146,7 @@ async def test_get_papers_details_by_ids(repository: PostgresRepository) -> None
         title=cast(Optional[str], test_paper_data_3["title"]),
         summary=cast(Optional[str], test_paper_data_3["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_3["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_3["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_3["published_date"]),
         authors=cast(List[str], test_paper_data_3["authors"]),
         area=cast(Optional[str], test_paper_data_3["area"]),
         primary_category=cast(Optional[str], test_paper_data_3["primary_category"]),
@@ -203,7 +203,7 @@ async def test_get_paper_details_by_pwc_id_found(
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -247,7 +247,7 @@ async def test_search_papers_by_keyword_no_filters(
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -262,7 +262,7 @@ async def test_search_papers_by_keyword_no_filters(
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -277,7 +277,7 @@ async def test_search_papers_by_keyword_no_filters(
         title=cast(Optional[str], test_paper_data_3["title"]),
         summary=cast(Optional[str], test_paper_data_3["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_3["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_3["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_3["published_date"]),
         authors=cast(List[str], test_paper_data_3["authors"]),
         area=cast(Optional[str], test_paper_data_3["area"]),
         primary_category=cast(Optional[str], test_paper_data_3["primary_category"]),
@@ -292,7 +292,7 @@ async def test_search_papers_by_keyword_no_filters(
         title=cast(Optional[str], test_paper_data_4["title"]),
         summary=cast(Optional[str], test_paper_data_4["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_4["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_4["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_4["published_date"]),
         authors=cast(List[str], test_paper_data_4["authors"]),
         area=cast(Optional[str], test_paper_data_4["area"]),
         primary_category=cast(Optional[str], test_paper_data_4["primary_category"]),
@@ -339,7 +339,7 @@ async def test_search_papers_by_keyword_with_limit_skip(
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -354,7 +354,7 @@ async def test_search_papers_by_keyword_with_limit_skip(
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -369,7 +369,7 @@ async def test_search_papers_by_keyword_with_limit_skip(
         title=cast(Optional[str], test_paper_data_3["title"]),
         summary=cast(Optional[str], test_paper_data_3["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_3["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_3["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_3["published_date"]),
         authors=cast(List[str], test_paper_data_3["authors"]),
         area=cast(Optional[str], test_paper_data_3["area"]),
         primary_category=cast(Optional[str], test_paper_data_3["primary_category"]),
@@ -384,7 +384,7 @@ async def test_search_papers_by_keyword_with_limit_skip(
         title=cast(Optional[str], test_paper_data_4["title"]),
         summary=cast(Optional[str], test_paper_data_4["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_4["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_4["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_4["published_date"]),
         authors=cast(List[str], test_paper_data_4["authors"]),
         area=cast(Optional[str], test_paper_data_4["area"]),
         primary_category=cast(Optional[str], test_paper_data_4["primary_category"]),
@@ -431,7 +431,7 @@ async def test_search_papers_by_keyword_with_filters(
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -446,7 +446,7 @@ async def test_search_papers_by_keyword_with_filters(
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -461,7 +461,7 @@ async def test_search_papers_by_keyword_with_filters(
         title=cast(Optional[str], test_paper_data_3["title"]),
         summary=cast(Optional[str], test_paper_data_3["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_3["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_3["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_3["published_date"]),
         authors=cast(List[str], test_paper_data_3["authors"]),
         area=cast(Optional[str], test_paper_data_3["area"]),
         primary_category=cast(Optional[str], test_paper_data_3["primary_category"]),
@@ -476,7 +476,7 @@ async def test_search_papers_by_keyword_with_filters(
         title=cast(Optional[str], test_paper_data_4["title"]),
         summary=cast(Optional[str], test_paper_data_4["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_4["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_4["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_4["published_date"]),
         authors=cast(List[str], test_paper_data_4["authors"]),
         area=cast(Optional[str], test_paper_data_4["area"]),
         primary_category=cast(Optional[str], test_paper_data_4["primary_category"]),
@@ -493,8 +493,8 @@ async def test_search_papers_by_keyword_with_filters(
 
     # Search for "paper" in NLP area published in 2024
     query = "paper"
-    date_from = date(2024, 1, 1)
-    date_to = date(2024, 12, 31)
+    date_from = date_type(2024, 1, 1)
+    date_to = date_type(2024, 12, 31)
     area = "NLP"
 
     results_list, total_count = await repository.search_papers_by_keyword(
@@ -523,7 +523,7 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -538,7 +538,7 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -553,7 +553,7 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
         title=cast(Optional[str], test_paper_data_3["title"]),
         summary=cast(Optional[str], test_paper_data_3["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_3["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_3["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_3["published_date"]),
         authors=cast(List[str], test_paper_data_3["authors"]),
         area=cast(Optional[str], test_paper_data_3["area"]),
         primary_category=cast(Optional[str], test_paper_data_3["primary_category"]),
@@ -568,7 +568,7 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
         title=cast(Optional[str], test_paper_data_4["title"]),
         summary=cast(Optional[str], test_paper_data_4["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_4["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_4["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_4["published_date"]),
         authors=cast(List[str], test_paper_data_4["authors"]),
         area=cast(Optional[str], test_paper_data_4["area"]),
         primary_category=cast(Optional[str], test_paper_data_4["primary_category"]),
@@ -583,7 +583,7 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
         title="Paper Without Summary",
         summary=None,
         pdf_url=None,
-        published_date=date(2024, 3, 1),
+        published_date=date_type(2024, 3, 1),
         authors=["Author G"],
         area="Other",
         primary_category="cs.XX",
@@ -661,7 +661,7 @@ async def setup_simple_data(repository: PostgresRepository) -> None:
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -676,7 +676,7 @@ async def setup_simple_data(repository: PostgresRepository) -> None:
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -818,7 +818,7 @@ async def test_search_papers_by_keyword_sort_by_date(
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -833,7 +833,7 @@ async def test_search_papers_by_keyword_sort_by_date(
         title=cast(Optional[str], test_paper_data_2["title"]),
         summary=cast(Optional[str], test_paper_data_2["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_2["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_2["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_2["published_date"]),
         authors=cast(List[str], test_paper_data_2["authors"]),
         area=cast(Optional[str], test_paper_data_2["area"]),
         primary_category=cast(Optional[str], test_paper_data_2["primary_category"]),
@@ -848,7 +848,7 @@ async def test_search_papers_by_keyword_sort_by_date(
         title=cast(Optional[str], test_paper_data_3["title"]),
         summary=cast(Optional[str], test_paper_data_3["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_3["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_3["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_3["published_date"]),
         authors=cast(List[str], test_paper_data_3["authors"]),
         area=cast(Optional[str], test_paper_data_3["area"]),
         primary_category=cast(Optional[str], test_paper_data_3["primary_category"]),
@@ -863,7 +863,7 @@ async def test_search_papers_by_keyword_sort_by_date(
         title=cast(Optional[str], test_paper_data_4["title"]),
         summary=cast(Optional[str], test_paper_data_4["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_4["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_4["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_4["published_date"]),
         authors=cast(List[str], test_paper_data_4["authors"]),
         area=cast(Optional[str], test_paper_data_4["area"]),
         primary_category=cast(Optional[str], test_paper_data_4["primary_category"]),
@@ -907,7 +907,7 @@ async def test_get_paper_details_by_id_integration(
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -943,7 +943,7 @@ async def test_upsert_paper_update(repository: PostgresRepository) -> None:
         title=cast(Optional[str], test_paper_data_1["title"]),
         summary=cast(Optional[str], test_paper_data_1["summary"]),
         pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
-        published_date=cast(Optional[date], test_paper_data_1["published_date"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
         authors=cast(List[str], test_paper_data_1["authors"]),
         area=cast(Optional[str], test_paper_data_1["area"]),
         primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
@@ -966,7 +966,7 @@ async def test_upsert_paper_update(repository: PostgresRepository) -> None:
         title=cast(Optional[str], updated_data["title"]),
         summary=cast(Optional[str], updated_data["summary"]),
         pdf_url=cast(Optional[HttpUrl], updated_data["pdf_url"]),
-        published_date=cast(Optional[date], updated_data["published_date"]),
+        published_date=cast(Optional[date_type], updated_data["published_date"]),
         authors=cast(List[str], updated_data["authors"]),
         area=cast(Optional[str], updated_data["area"]),
         primary_category=cast(Optional[str], updated_data["primary_category"]),
@@ -988,3 +988,321 @@ async def test_upsert_paper_update(repository: PostgresRepository) -> None:
     assert (
         details["pwc_id"] == test_paper_data_1["pwc_id"]
     )  # pwc_id should remain the same
+
+
+async def test_get_all_papers_for_sync_empty_db(repository: PostgresRepository) -> None:
+    """测试在数据库为空时获取所有论文。"""
+    # 先清空数据库
+    async with repository.pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
+    
+    # 测试方法
+    results = await repository.get_all_papers_for_sync()
+    
+    # 验证结果
+    assert isinstance(results, list)
+    assert len(results) == 0
+
+
+async def test_get_all_papers_for_sync_with_data(repository: PostgresRepository) -> None:
+    """测试获取所有有摘要的论文。"""
+    # 创建测试数据
+    paper1 = Paper(
+        pwc_id="test-sync-1",
+        title="Paper With Summary",
+        summary="This is a summary for syncing.",
+        authors=["Author X"]
+    )
+    paper2 = Paper(
+        pwc_id="test-sync-2",
+        title="Paper Without Summary",
+        summary="", # 空摘要
+        authors=["Author Y"]
+    )
+    paper3 = Paper(
+        pwc_id="test-sync-3",
+        title="Paper With Summary 2",
+        summary="Another summary for testing sync.",
+        authors=["Author Z"]
+    )
+    
+    id1 = await repository.upsert_paper(paper1)
+    id2 = await repository.upsert_paper(paper2)
+    id3 = await repository.upsert_paper(paper3)
+    
+    assert id1 is not None
+    assert id2 is not None
+    assert id3 is not None
+    
+    # 测试方法
+    results = await repository.get_all_papers_for_sync()
+    
+    # 验证结果
+    assert isinstance(results, list)
+    assert len(results) == 2  # 应该只返回有摘要的论文
+    
+    paper_ids = {result["paper_id"] for result in results}
+    assert id1 in paper_ids
+    assert id3 in paper_ids
+    assert id2 not in paper_ids
+
+
+async def test_count_papers_empty_db(repository: PostgresRepository) -> None:
+    """测试在数据库为空时计数论文。"""
+    # 先清空数据库
+    async with repository.pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
+    
+    # 测试方法
+    count = await repository.count_papers()
+    
+    # 验证结果
+    assert count == 0
+
+
+async def test_count_papers_with_data(repository: PostgresRepository) -> None:
+    """测试计数有数据的论文表。"""
+    # 清空数据库
+    async with repository.pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
+    
+    # 创建测试数据
+    paper1 = Paper(
+        pwc_id="test-count-1",
+        title="Test Count Paper 1",
+        authors=["Author X"]
+    )
+    paper2 = Paper(
+        pwc_id="test-count-2",
+        title="Test Count Paper 2",
+        authors=["Author Y"]
+    )
+    
+    await repository.upsert_paper(paper1)
+    await repository.upsert_paper(paper2)
+    
+    # 测试方法
+    count = await repository.count_papers()
+    
+    # 验证结果
+    assert count == 2
+
+
+async def test_search_papers_by_keyword_empty_result(repository: PostgresRepository) -> None:
+    """测试搜索不存在的关键词。"""
+    # 确保有一些测试数据
+    paper = Paper(
+        pwc_id="test-search-empty",
+        title="Specific Title For Test",
+        summary="Specific summary for empty search test",
+        authors=["Author Empty"]
+    )
+    await repository.upsert_paper(paper)
+    
+    # 搜索不存在的关键词
+    results, count = await repository.search_papers_by_keyword("NonExistentKeywordXYZ123")
+    
+    # 验证结果
+    assert isinstance(results, list)
+    assert len(results) == 0
+    assert count == 0
+
+
+async def test_search_papers_by_keyword_invalid_sort(repository: PostgresRepository) -> None:
+    """测试使用无效的排序字段。"""
+    # 创建测试数据
+    paper = Paper(
+        pwc_id="test-sort-invalid",
+        title="Test Invalid Sort",
+        summary="Test paper for invalid sort test",
+        authors=["Author Sort"]
+    )
+    await repository.upsert_paper(paper)
+    
+    # 使用无效的排序字段
+    results, count = await repository.search_papers_by_keyword(
+        "Test", sort_by="invalid_column"  # type: ignore
+    )
+    
+    # 验证结果
+    assert isinstance(results, list)
+    assert count > 0
+    # 应该仍然返回结果，但使用默认排序
+
+
+async def test_get_hf_models_by_ids_empty_ids(repository: PostgresRepository) -> None:
+    """测试使用空ID列表获取HF模型。"""
+    results = await repository.get_hf_models_by_ids([])
+    
+    assert isinstance(results, list)
+    assert len(results) == 0
+
+
+async def test_get_paper_details_by_id_nonexistent(repository: PostgresRepository) -> None:
+    """测试获取不存在的论文ID。"""
+    # 使用一个不太可能存在的ID
+    result = await repository.get_paper_details_by_id(999999999)
+    
+    assert result is None
+
+
+async def test_save_paper_success(repository: PostgresRepository) -> None:
+    """Test saving a new paper successfully."""
+    paper = Paper(
+        pwc_id="save-success-1",
+        title="Save Success Test",
+        arxiv_id_versioned="2202.00001v1",
+        arxiv_id_base="2202.00001",
+        summary="Summary here",
+        pdf_url=HttpUrl("https://arxiv.org/pdf/2202.00001.pdf"),
+        authors=["Tester"],
+        published_date=date_type(2022, 2, 1),
+        categories=["cs.LG"],
+    )
+    result_id = await repository.upsert_paper(paper)
+    assert isinstance(result_id, int)
+
+    # Verify data was inserted
+    details = await repository.get_paper_details_by_id(result_id)
+    assert details is not None
+    assert details["pwc_id"] == "save-success-1"
+    assert details["title"] == "Save Success Test"
+
+
+async def test_count_hf_models(repository: PostgresRepository) -> None:
+    """Test counting Hugging Face models (assuming table exists)."""
+    # Assuming table hf_models exists and is empty initially
+    count_initial = await repository.count_hf_models()
+    assert count_initial == 0
+
+    # Add some dummy data (replace with actual upsert if available)
+    # This requires knowing the hf_models table structure
+    # If direct insertion is complex, skip this part or use a mock
+    # For now, just assert initial count is 0 if no data added
+
+
+async def test_fetch_one_success(repository: PostgresRepository) -> None:
+    """Test fetching a single record successfully."""
+    # Insert data first
+    paper1 = Paper(
+        pwc_id=cast(str, test_paper_data_1["pwc_id"]),
+        arxiv_id_base=cast(Optional[str], test_paper_data_1["arxiv_id_base"]),
+        title=cast(Optional[str], test_paper_data_1["title"]),
+        summary=cast(Optional[str], test_paper_data_1["summary"]),
+        pdf_url=cast(Optional[HttpUrl], test_paper_data_1["pdf_url"]),
+        published_date=cast(Optional[date_type], test_paper_data_1["published_date"]),
+        authors=cast(List[str], test_paper_data_1["authors"]),
+        area=cast(Optional[str], test_paper_data_1["area"]),
+        primary_category=cast(Optional[str], test_paper_data_1["primary_category"]),
+        categories=cast(List[str], test_paper_data_1["categories"]),
+        pwc_title=cast(Optional[str], test_paper_data_1["pwc_title"]),
+        pwc_url=cast(Optional[HttpUrl], test_paper_data_1["pwc_url"]),
+        doi=cast(Optional[str], test_paper_data_1["doi"]),
+    )
+    paper_id = await repository.upsert_paper(paper1)
+    assert paper_id is not None
+
+    query = "SELECT title, pwc_id FROM papers WHERE paper_id = %s"
+    result = await repository.fetch_one(query, (paper_id,))
+
+    assert result is not None
+    assert result["pwc_id"] == test_paper_data_1["pwc_id"]
+    assert result["title"] == test_paper_data_1["title"]
+
+
+async def test_fetch_one_not_found(repository: PostgresRepository) -> None:
+    """Test fetching a single record that does not exist."""
+    query = "SELECT title FROM papers WHERE paper_id = %s"
+    result = await repository.fetch_one(query, (99999,))
+    assert result is None
+
+
+async def test_get_tasks_for_papers_empty_ids(repository: PostgresRepository) -> None:
+    """Test fetching tasks for papers with empty IDs."""
+    result = await repository.get_tasks_for_papers([])
+    
+    assert isinstance(result, dict)
+    assert len(result) == 0
+
+
+async def test_get_datasets_for_papers_empty_ids(repository: PostgresRepository) -> None:
+    """Test fetching datasets for papers with empty IDs."""
+    result = await repository.get_datasets_for_papers([])
+    
+    assert isinstance(result, dict)
+    assert len(result) == 0
+
+
+async def test_get_repositories_for_papers_empty_ids(repository: PostgresRepository) -> None:
+    """Test fetching repositories for papers with empty IDs."""
+    result = await repository.get_repositories_for_papers([])
+    
+    assert isinstance(result, dict)
+    assert len(result) == 0
+
+
+async def test_close_connection_pool(repository: PostgresRepository) -> None:
+    """Test closing the connection pool."""
+    # Save original pool to restore
+    original_pool = repository.pool
+    
+    # Create mock pool
+    mock_pool = AsyncMock()
+    repository.pool = mock_pool
+    
+    try:
+        # Test close method
+        await repository.close()
+        
+        # Verify close method was called
+        mock_pool.close.assert_called_once()
+    finally:
+        # Restore original pool
+        repository.pool = original_pool
+
+
+async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -> None:
+    """Test fetching tasks for papers with tasks."""
+    # First empty the database
+    async with repository.pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
+            await cur.execute("TRUNCATE pwc_tasks RESTART IDENTITY CASCADE")
+    
+    # Create test data
+    paper1 = Paper(
+        pwc_id="test-tasks-1",
+        title="Test Tasks Paper 1",
+        authors=["Author Tasks"]
+    )
+    paper2 = Paper(
+        pwc_id="test-tasks-2",
+        title="Test Tasks Paper 2",
+        authors=["Author Tasks"]
+    )
+    
+    id1 = await repository.upsert_paper(paper1)
+    id2 = await repository.upsert_paper(paper2)
+    assert id1 is not None
+    assert id2 is not None
+    
+    # Add tasks
+    async with repository.pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO pwc_tasks (paper_id, task_name) VALUES (%s, %s), (%s, %s), (%s, %s)",
+                (id1, "Task A", id1, "Task B", id2, "Task C")
+            )
+    
+    # Test method
+    result = await repository.get_tasks_for_papers([id1, id2])
+    
+    # Verify result
+    assert isinstance(result, dict)
+    assert len(result) == 2
+    assert set(result[id1]) == {"Task A", "Task B"}
+    assert set(result[id2]) == {"Task C"}
+

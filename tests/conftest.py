@@ -32,6 +32,7 @@ from pathlib import Path  # Add Path import
 from unittest.mock import patch
 from starlette.datastructures import State  # Import State for mock_app
 from contextlib import asynccontextmanager
+import inspect  # Import inspect module
 
 # Import Neo4j Driver
 from neo4j import AsyncGraphDatabase, AsyncDriver, basic_auth  # Import basic_auth
@@ -86,6 +87,14 @@ TEST_DB_URL_FROM_ENV = os.getenv("TEST_DATABASE_URL")
 TEST_NEO4J_URI = os.getenv("TEST_NEO4J_URI")
 TEST_NEO4J_USER = os.getenv("TEST_NEO4J_USER", "neo4j")
 TEST_NEO4J_PASSWORD = os.getenv("TEST_NEO4J_PASSWORD")
+
+
+# --- Session-Scoped Lock for Database Cleanup ---
+@pytest.fixture(scope="session")
+def db_cleanup_lock() -> asyncio.Lock:
+    """Provides a session-scoped asyncio Lock to serialize DB cleanup operations."""
+    logger.info("[db_cleanup_lock fixture] Creating session-scoped lock.")
+    return asyncio.Lock()
 
 
 # --- Fixture for Temporary Faiss Files (Session scope for efficiency) ---
@@ -555,59 +564,58 @@ async def db_pool(
 @pytest_asyncio.fixture()
 async def repository(
     db_pool: AsyncConnectionPool,
+    db_cleanup_lock: asyncio.Lock,
 ) -> AsyncGenerator[PostgresRepository, None]:
     """Creates a PostgresRepository instance using the test database pool.
 
-    Cleans relevant tables before yielding the repository for test isolation.
+    Cleans relevant tables BEFORE yielding the repository for test isolation,
+    using a lock to prevent concurrent cleanup operations.
+    (Post-test cleanup REMOVED for simplification during debugging).
     """
     if not db_pool:
         pytest.skip("Test database pool is not available.")
 
-    # Clean tables before the test runs
-    logger.info("[repository fixture] Cleaning test database tables...")
-    async with db_pool.connection() as conn:
-        async with conn.cursor() as cur:
-            try:
-                # List all tables you need to truncate for isolation
-                # Add other tables like hf_models if their tests interfere
-                await cur.execute("TRUNCATE TABLE papers RESTART IDENTITY CASCADE;")
-                # Add TRUNCATE for other tables if needed:
-                # await cur.execute("TRUNCATE TABLE hf_models RESTART IDENTITY CASCADE;")
-                logger.info("[repository fixture] Tables truncated successfully.")
-            except Exception as e:
-                logger.error(f"[repository fixture] Error truncating tables: {e}")
-                pytest.fail(f"Failed to clean test database: {e}")
+    # Safely get calling test name
+    frame = inspect.currentframe()
+    func_name = "unknown_test" # Default value
+    if frame and frame.f_back:
+        caller_frame = frame.f_back
+        if caller_frame:
+             func_name = caller_frame.f_code.co_name
 
-    repo = PostgresRepository(pool=db_pool)
-    yield repo  # Provide the repo instance to the test
-
-    # --- PROBLEM FIXED: Cleanup is now AFTER yield --- #
-    logger.info(
-        "[repository fixture] Cleaning test database tables AFTER test execution..."
-    )
+    # --- Pre-test Cleanup --- (Keep pre-test cleanup)
+    logger.info(f"[repository fixture for {func_name}] PRE-TEST: Attempting to acquire DB cleanup lock...")
     try:
-        async with repo.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                # Truncate all relevant tables after the test
-                # Using CASCADE ensures related tables are also handled if FKs exist
-                # RESTART IDENTITY resets sequences for predictable IDs in tests
-                await cur.execute(
-                    """
-                    TRUNCATE TABLE model_paper_links, hf_models, papers,
-                                 pwc_tasks, pwc_datasets, pwc_repositories
-                                 RESTART IDENTITY CASCADE;
-                    """
-                )
-        logger.info(
-            "[repository fixture] Tables truncated successfully AFTER test execution."
-        )
-    except Exception as e:
-        # Log error during cleanup, but don't necessarily fail the test run
-        # unless cleanup failure is critical
-        logger.error(f"Error cleaning database in repository fixture teardown: {e}")
+        async with db_cleanup_lock: # Acquire lock
+            logger.info(f"[repository fixture for {func_name}] PRE-TEST: DB cleanup lock ACQUIRED. Cleaning tables...")
+            try:
+                async with db_pool.connection() as conn:
+                    logger.info(f"[repository fixture for {func_name}] PRE-TEST: Acquired PG connection for TRUNCATE.")
+                    async with conn.cursor() as cur:
+                        logger.info(f"[repository fixture for {func_name}] PRE-TEST: Executing TRUNCATE...")
+                        await cur.execute(
+                            """
+                            TRUNCATE TABLE model_paper_links, hf_models, papers,
+                                         pwc_tasks, pwc_datasets, pwc_repositories
+                                         RESTART IDENTITY CASCADE;
+                            """
+                        )
+                        logger.info(f"[repository fixture for {func_name}] PRE-TEST: TRUNCATE command executed.")
+                    await conn.commit()
+                    logger.info(f"[repository fixture for {func_name}] PRE-TEST: COMMIT executed after TRUNCATE.")
+                logger.info(f"[repository fixture for {func_name}] PRE-TEST: Tables truncated and committed successfully.")
+            except Exception as e:
+                logger.error(f"[repository fixture for {func_name}] PRE-TEST: Error truncating tables (while holding lock): {e}", exc_info=True)
+                pytest.fail(f"[repository fixture for {func_name}] PRE-TEST: Failed to clean test database: {e}")
+    finally:
+         logger.info(f"[repository fixture for {func_name}] PRE-TEST: DB cleanup lock released.")
 
-    # --- Teardown (Pool is closed by db_pool fixture) --- #
-    logger.info("[repository fixture] Teardown complete (pool managed elsewhere).")
+    # Yield the repository
+    repo = PostgresRepository(pool=db_pool)
+    logger.info(f"[repository fixture for {func_name}] Yielding repository instance.")
+    yield repo
+
+    logger.info(f"[repository fixture for {func_name}] Teardown complete (NO post-test cleanup).")
 
 
 # --- Fixture for Neo4j Driver (Function Scope) ---
@@ -628,7 +636,9 @@ async def neo4j_driver(test_settings: Settings) -> AsyncGenerator[AsyncDriver, N
     # Ensure username and password are not None before creating auth tuple
     neo4j_user = test_settings.neo4j_username
     neo4j_pwd = test_settings.neo4j_password
-    neo4j_db = test_settings.neo4j_database  # Uses the configured test DB (defaults to 'neo4j')
+    neo4j_db = (
+        test_settings.neo4j_database
+    )  # Uses the configured test DB (defaults to 'neo4j')
 
     if (
         not neo4j_uri or not neo4j_user or not neo4j_pwd
@@ -701,24 +711,33 @@ async def neo4j_driver(test_settings: Settings) -> AsyncGenerator[AsyncDriver, N
 async def neo4j_repo_fixture(
     neo4j_driver: AsyncDriver,
 ) -> AsyncGenerator[Neo4jRepository, None]:  # Return type fixed for yield
-    """Provides a Neo4jRepository instance initialized with the function-scoped driver."""
-    # Ensure driver fixture ran successfully (wasn't skipped)
-    if neo4j_driver is None:
-        pytest.skip("Skipping test because Neo4j driver fixture failed or was skipped.")
-        yield None  # Should not be reached
-        return  # Explicit return
+    """Function-scoped fixture for Neo4jRepository instance with pre-test cleanup."""
+    logger.info(
+        "[neo4j_repo_fixture] Creating Neo4jRepository and cleaning DB (function scope)"
+    )
+    # --- Pre-test Cleanup ---
+    try:
+        async with neo4j_driver.session() as session:
+            logger.info(
+                "[neo4j_repo_fixture] Running: MATCH (n) DETACH DELETE n before test..."
+            )
+            await session.run("MATCH (n) DETACH DELETE n")
+            logger.info(
+                "[neo4j_repo_fixture] Finished: MATCH (n) DETACH DELETE n before test."
+            )
+    except Exception as e:
+        logger.exception(
+            f"[neo4j_repo_fixture] FAILED to clean Neo4j DB before test: {e}"
+        )
+        pytest.fail(f"Failed to clean Neo4j DB before test: {e}")
 
+    # Create repository instance
     repo = Neo4jRepository(driver=neo4j_driver)
     try:
-        # Optional: Run constraints creation here if needed for every repo test,
-        # but doing it in the test itself or a specific setup fixture might be cleaner.
-        # await repo.create_constraints()
-        logger.debug("[neo4j_repo_fixture] Yielding Neo4jRepository instance.")
         yield repo
     finally:
-        # No specific cleanup needed for the repo itself, driver cleanup handles connection.
-        logger.debug("[neo4j_repo_fixture] Teardown complete.")
-        pass  # No specific repo cleanup needed
+        # Teardown logic (if any) can go here, but cleanup is done before yield
+        logger.info("[neo4j_repo_fixture] Fixture teardown (function scope)")
 
 
 @pytest.fixture

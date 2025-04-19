@@ -211,13 +211,20 @@ def test_settings_loading_with_env_vars_override(
     # --- End Debug Prints ---
 
     # 创建一个已知可以忽略比较的密钥列表
-    ignore_keys = ["pwc_api_key", "hf_api_key", "github_api_key", "neo4j_password", "huggingface_api_key", "test_neo4j_password"]
+    ignore_keys = [
+        "pwc_api_key",
+        "hf_api_key",
+        "github_api_key",
+        "neo4j_password",
+        "huggingface_api_key",
+        "test_neo4j_password",
+    ]
 
     for key, actual_value in actual_settings_dict.items():
         # 跳过API密钥和密码的比较
         if key in ignore_keys:
             continue
-            
+
         # Check if the actual key exists in our expected dictionary
         assert key in expected_env, (
             f"Unexpected attribute '{key}' found in Settings object (value: {actual_value})"
@@ -295,14 +302,21 @@ def test_settings_loading_defaults_with_env_file(
     # --- End Debug Prints ---
 
     # 创建一个已知可以忽略比较的密钥列表
-    ignore_keys = ["pwc_api_key", "hf_api_key", "github_api_key", "neo4j_password", "huggingface_api_key", "test_neo4j_password"]
+    ignore_keys = [
+        "pwc_api_key",
+        "hf_api_key",
+        "github_api_key",
+        "neo4j_password",
+        "huggingface_api_key",
+        "test_neo4j_password",
+    ]
 
     # Verify EXPECTED_SETTINGS_DEFAULTS reflects the actual loaded state
     for key, actual_value in actual_settings_dict.items():
         # 跳过API密钥和密码的比较
         if key in ignore_keys:
             continue
-        
+
         assert key in EXPECTED_SETTINGS_DEFAULTS, (
             f"Unexpected attribute '{key}' found in Settings object (value: {actual_value})"
         )

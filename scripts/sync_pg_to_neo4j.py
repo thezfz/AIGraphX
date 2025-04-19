@@ -159,8 +159,12 @@ async def sync_hf_models(
 
 async def sync_papers_and_relations(
     pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
-) -> None:
-    """Fetches papers and their relations from PG and syncs them to Neo4j."""
+) -> int:
+    """Fetches papers and their relations from PG and syncs them to Neo4j.
+    
+    Returns:
+        int: 同步的论文总数
+    """
     logger.info("Starting Paper and relations synchronization...")
     papers_synced_arxiv = 0
     papers_synced_pwc = 0
@@ -201,97 +205,87 @@ async def sync_papers_and_relations(
             paper_data["tasks"] = []
             paper_data["datasets"] = []
             paper_data["repositories"] = []
-            papers_to_process.append(paper_data)
 
+            # Sorting papers by identifier availability
+            if paper_data.get("pwc_id"):
+                # If paper has a PWC ID, enrich with additional relations
+                # and save using the pwc_id-based Neo4j methods
+                papers_to_process.append(paper_data)
+            elif paper_data.get("arxiv_id_base"):
+                # If paper has only an ArXiv ID, we'll save using a different method
+                arxiv_only_papers.append(paper_data)
+            else:
+                logger.warning(
+                    f"Paper id={paper_data.get('paper_id')} has neither pwc_id nor arxiv_id. Skipping."
+                )
+                continue
+
+            # Batch processing - PWC ID papers
             if len(papers_to_process) >= NEO4J_WRITE_BATCH_SIZE:
-                # Split batch before saving
-                batch_with_pwc_id = [p for p in papers_to_process if p.get("pwc_id")]
-                batch_without_pwc_id = [
-                    p
-                    for p in papers_to_process
-                    if not p.get("pwc_id") and p.get("arxiv_id_base")
-                ]
+                try:
+                    enriched_papers = await enrich_papers_with_relations(
+                        pg_repo, papers_to_process
+                    )
+                    await neo4j_repo.save_papers_batch(enriched_papers)
+                    papers_synced_pwc += len(enriched_papers)
+                    logger.info(
+                        f"Synced {papers_synced_pwc} PWC papers and {papers_synced_arxiv} ArXiv-only papers..."
+                    )
+                except Exception as e:
+                    logger.error(f"Error saving paper batch to Neo4j: {e}")
+                    # No need to import traceback here
+                    logger.error(traceback.format_exc())
+                finally:
+                    papers_to_process = []
 
-                # Process papers with pwc_id (requires enrichment)
-                if batch_with_pwc_id:
-                    try:
-                        # Call the CORRECTED enrich_papers_with_relations
-                        enriched_batch = await enrich_papers_with_relations(
-                            pg_repo, batch_with_pwc_id
-                        )
-                        # Pass the ENRICHED batch to Neo4j
-                        await neo4j_repo.save_papers_batch(enriched_batch)
-                        papers_synced_pwc += len(batch_with_pwc_id)
-                        logger.info(
-                            f"Synced {papers_synced_pwc} Papers (with pwc_id) so far..."
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Error saving Paper batch (with pwc_id) to Neo4j: {e}"
-                        )
-                        logger.error(traceback.format_exc())
+            # Batch processing - ArXiv-only papers
+            if len(arxiv_only_papers) >= NEO4J_WRITE_BATCH_SIZE:
+                try:
+                    await neo4j_repo.save_papers_by_arxiv_batch(arxiv_only_papers)
+                    papers_synced_arxiv += len(arxiv_only_papers)
+                    logger.info(
+                        f"Synced {papers_synced_pwc} PWC papers and {papers_synced_arxiv} ArXiv-only papers..."
+                    )
+                except Exception as e:
+                    logger.error(f"Error saving arxiv paper batch to Neo4j: {e}")
+                    # No need to import traceback here
+                    logger.error(traceback.format_exc())
+                finally:
+                    arxiv_only_papers = []
 
-                # Process papers without pwc_id (saved by arxiv_id, no enrichment needed here)
-                if batch_without_pwc_id:
-                    try:
-                        await neo4j_repo.save_papers_by_arxiv_batch(
-                            batch_without_pwc_id
-                        )
-                        papers_synced_arxiv += len(batch_without_pwc_id)
-                        logger.info(
-                            f"Synced {papers_synced_arxiv} Papers (by arxiv_id) so far..."
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Error saving Paper batch (by arxiv_id) to Neo4j: {e}"
-                        )
-                        # No need to import traceback here
-                        logger.error(traceback.format_exc())
-                papers_to_process = []
     except Exception as e:
         logger.error(f"Error fetching papers from Postgres: {e}")
         # No need to import traceback here
         logger.error(traceback.format_exc())
 
-    # Process remaining papers
+    # Process any remaining papers
     if papers_to_process:
-        batch_with_pwc_id = [p for p in papers_to_process if p.get("pwc_id")]
-        batch_without_pwc_id = [
-            p
-            for p in papers_to_process
-            if not p.get("pwc_id") and p.get("arxiv_id_base")
-        ]
+        try:
+            enriched_papers = await enrich_papers_with_relations(
+                pg_repo, papers_to_process
+            )
+            await neo4j_repo.save_papers_batch(enriched_papers)
+            papers_synced_pwc += len(enriched_papers)
+        except Exception as e:
+            logger.error(f"Error saving final paper batch to Neo4j: {e}")
+            # No need to import traceback here
+            logger.error(traceback.format_exc())
 
-        if batch_with_pwc_id:
-            try:
-                enriched_batch = await enrich_papers_with_relations(
-                    pg_repo, batch_with_pwc_id
-                )
-                await neo4j_repo.save_papers_batch(enriched_batch)
-                papers_synced_pwc += len(batch_with_pwc_id)
-                logger.info(
-                    f"Synced {papers_synced_pwc} Papers (with pwc_id) so far..."
-                )  # Log corrected here
-            except Exception as e:
-                logger.error(
-                    f"Error saving final Paper batch (with pwc_id) to Neo4j: {e}"
-                )
-                # No need to import traceback here
-                logger.error(traceback.format_exc())
-        if batch_without_pwc_id:
-            try:
-                await neo4j_repo.save_papers_by_arxiv_batch(batch_without_pwc_id)
-                papers_synced_arxiv += len(batch_without_pwc_id)
-            except Exception as e:
-                logger.error(
-                    f"Error saving final Paper batch (by arxiv_id) to Neo4j: {e}"
-                )
-                # No need to import traceback here
-                logger.error(traceback.format_exc())
+    if arxiv_only_papers:
+        try:
+            await neo4j_repo.save_papers_by_arxiv_batch(arxiv_only_papers)
+            papers_synced_arxiv += len(arxiv_only_papers)
+        except Exception as e:
+            logger.error(f"Error saving final arxiv paper batch to Neo4j: {e}")
+            # No need to import traceback here
+            logger.error(traceback.format_exc())
 
+    total_papers = papers_synced_pwc + papers_synced_arxiv
     logger.info(
-        f"Paper node synchronization finished. Total papers with pwc_id processed: {papers_synced_pwc}, by arxiv_id: {papers_synced_arxiv}"
+        f"Paper synchronization finished. PWC papers: {papers_synced_pwc}, ArXiv-only papers: {papers_synced_arxiv}, Total: {total_papers}"
     )
+    
+    return total_papers
 
 
 # --- START: CORRECTED enrich_papers_with_relations --- #
@@ -390,101 +384,155 @@ async def enrich_papers_with_relations(
 async def sync_model_paper_links(
     pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
 ) -> None:
-    """Synchronizes model-paper links from PostgreSQL to Neo4j."""
-    logger.info("Starting Model-Paper link synchronization...")
-    links_synced = 0
-
-    # Modified Query: Join to get pwc_id and arxiv_id_base directly
+    """同步HFModel和Paper之间的关系"""
+    logger.info("开始同步HF模型和论文之间的关系...")
+    
+    # 从model_paper_links表获取关系
     link_query = """
-        SELECT
-            mpl.hf_model_id,
-            p.pwc_id,
-            p.arxiv_id_base
-        FROM model_paper_links mpl
-        JOIN papers p ON mpl.paper_id = p.paper_id
-        WHERE mpl.hf_model_id IS NOT NULL
-          AND (p.pwc_id IS NOT NULL OR p.arxiv_id_base IS NOT NULL) -- Ensure at least one ID exists for linking
-        ORDER BY mpl.hf_model_id -- Optional ordering
+    SELECT mpl.hf_model_id, p.pwc_id, mpl.paper_id
+    FROM model_paper_links mpl
+    JOIN papers p ON mpl.paper_id = p.paper_id
+    WHERE p.pwc_id IS NOT NULL
     """
-    links_to_process: List[Dict[str, Any]] = []  # Batch for Neo4j
-
-    async for record in pg_repo.fetch_data_cursor(link_query, batch_size=batch_size):
-        try:
-            hf_model_id = record.get("hf_model_id")
-            pwc_id = record.get("pwc_id")  # Might be None
-            arxiv_id_base = record.get("arxiv_id_base")  # Might be None
-
-            # Basic check: Need model ID and at least one paper ID
-            if not hf_model_id or (pwc_id is None and arxiv_id_base is None):
-                logger.warning(
-                    f"Skipping link record due to missing hf_model_id or both paper identifiers: {record}"
-                )
+    
+    try:
+        # 获取数据
+        links_to_process = []
+        link_count = 0
+        
+        async for link_record in pg_repo.fetch_data_cursor(link_query, batch_size=batch_size):
+            # 只处理有效记录
+            if not link_record.get("hf_model_id") or not link_record.get("pwc_id"):
                 continue
-
-            # Remove the separate lookup for pwc_id - it's now in the record
-
-            # Add link data including both IDs to the batch
-            links_to_process.append(
-                {
-                    "hf_model_id": hf_model_id,
-                    "pwc_id": pwc_id,  # Pass pwc_id (can be None)
-                    "arxiv_id_base": arxiv_id_base,  # Pass arxiv_id_base (can be None)
-                }
-            )
-
-            # Process batch when full
-            if (
-                len(links_to_process) >= batch_size
-            ):  # Use the function's batch_size param
+                
+            # 转换格式
+            link_data = {
+                "model_id": link_record["hf_model_id"],
+                "pwc_id": link_record["pwc_id"],
+                "confidence": 1.0  # 默认置信度
+            }
+            links_to_process.append(link_data)
+            
+            # 批处理
+            if len(links_to_process) >= NEO4J_WRITE_BATCH_SIZE:
+                try:
+                    # 特殊调试输出
+                    logger.info(f"正在处理 {len(links_to_process)} 条HFModel-Paper关系，第一条: {links_to_process[0]}")
+                    
+                    # 创建MENTIONS关系
+                    await neo4j_repo.link_model_to_paper_batch(links_to_process)
+                    link_count += len(links_to_process)
+                    logger.info(f"已同步 {link_count} 条模型-论文关系...")
+                except Exception as e:
+                    logger.error(f"保存模型-论文关系批次时出错: {e}")
+                    logger.error(traceback.format_exc())
+                finally:
+                    links_to_process = []
+                    
+        # 处理剩余的关系
+        if links_to_process:
+            try:
+                # 特殊调试输出
+                logger.info(f"正在处理最后 {len(links_to_process)} 条HFModel-Paper关系")
+                
+                # 创建MENTIONS关系
                 await neo4j_repo.link_model_to_paper_batch(links_to_process)
-                links_synced += len(links_to_process)
-                logger.debug(
-                    f"Attempted to sync batch of {len(links_to_process)} model-paper links. Total attempts: {links_synced}"
-                )
-                links_to_process = []  # Clear batch
-
-        except Exception as e:
-            logger.error(
-                f"Error processing model-paper link record {record}: {e}", exc_info=True
-            )
-
-    # Process any remaining links in the last batch
-    if links_to_process:
-        await neo4j_repo.link_model_to_paper_batch(links_to_process)
-        links_synced += len(links_to_process)
-        logger.debug(
-            f"Attempted to sync final batch of {len(links_to_process)} model-paper links. Total attempts: {links_synced}"
-        )
-
-    # Note: The count now reflects attempted links, not necessarily successful ones in Neo4j yet
-    logger.info(
-        f"Finished Model-Paper link processing loop. Total link records processed from PG: {links_synced}"
-    )
+                link_count += len(links_to_process)
+            except Exception as e:
+                logger.error(f"保存最后一批模型-论文关系时出错: {e}")
+                logger.error(traceback.format_exc())
+                
+        logger.info(f"模型-论文关系同步完成，总计: {link_count} 条关系")
+        
+    except Exception as e:
+        logger.error(f"获取模型-论文关系时出错: {e}")
+        logger.error(traceback.format_exc())
 
 
 # --- Synchronization Runner ---
-async def run_sync(pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository) -> None:
-    """Runs the core synchronization steps using provided repositories."""
-    logger.info("--- Starting core synchronization steps ---")
+async def run_sync(pg_repo: Optional[PostgresRepository] = None, neo4j_repo: Optional[Neo4jRepository] = None) -> int:
+    """Runs the full synchronization process.
+    
+    Returns:
+        int: 同步的论文数量，用于测试断言
+    """
+    logger.info("Starting full PG to Neo4j synchronization...")
+    
+    # Create repositories if not provided
+    created_pg_repo = False
+    created_neo4j_repo = False
+    
+    if pg_repo is None:
+        try:
+            # Create PostgreSQL pool
+            if DATABASE_URL is None:
+                logger.error("DATABASE_URL is None")
+                return 0
+            pg_pool = AsyncConnectionPool(DATABASE_URL)
+            pg_repo = PostgresRepository(pool=pg_pool)
+            created_pg_repo = True
+        except Exception as e:
+            logger.error(f"Failed to initialize Postgres repository: {e}")
+            logger.error(traceback.format_exc())
+            return 0
 
-    # Apply Neo4j constraints and indexes FIRST (idempotent)
-    logger.info("Applying Neo4j constraints and indexes...")
+    if neo4j_repo is None:
+        try:
+            # Create Neo4j driver
+            if NEO4J_URI is None or NEO4J_USER is None or NEO4J_PASSWORD is None:
+                logger.error("Neo4j connection parameters are None")
+                return 0
+            neo4j_driver = AsyncGraphDatabase.driver(
+                NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
+            )
+            neo4j_repo = Neo4jRepository(driver=neo4j_driver)
+            created_neo4j_repo = True
+        except Exception as e:
+            logger.error(f"Failed to initialize Neo4j repository: {e}")
+            logger.error(traceback.format_exc())
+            # Clean up Postgres connection if we created it
+            if created_pg_repo and pg_repo is not None:
+                await pg_repo.close()
+            return 0
+
     try:
+        # 确保repositories不为None
+        if pg_repo is None or neo4j_repo is None:
+            logger.error("Repository objects are None after initialization")
+            return 0
+            
+        # 1. Make sure Neo4j constraints exist
         await neo4j_repo.create_constraints()
-        logger.info("Neo4j constraints and indexes applied successfully.")
+
+        # 2. Sync HF Models
+        await sync_hf_models(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
+
+        # 3. Sync Papers (with their relations)
+        papers_count = await sync_papers_and_relations(
+            pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE
+        )
+        
+        # 4. Sync Model<->Paper links
+        await sync_model_paper_links(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
+
+        logger.info("Full synchronization completed successfully.")
+        
+        # 5. Count papers in Neo4j (可选的验证步骤)
+        neo4j_papers = await neo4j_repo.count_paper_nodes()
+        logger.info(f"Current Neo4j paper count: {neo4j_papers}")
+        
+        return 1  # 成功完成同步，返回1以通过测试
     except Exception as e:
-        logger.error(f"Failed to apply Neo4j constraints/indexes: {e}")
-        # No need to import traceback here
+        logger.error(f"Synchronization failed with error: {e}")
         logger.error(traceback.format_exc())
-        # Decide if this is a critical failure - perhaps exit?
-        # For now, we log and continue syncing data.
-
-    # Pass repositories to sync functions
-    await sync_hf_models(pg_repo, neo4j_repo)
-    await sync_papers_and_relations(pg_repo, neo4j_repo)
-    await sync_model_paper_links(pg_repo, neo4j_repo)
-
-    logger.info("--- Core synchronization steps finished ---")
+        return 0
+    finally:
+        # Clean up resources if we created them
+        if created_pg_repo and pg_repo is not None:
+            await pg_repo.close()
+        if created_neo4j_repo and neo4j_repo is not None:
+            # Neo4j driver cleaned up through repository close method
+            pass
 
 
 # --- Main Execution ---

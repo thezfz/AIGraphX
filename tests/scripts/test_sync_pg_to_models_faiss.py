@@ -74,6 +74,7 @@ async def insert_faiss_model_pg_data(repo: PostgresRepository) -> List[str]:
                         model_data["hf_library_name"],
                     ),
                 )
+            await conn.commit()
     return model_ids
 
 

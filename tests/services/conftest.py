@@ -164,12 +164,19 @@ def mock_pg_repo() -> MagicMock:
         limit: int = 10,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
+        published_after: Optional[date] = None,
+        published_before: Optional[date] = None,
         area: Optional[str] = None,
+        filter_area: Optional[str] = None,
         sort_by: Optional[
             Literal["published_date", "title", "paper_id"]
         ] = "published_date",
         sort_order: Optional[Literal["asc", "desc"]] = "desc",
     ) -> Tuple[List[Dict[str, Any]], int]:
+        date_from = date_from or published_after
+        date_to = date_to or published_before
+        area = area or filter_area
+        
         # Simulate DB fetching details directly
         # Use details map for consistency
         all_paper_details = list(mock.paper_details_map.values())

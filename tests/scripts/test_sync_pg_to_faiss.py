@@ -121,7 +121,7 @@ async def test_build_faiss_integration(
         index_path=str(temp_index_path),  # Use the path from settings
         id_map_path=str(temp_map_path),  # Use the path from settings
         batch_size=32,  # Added batch_size argument
-        reset_index=False,  # Test without reset first
+        reset_index=True,  # << CHANGED: Ensure clean state by resetting
     )
 
     # 5. Assert: Check if files were created in tmp_path
