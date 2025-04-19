@@ -176,7 +176,7 @@ def mock_pg_repo() -> MagicMock:
         date_from = date_from or published_after
         date_to = date_to or published_before
         area = area or filter_area
-        
+
         # Simulate DB fetching details directly
         # Use details map for consistency
         all_paper_details = list(mock.paper_details_map.values())

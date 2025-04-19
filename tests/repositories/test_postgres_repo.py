@@ -996,52 +996,54 @@ async def test_get_all_papers_for_sync_empty_db(repository: PostgresRepository) 
     async with repository.pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
-    
+
     # 测试方法
     results = await repository.get_all_papers_for_sync()
-    
+
     # 验证结果
     assert isinstance(results, list)
     assert len(results) == 0
 
 
-async def test_get_all_papers_for_sync_with_data(repository: PostgresRepository) -> None:
+async def test_get_all_papers_for_sync_with_data(
+    repository: PostgresRepository,
+) -> None:
     """测试获取所有有摘要的论文。"""
     # 创建测试数据
     paper1 = Paper(
         pwc_id="test-sync-1",
         title="Paper With Summary",
         summary="This is a summary for syncing.",
-        authors=["Author X"]
+        authors=["Author X"],
     )
     paper2 = Paper(
         pwc_id="test-sync-2",
         title="Paper Without Summary",
-        summary="", # 空摘要
-        authors=["Author Y"]
+        summary="",  # 空摘要
+        authors=["Author Y"],
     )
     paper3 = Paper(
         pwc_id="test-sync-3",
         title="Paper With Summary 2",
         summary="Another summary for testing sync.",
-        authors=["Author Z"]
+        authors=["Author Z"],
     )
-    
+
     id1 = await repository.upsert_paper(paper1)
     id2 = await repository.upsert_paper(paper2)
     id3 = await repository.upsert_paper(paper3)
-    
+
     assert id1 is not None
     assert id2 is not None
     assert id3 is not None
-    
+
     # 测试方法
     results = await repository.get_all_papers_for_sync()
-    
+
     # 验证结果
     assert isinstance(results, list)
     assert len(results) == 2  # 应该只返回有摘要的论文
-    
+
     paper_ids = {result["paper_id"] for result in results}
     assert id1 in paper_ids
     assert id3 in paper_ids
@@ -1054,10 +1056,10 @@ async def test_count_papers_empty_db(repository: PostgresRepository) -> None:
     async with repository.pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
-    
+
     # 测试方法
     count = await repository.count_papers()
-    
+
     # 验证结果
     assert count == 0
 
@@ -1068,65 +1070,68 @@ async def test_count_papers_with_data(repository: PostgresRepository) -> None:
     async with repository.pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
-    
+
     # 创建测试数据
     paper1 = Paper(
-        pwc_id="test-count-1",
-        title="Test Count Paper 1",
-        authors=["Author X"]
+        pwc_id="test-count-1", title="Test Count Paper 1", authors=["Author X"]
     )
     paper2 = Paper(
-        pwc_id="test-count-2",
-        title="Test Count Paper 2",
-        authors=["Author Y"]
+        pwc_id="test-count-2", title="Test Count Paper 2", authors=["Author Y"]
     )
-    
+
     await repository.upsert_paper(paper1)
     await repository.upsert_paper(paper2)
-    
+
     # 测试方法
     count = await repository.count_papers()
-    
+
     # 验证结果
     assert count == 2
 
 
-async def test_search_papers_by_keyword_empty_result(repository: PostgresRepository) -> None:
+async def test_search_papers_by_keyword_empty_result(
+    repository: PostgresRepository,
+) -> None:
     """测试搜索不存在的关键词。"""
     # 确保有一些测试数据
     paper = Paper(
         pwc_id="test-search-empty",
         title="Specific Title For Test",
         summary="Specific summary for empty search test",
-        authors=["Author Empty"]
+        authors=["Author Empty"],
     )
     await repository.upsert_paper(paper)
-    
+
     # 搜索不存在的关键词
-    results, count = await repository.search_papers_by_keyword("NonExistentKeywordXYZ123")
-    
+    results, count = await repository.search_papers_by_keyword(
+        "NonExistentKeywordXYZ123"
+    )
+
     # 验证结果
     assert isinstance(results, list)
     assert len(results) == 0
     assert count == 0
 
 
-async def test_search_papers_by_keyword_invalid_sort(repository: PostgresRepository) -> None:
+async def test_search_papers_by_keyword_invalid_sort(
+    repository: PostgresRepository,
+) -> None:
     """测试使用无效的排序字段。"""
     # 创建测试数据
     paper = Paper(
         pwc_id="test-sort-invalid",
         title="Test Invalid Sort",
         summary="Test paper for invalid sort test",
-        authors=["Author Sort"]
+        authors=["Author Sort"],
     )
     await repository.upsert_paper(paper)
-    
+
     # 使用无效的排序字段
     results, count = await repository.search_papers_by_keyword(
-        "Test", sort_by="invalid_column"  # type: ignore
+        "Test",
+        sort_by="invalid_column",  # type: ignore
     )
-    
+
     # 验证结果
     assert isinstance(results, list)
     assert count > 0
@@ -1136,16 +1141,18 @@ async def test_search_papers_by_keyword_invalid_sort(repository: PostgresReposit
 async def test_get_hf_models_by_ids_empty_ids(repository: PostgresRepository) -> None:
     """测试使用空ID列表获取HF模型。"""
     results = await repository.get_hf_models_by_ids([])
-    
+
     assert isinstance(results, list)
     assert len(results) == 0
 
 
-async def test_get_paper_details_by_id_nonexistent(repository: PostgresRepository) -> None:
+async def test_get_paper_details_by_id_nonexistent(
+    repository: PostgresRepository,
+) -> None:
     """测试获取不存在的论文ID。"""
     # 使用一个不太可能存在的ID
     result = await repository.get_paper_details_by_id(999999999)
-    
+
     assert result is None
 
 
@@ -1223,23 +1230,27 @@ async def test_fetch_one_not_found(repository: PostgresRepository) -> None:
 async def test_get_tasks_for_papers_empty_ids(repository: PostgresRepository) -> None:
     """Test fetching tasks for papers with empty IDs."""
     result = await repository.get_tasks_for_papers([])
-    
+
     assert isinstance(result, dict)
     assert len(result) == 0
 
 
-async def test_get_datasets_for_papers_empty_ids(repository: PostgresRepository) -> None:
+async def test_get_datasets_for_papers_empty_ids(
+    repository: PostgresRepository,
+) -> None:
     """Test fetching datasets for papers with empty IDs."""
     result = await repository.get_datasets_for_papers([])
-    
+
     assert isinstance(result, dict)
     assert len(result) == 0
 
 
-async def test_get_repositories_for_papers_empty_ids(repository: PostgresRepository) -> None:
+async def test_get_repositories_for_papers_empty_ids(
+    repository: PostgresRepository,
+) -> None:
     """Test fetching repositories for papers with empty IDs."""
     result = await repository.get_repositories_for_papers([])
-    
+
     assert isinstance(result, dict)
     assert len(result) == 0
 
@@ -1248,15 +1259,15 @@ async def test_close_connection_pool(repository: PostgresRepository) -> None:
     """Test closing the connection pool."""
     # Save original pool to restore
     original_pool = repository.pool
-    
+
     # Create mock pool
     mock_pool = AsyncMock()
     repository.pool = mock_pool
-    
+
     try:
         # Test close method
         await repository.close()
-        
+
         # Verify close method was called
         mock_pool.close.assert_called_once()
     finally:
@@ -1271,38 +1282,33 @@ async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
             await cur.execute("TRUNCATE pwc_tasks RESTART IDENTITY CASCADE")
-    
+
     # Create test data
     paper1 = Paper(
-        pwc_id="test-tasks-1",
-        title="Test Tasks Paper 1",
-        authors=["Author Tasks"]
+        pwc_id="test-tasks-1", title="Test Tasks Paper 1", authors=["Author Tasks"]
     )
     paper2 = Paper(
-        pwc_id="test-tasks-2",
-        title="Test Tasks Paper 2",
-        authors=["Author Tasks"]
+        pwc_id="test-tasks-2", title="Test Tasks Paper 2", authors=["Author Tasks"]
     )
-    
+
     id1 = await repository.upsert_paper(paper1)
     id2 = await repository.upsert_paper(paper2)
     assert id1 is not None
     assert id2 is not None
-    
+
     # Add tasks
     async with repository.pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO pwc_tasks (paper_id, task_name) VALUES (%s, %s), (%s, %s), (%s, %s)",
-                (id1, "Task A", id1, "Task B", id2, "Task C")
+                (id1, "Task A", id1, "Task B", id2, "Task C"),
             )
-    
+
     # Test method
     result = await repository.get_tasks_for_papers([id1, id2])
-    
+
     # Verify result
     assert isinstance(result, dict)
     assert len(result) == 2
     assert set(result[id1]) == {"Task A", "Task B"}
     assert set(result[id2]) == {"Task C"}
-

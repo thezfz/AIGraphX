@@ -161,7 +161,7 @@ async def sync_papers_and_relations(
     pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
 ) -> int:
     """Fetches papers and their relations from PG and syncs them to Neo4j.
-    
+
     Returns:
         int: 同步的论文总数
     """
@@ -284,7 +284,7 @@ async def sync_papers_and_relations(
     logger.info(
         f"Paper synchronization finished. PWC papers: {papers_synced_pwc}, ArXiv-only papers: {papers_synced_arxiv}, Total: {total_papers}"
     )
-    
+
     return total_papers
 
 
@@ -386,7 +386,7 @@ async def sync_model_paper_links(
 ) -> None:
     """同步HFModel和Paper之间的关系"""
     logger.info("开始同步HF模型和论文之间的关系...")
-    
+
     # 从model_paper_links表获取关系
     link_query = """
     SELECT mpl.hf_model_id, p.pwc_id, mpl.paper_id
@@ -394,31 +394,35 @@ async def sync_model_paper_links(
     JOIN papers p ON mpl.paper_id = p.paper_id
     WHERE p.pwc_id IS NOT NULL
     """
-    
+
     try:
         # 获取数据
         links_to_process = []
         link_count = 0
-        
-        async for link_record in pg_repo.fetch_data_cursor(link_query, batch_size=batch_size):
+
+        async for link_record in pg_repo.fetch_data_cursor(
+            link_query, batch_size=batch_size
+        ):
             # 只处理有效记录
             if not link_record.get("hf_model_id") or not link_record.get("pwc_id"):
                 continue
-                
+
             # 转换格式
             link_data = {
                 "model_id": link_record["hf_model_id"],
                 "pwc_id": link_record["pwc_id"],
-                "confidence": 1.0  # 默认置信度
+                "confidence": 1.0,  # 默认置信度
             }
             links_to_process.append(link_data)
-            
+
             # 批处理
             if len(links_to_process) >= NEO4J_WRITE_BATCH_SIZE:
                 try:
                     # 特殊调试输出
-                    logger.info(f"正在处理 {len(links_to_process)} 条HFModel-Paper关系，第一条: {links_to_process[0]}")
-                    
+                    logger.info(
+                        f"正在处理 {len(links_to_process)} 条HFModel-Paper关系，第一条: {links_to_process[0]}"
+                    )
+
                     # 创建MENTIONS关系
                     await neo4j_repo.link_model_to_paper_batch(links_to_process)
                     link_count += len(links_to_process)
@@ -428,40 +432,43 @@ async def sync_model_paper_links(
                     logger.error(traceback.format_exc())
                 finally:
                     links_to_process = []
-                    
+
         # 处理剩余的关系
         if links_to_process:
             try:
                 # 特殊调试输出
                 logger.info(f"正在处理最后 {len(links_to_process)} 条HFModel-Paper关系")
-                
+
                 # 创建MENTIONS关系
                 await neo4j_repo.link_model_to_paper_batch(links_to_process)
                 link_count += len(links_to_process)
             except Exception as e:
                 logger.error(f"保存最后一批模型-论文关系时出错: {e}")
                 logger.error(traceback.format_exc())
-                
+
         logger.info(f"模型-论文关系同步完成，总计: {link_count} 条关系")
-        
+
     except Exception as e:
         logger.error(f"获取模型-论文关系时出错: {e}")
         logger.error(traceback.format_exc())
 
 
 # --- Synchronization Runner ---
-async def run_sync(pg_repo: Optional[PostgresRepository] = None, neo4j_repo: Optional[Neo4jRepository] = None) -> int:
+async def run_sync(
+    pg_repo: Optional[PostgresRepository] = None,
+    neo4j_repo: Optional[Neo4jRepository] = None,
+) -> int:
     """Runs the full synchronization process.
-    
+
     Returns:
         int: 同步的论文数量，用于测试断言
     """
     logger.info("Starting full PG to Neo4j synchronization...")
-    
+
     # Create repositories if not provided
     created_pg_repo = False
     created_neo4j_repo = False
-    
+
     if pg_repo is None:
         try:
             # Create PostgreSQL pool
@@ -500,7 +507,7 @@ async def run_sync(pg_repo: Optional[PostgresRepository] = None, neo4j_repo: Opt
         if pg_repo is None or neo4j_repo is None:
             logger.error("Repository objects are None after initialization")
             return 0
-            
+
         # 1. Make sure Neo4j constraints exist
         await neo4j_repo.create_constraints()
 
@@ -511,16 +518,16 @@ async def run_sync(pg_repo: Optional[PostgresRepository] = None, neo4j_repo: Opt
         papers_count = await sync_papers_and_relations(
             pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE
         )
-        
+
         # 4. Sync Model<->Paper links
         await sync_model_paper_links(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
 
         logger.info("Full synchronization completed successfully.")
-        
+
         # 5. Count papers in Neo4j (可选的验证步骤)
         neo4j_papers = await neo4j_repo.count_paper_nodes()
         logger.info(f"Current Neo4j paper count: {neo4j_papers}")
-        
+
         return 1  # 成功完成同步，返回1以通过测试
     except Exception as e:
         logger.error(f"Synchronization failed with error: {e}")

@@ -577,22 +577,30 @@ async def repository(
 
     # Safely get calling test name
     frame = inspect.currentframe()
-    func_name = "unknown_test" # Default value
+    func_name = "unknown_test"  # Default value
     if frame and frame.f_back:
         caller_frame = frame.f_back
         if caller_frame:
-             func_name = caller_frame.f_code.co_name
+            func_name = caller_frame.f_code.co_name
 
     # --- Pre-test Cleanup --- (Keep pre-test cleanup)
-    logger.info(f"[repository fixture for {func_name}] PRE-TEST: Attempting to acquire DB cleanup lock...")
+    logger.info(
+        f"[repository fixture for {func_name}] PRE-TEST: Attempting to acquire DB cleanup lock..."
+    )
     try:
-        async with db_cleanup_lock: # Acquire lock
-            logger.info(f"[repository fixture for {func_name}] PRE-TEST: DB cleanup lock ACQUIRED. Cleaning tables...")
+        async with db_cleanup_lock:  # Acquire lock
+            logger.info(
+                f"[repository fixture for {func_name}] PRE-TEST: DB cleanup lock ACQUIRED. Cleaning tables..."
+            )
             try:
                 async with db_pool.connection() as conn:
-                    logger.info(f"[repository fixture for {func_name}] PRE-TEST: Acquired PG connection for TRUNCATE.")
+                    logger.info(
+                        f"[repository fixture for {func_name}] PRE-TEST: Acquired PG connection for TRUNCATE."
+                    )
                     async with conn.cursor() as cur:
-                        logger.info(f"[repository fixture for {func_name}] PRE-TEST: Executing TRUNCATE...")
+                        logger.info(
+                            f"[repository fixture for {func_name}] PRE-TEST: Executing TRUNCATE..."
+                        )
                         await cur.execute(
                             """
                             TRUNCATE TABLE model_paper_links, hf_models, papers,
@@ -600,22 +608,37 @@ async def repository(
                                          RESTART IDENTITY CASCADE;
                             """
                         )
-                        logger.info(f"[repository fixture for {func_name}] PRE-TEST: TRUNCATE command executed.")
+                        logger.info(
+                            f"[repository fixture for {func_name}] PRE-TEST: TRUNCATE command executed."
+                        )
                     await conn.commit()
-                    logger.info(f"[repository fixture for {func_name}] PRE-TEST: COMMIT executed after TRUNCATE.")
-                logger.info(f"[repository fixture for {func_name}] PRE-TEST: Tables truncated and committed successfully.")
+                    logger.info(
+                        f"[repository fixture for {func_name}] PRE-TEST: COMMIT executed after TRUNCATE."
+                    )
+                logger.info(
+                    f"[repository fixture for {func_name}] PRE-TEST: Tables truncated and committed successfully."
+                )
             except Exception as e:
-                logger.error(f"[repository fixture for {func_name}] PRE-TEST: Error truncating tables (while holding lock): {e}", exc_info=True)
-                pytest.fail(f"[repository fixture for {func_name}] PRE-TEST: Failed to clean test database: {e}")
+                logger.error(
+                    f"[repository fixture for {func_name}] PRE-TEST: Error truncating tables (while holding lock): {e}",
+                    exc_info=True,
+                )
+                pytest.fail(
+                    f"[repository fixture for {func_name}] PRE-TEST: Failed to clean test database: {e}"
+                )
     finally:
-         logger.info(f"[repository fixture for {func_name}] PRE-TEST: DB cleanup lock released.")
+        logger.info(
+            f"[repository fixture for {func_name}] PRE-TEST: DB cleanup lock released."
+        )
 
     # Yield the repository
     repo = PostgresRepository(pool=db_pool)
     logger.info(f"[repository fixture for {func_name}] Yielding repository instance.")
     yield repo
 
-    logger.info(f"[repository fixture for {func_name}] Teardown complete (NO post-test cleanup).")
+    logger.info(
+        f"[repository fixture for {func_name}] Teardown complete (NO post-test cleanup)."
+    )
 
 
 # --- Fixture for Neo4j Driver (Function Scope) ---

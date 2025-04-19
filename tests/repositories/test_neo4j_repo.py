@@ -464,42 +464,43 @@ async def test_search_nodes_success_with_results() -> None:
     # Keeping this mocked as setting up full-text index in integration can be complex.
     mock_driver = AsyncMock(spec=AsyncDriver)
     mock_session = AsyncMock(spec=AsyncSession)
-    
+
     # Mock the async iterator directly
     mock_records = []
-    for i, data in enumerate([
-        {"id": 1, "title": "Paper 1"},
-        {"id": 2, "name": "Author A"}
-    ]):
+    for i, data in enumerate(
+        [{"id": 1, "title": "Paper 1"}, {"id": 2, "name": "Author A"}]
+    ):
         mock_record = MagicMock()
         mock_node = MagicMock()
         mock_node.items.return_value = data.items()
-        mock_record.__getitem__.side_effect = lambda key: mock_node if key == "node" else 0.9 - i * 0.1
+        mock_record.__getitem__.side_effect = (
+            lambda key: mock_node if key == "node" else 0.9 - i * 0.1
+        )
         mock_records.append(mock_record)
-    
+
     # Setup mock async iterator for result
     mock_result = AsyncMock()
     mock_result.__aiter__.return_value = mock_records
-    
+
     # Setup session.run to return our mock result
     mock_session.run = AsyncMock(return_value=mock_result)
     mock_driver.session.return_value.__aenter__.return_value = mock_session
     mock_driver.session.return_value.__aexit__.return_value = None
-    
+
     repo = Neo4jRepository(driver=mock_driver)
-    
+
     # Expected result format
     expected_results = [
         {"node": {"id": 1, "title": "Paper 1"}, "score": 0.9},
-        {"node": {"id": 2, "name": "Author A"}, "score": 0.8}
+        {"node": {"id": 2, "name": "Author A"}, "score": 0.8},
     ]
-    
+
     # Patch search_nodes to return mock data directly for this test
-    with patch.object(repo, 'search_nodes', return_value=expected_results):
+    with patch.object(repo, "search_nodes", return_value=expected_results):
         results = await repo.search_nodes(
             "test query", "paper_fulltext_idx", ["Paper", "Author"], 10, 0
         )
-        
+
         assert results == expected_results
 
 
@@ -848,7 +849,11 @@ async def test_get_related_nodes_exception(mock_logger: MagicMock) -> None:
     assert mock_logger.error.call_count >= 1
     # 检查第一次调用中包含期望的错误消息
     first_call_args = mock_logger.error.call_args_list[0][0]
-    assert any("Error getting related nodes" in arg for arg in first_call_args if isinstance(arg, str))
+    assert any(
+        "Error getting related nodes" in arg
+        for arg in first_call_args
+        if isinstance(arg, str)
+    )
 
 
 @pytest.mark.asyncio
@@ -990,10 +995,10 @@ async def test_get_paper_neighborhood_not_found_integration(
 ) -> None:
     """测试获取不存在的论文邻域。"""
     repo = neo4j_repo_fixture
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 测试获取不存在的论文邻域
     result = await repo.get_paper_neighborhood("non-existent-paper-id")
     assert result is None
@@ -1010,10 +1015,10 @@ async def test_get_paper_neighborhood_integration(
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
     pwc_id = "test-neighborhood"
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 创建测试数据，包括所有类型的关系
     async with neo4j_driver.session(database=db_name) as session:
         await session.execute_write(
@@ -1066,42 +1071,42 @@ async def test_get_paper_neighborhood_integration(
                 })
                 CREATE (hf)-[:MENTIONS]->(p)
                 """,
-                {"pwc_id": pwc_id}
+                {"pwc_id": pwc_id},
             )
         )
-    
+
     # 测试获取论文邻域
     result = await repo.get_paper_neighborhood(pwc_id)
-    
+
     # 验证结果
     assert result is not None
     # 验证paper数据
     assert result["paper"]["pwc_id"] == pwc_id
     assert result["paper"]["title"] == "Test Neighborhood Paper"
-    
+
     # 验证关系
     assert len(result["authors"]) == 2
     author_names = {author["name"] for author in result["authors"]}
     assert "Author A" in author_names
     assert "Author B" in author_names
-    
+
     assert len(result["tasks"]) == 2
     task_names = {task["name"] for task in result["tasks"]}
     assert "Task X" in task_names
     assert "Task Y" in task_names
-    
+
     assert len(result["datasets"]) == 1
     assert result["datasets"][0]["name"] == "Dataset Z"
-    
+
     assert len(result["methods"]) == 1
     assert result["methods"][0]["name"] == "Method M"
-    
+
     assert len(result["repositories"]) == 1
     assert result["repositories"][0]["url"] == "http://github.com/test/repo"
     assert result["repositories"][0]["stars"] == 100
-    
+
     assert result["area"]["name"] == "Computer Vision"
-    
+
     assert len(result["models"]) == 1
     assert result["models"][0]["model_id"] == "test/model"
 
@@ -1119,13 +1124,13 @@ async def test_get_paper_neighborhood_error(
     mock_session = AsyncMock()
     mock_session.__aenter__.side_effect = Exception("Simulated session error")
     mock_driver.session.return_value = mock_session
-    
+
     # 使用mock driver创建repository
     repo = Neo4jRepository(driver=mock_driver)
-    
+
     # 测试获取论文邻域
     result = await repo.get_paper_neighborhood("test-id")
-    
+
     # 验证结果
     assert result is None
     mock_logger.error.assert_called()
@@ -1141,10 +1146,10 @@ async def test_link_model_to_paper_batch_integration(
     """测试批量链接模型到论文。"""
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 创建测试数据 - 论文和模型节点
     async with neo4j_driver.session(database=db_name) as session:
         await session.execute_write(
@@ -1157,17 +1162,21 @@ async def test_link_model_to_paper_batch_integration(
                 """
             )
         )
-    
+
     # 准备链接数据
     links = [
         {"model_id": "model-1", "pwc_id": "paper-1", "confidence": 0.95},
         {"model_id": "model-2", "pwc_id": "paper-2", "confidence": 0.85},
-        {"model_id": "model-1", "pwc_id": "paper-2", "confidence": 0.70}  # 一个模型链接到多篇论文
+        {
+            "model_id": "model-1",
+            "pwc_id": "paper-2",
+            "confidence": 0.70,
+        },  # 一个模型链接到多篇论文
     ]
-    
+
     # 测试批量链接
     await repo.link_model_to_paper_batch(links)
-    
+
     # 验证结果
     async with neo4j_driver.session(database=db_name) as session:
         # 检查链接数量
@@ -1177,7 +1186,7 @@ async def test_link_model_to_paper_batch_integration(
         count_record = await result_count.single()
         assert count_record is not None
         assert count_record["count"] == 3
-        
+
         # 检查具体链接及其属性
         result_link1 = await session.run(
             """
@@ -1188,7 +1197,7 @@ async def test_link_model_to_paper_batch_integration(
         link1_record = await result_link1.single()
         assert link1_record is not None
         assert link1_record["confidence"] == 0.95
-        
+
         # 检查模型1到论文2的链接
         result_link3 = await session.run(
             """
@@ -1211,10 +1220,10 @@ async def test_save_papers_by_arxiv_batch_integration(
     """测试通过ArXiv ID批量保存论文。"""
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 准备测试数据
     papers_data = [
         {
@@ -1225,7 +1234,7 @@ async def test_save_papers_by_arxiv_batch_integration(
             "published_date": "2024-01-01",
             "authors": ["Author A", "Author B"],
             "primary_category": "cs.CV",
-            "categories": ["cs.CV", "cs.AI"]
+            "categories": ["cs.CV", "cs.AI"],
         },
         {
             "arxiv_id_base": "2401.00002",
@@ -1235,7 +1244,7 @@ async def test_save_papers_by_arxiv_batch_integration(
             "published_date": "2024-01-02",
             "authors": ["Author C"],
             "primary_category": "cs.LG",
-            "categories": ["cs.LG"]
+            "categories": ["cs.LG"],
         },
         {
             "arxiv_id_base": "2401.00003",
@@ -1245,37 +1254,37 @@ async def test_save_papers_by_arxiv_batch_integration(
             "published_date": "2024-01-03",
             "authors": ["Author D", "Author E"],
             "primary_category": "cs.NE",
-            "categories": ["cs.NE", "cs.AI"]
-        }
+            "categories": ["cs.NE", "cs.AI"],
+        },
     ]
-    
+
     # 测试批量保存
     await repo.save_papers_by_arxiv_batch(papers_data)
-    
+
     # 验证结果
     async with neo4j_driver.session(database=db_name) as session:
         # 检查Paper节点数量
         result_papers = await session.run(
             "MATCH (p:Paper) WHERE p.arxiv_id_base IN $ids RETURN count(p) AS count",
-            {"ids": ["2401.00001", "2401.00002", "2401.00003"]}
+            {"ids": ["2401.00001", "2401.00002", "2401.00003"]},
         )
         papers_count = await result_papers.single()
         assert papers_count is not None
         assert papers_count["count"] == 3
-        
+
         # 检查作者节点数量
         result_authors = await session.run(
             "MATCH (a:Author)-[:AUTHORED]->(p:Paper) WHERE p.arxiv_id_base IN $ids RETURN count(a) AS count",
-            {"ids": ["2401.00001", "2401.00002", "2401.00003"]}
+            {"ids": ["2401.00001", "2401.00002", "2401.00003"]},
         )
         authors_count = await result_authors.single()
         assert authors_count is not None
         assert authors_count["count"] >= 4  # 至少有4个作者节点
-        
+
         # 检查分类节点数量
         result_categories = await session.run(
             "MATCH (p:Paper)-[:HAS_CATEGORY]->(c:Category) WHERE p.arxiv_id_base IN $ids RETURN count(c) AS count",
-            {"ids": ["2401.00001", "2401.00002", "2401.00003"]}
+            {"ids": ["2401.00001", "2401.00002", "2401.00003"]},
         )
         categories_count = await result_categories.single()
         assert categories_count is not None
@@ -1292,10 +1301,10 @@ async def test_search_nodes_integration(
     """测试在Neo4j中搜索节点。"""
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 创建测试数据
     async with neo4j_driver.session(database=db_name) as session:
         await session.execute_write(
@@ -1307,21 +1316,31 @@ async def test_search_nodes_integration(
                 """
             )
         )
-    
+
     # 使用模拟方法，因为环境中可能没有APOC或全文索引
     # 不使用真正的数据库查询，而是直接模拟基于查询词的匹配结果
-    with patch.object(repo, 'search_nodes', return_value=[
-        {"node": {"title": "Neural Network Research", "summary": "A paper about neural networks"}, "score": 1.0}
-    ]):
+    with patch.object(
+        repo,
+        "search_nodes",
+        return_value=[
+            {
+                "node": {
+                    "title": "Neural Network Research",
+                    "summary": "A paper about neural networks",
+                },
+                "score": 1.0,
+            }
+        ],
+    ):
         # 测试搜索方法
         results = await repo.search_nodes(
             search_term="neural",
             index_name="paper_fulltext",  # 任意索引名称
             labels=["Paper"],
             limit=10,
-            skip=0
+            skip=0,
         )
-        
+
         # 验证结果
         assert isinstance(results, list)
         assert len(results) == 1
@@ -1350,10 +1369,10 @@ async def test_get_related_nodes_different_types_integration(
     """测试获取不同类型的相关节点。"""
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 创建测试数据 - 各种节点和关系
     async with neo4j_driver.session(database=db_name) as session:
         await session.execute_write(
@@ -1390,14 +1409,14 @@ async def test_get_related_nodes_different_types_integration(
                 """
             )
         )
-    
+
     # 确定测试的起始节点值
     start_node_val = ""
     if start_node_label == "Paper":
         start_node_val = "paper-test-1"
     elif start_node_label == "HFModel":
         start_node_val = "model-test-2"
-    
+
     # 测试获取相关节点
     results = await repo.get_related_nodes(
         start_node_label=start_node_label,
@@ -1406,16 +1425,20 @@ async def test_get_related_nodes_different_types_integration(
         relationship_type=relationship_type,
         target_node_label=target_node_label,
         direction="OUT" if relationship_type in ["HAS_TASK", "USES_DATASET"] else "IN",
-        limit=10
+        limit=10,
     )
-    
+
     # 验证结果
     assert len(results) > 0
     # 验证返回的节点类型正确
     for result in results:
         if target_node_label == "Task":
             assert "name" in result
-            assert result["name"] in ["Classification", "Object Detection", "Segmentation"]
+            assert result["name"] in [
+                "Classification",
+                "Object Detection",
+                "Segmentation",
+            ]
         elif target_node_label == "Dataset":
             assert "name" in result
             assert result["name"] in ["COCO", "ImageNet"]
@@ -1435,31 +1458,31 @@ async def test_create_or_update_paper_node_integration(
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
     pwc_id = "test-create-update"
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 测试创建节点
     await repo.create_or_update_paper_node(pwc_id, "Initial Title")
-    
+
     # 验证节点被创建
     async with neo4j_driver.session(database=db_name) as session:
         result_create = await session.run(
             "MATCH (p:Paper {pwc_id: $pwc_id}) RETURN p.title AS title",
-            {"pwc_id": pwc_id}
+            {"pwc_id": pwc_id},
         )
         create_record = await result_create.single()
         assert create_record is not None
         assert create_record["title"] == "Initial Title"
-    
+
     # 测试更新节点
     await repo.create_or_update_paper_node(pwc_id, "Updated Title")
-    
+
     # 验证节点被更新
     async with neo4j_driver.session(database=db_name) as session:
         result_update = await session.run(
             "MATCH (p:Paper {pwc_id: $pwc_id}) RETURN p.title AS title",
-            {"pwc_id": pwc_id}
+            {"pwc_id": pwc_id},
         )
         update_record = await result_update.single()
         assert update_record is not None
@@ -1477,18 +1500,18 @@ async def test_link_paper_to_entity_integration(
     repo = neo4j_repo_fixture
     db_name = test_settings.neo4j_database
     pwc_id = "test-link-entity"
-    
+
     # 先确保数据库为空
     await _clear_neo4j_db(neo4j_driver, test_settings)
-    
+
     # 测试链接论文到自定义实体
     await repo.link_paper_to_entity(
         pwc_id=pwc_id,
         entity_label="CustomEntity",
         entity_name="Test Entity",
-        relationship="HAS_CUSTOM_ENTITY"
+        relationship="HAS_CUSTOM_ENTITY",
     )
-    
+
     # 验证链接被创建
     async with neo4j_driver.session(database=db_name) as session:
         result = await session.run(
@@ -1496,7 +1519,7 @@ async def test_link_paper_to_entity_integration(
             MATCH (p:Paper {pwc_id: $pwc_id})-[r:HAS_CUSTOM_ENTITY]->(e:CustomEntity {name: $name})
             RETURN p.pwc_id AS pwc_id, e.name AS entity_name
             """,
-            {"pwc_id": pwc_id, "name": "Test Entity"}
+            {"pwc_id": pwc_id, "name": "Test Entity"},
         )
         record = await result.single()
         assert record is not None

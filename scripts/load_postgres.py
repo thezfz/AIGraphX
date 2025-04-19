@@ -448,7 +448,9 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
     batch_count = 0
     error_count = 0
     current_batch: List[Tuple[int, Dict[str, Any]]] = []
-    start_line = _load_checkpoint(reset_checkpoint) # Resetting only affects checkpoint file now
+    start_line = _load_checkpoint(
+        reset_checkpoint
+    )  # Resetting only affects checkpoint file now
 
     # reset_db flag is now only informational for logging
     # Database truncation/cleanup is expected to be handled externally (e.g., by test fixtures)
@@ -493,7 +495,9 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
                         logger.info(
                             f"Processing batch starting at line {batch_start_line} (size: {len(current_batch)})..."
                         )
-                        async with pool.connection() as conn: # Get connection for batch
+                        async with (
+                            pool.connection() as conn
+                        ):  # Get connection for batch
                             lines_processed_in_batch = await process_batch(
                                 conn, current_batch
                             )
@@ -528,7 +532,7 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
 
             # Final checkpoint save
             # Corrected condition: Save checkpoint if we processed any new lines
-            final_line_num = i + 1 # Use the actual last line number read
+            final_line_num = i + 1  # Use the actual last line number read
             if final_line_num > start_line:
                 _save_checkpoint(final_line_num)
 
@@ -540,7 +544,9 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
         if pool:
             await pool.close()
             logger.info("Database pool closed.")
-        logger.info(f"Data loading finished. Total lines processed successfully: {processed_count}. Total errors: {error_count}.")
+        logger.info(
+            f"Data loading finished. Total lines processed successfully: {processed_count}. Total errors: {error_count}."
+        )
 
 
 if __name__ == "__main__":

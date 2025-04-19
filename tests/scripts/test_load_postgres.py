@@ -164,7 +164,9 @@ async def test_load_postgres_integration_success(
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
     # 3. Run the script main function
-    await load_pg_main(input_file_path=str(input_file), reset_db=False, reset_checkpoint=False)
+    await load_pg_main(
+        input_file_path=str(input_file), reset_db=False, reset_checkpoint=False
+    )
 
     # 4. Assert database state using the repository
     async with repo.pool.connection() as conn:
@@ -246,7 +248,9 @@ async def test_load_postgres_integration_resume(
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
     # Run the script
-    await load_pg_main(input_file_path=str(input_file), reset_db=False, reset_checkpoint=False)
+    await load_pg_main(
+        input_file_path=str(input_file), reset_db=False, reset_checkpoint=False
+    )
 
     # Assert database state: Only model 2 should have been processed this run
     async with repo.pool.connection() as conn:
@@ -287,7 +291,9 @@ async def test_load_postgres_integration_reset(
     # Patch checkpoint file path and save function
     mocker.patch("scripts.load_postgres.CHECKPOINT_FILE", str(checkpoint_path))
     # Patch load checkpoint to simulate reset (it won't find a file)
-    mock_load = mocker.patch("scripts.load_postgres._load_checkpoint", return_value=0) # Reset starts from 0
+    mock_load = mocker.patch(
+        "scripts.load_postgres._load_checkpoint", return_value=0
+    )  # Reset starts from 0
     mock_save = mocker.patch("scripts.load_postgres._save_checkpoint")
 
     # Patch the DATABASE_URL used by the script
@@ -297,7 +303,9 @@ async def test_load_postgres_integration_reset(
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
     # Run the script with reset_checkpoint=True (reset_db flag is ignored by script now)
-    await load_pg_main(input_file_path=str(input_file), reset_db=True, reset_checkpoint=True)
+    await load_pg_main(
+        input_file_path=str(input_file), reset_db=True, reset_checkpoint=True
+    )
 
     # Assert database state: Only model 1 (from input file) should exist
     async with repo.pool.connection() as conn:
@@ -312,7 +320,7 @@ async def test_load_postgres_integration_reset(
             assert model1[0] == "author1"
 
     # Assert checkpoint handling
-    mock_load.assert_called_once_with(True) # Check reset_checkpoint=True was passed
+    mock_load.assert_called_once_with(True)  # Check reset_checkpoint=True was passed
     # Check that the final line number (1+1=2) was attempted to be saved
     # Note: Script saves the *next* line number to start from.
     # If input has 1 line, loop finishes with i=0, final_line_num=1.

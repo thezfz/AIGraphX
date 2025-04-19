@@ -297,7 +297,9 @@ class PostgresRepository:
         try:
             while True:
                 # 正确的SQL格式
-                batch_query = f"{query} ORDER BY hf_model_id LIMIT %s OFFSET %s"  # 移除末尾的分号
+                batch_query = (
+                    f"{query} ORDER BY hf_model_id LIMIT %s OFFSET %s"  # 移除末尾的分号
+                )
                 async with self.pool.connection() as conn:
                     async with conn.cursor(row_factory=dict_row) as cur:
                         await cur.execute(batch_query, (batch_size, offset))
@@ -317,41 +319,41 @@ class PostgresRepository:
         if not paper_data or "pwc_id" not in paper_data:
             self.logger.error("Cannot save paper: missing data or pwc_id.")
             return False
-            
+
         try:
             # 准备列和值
             cols = []
             vals = []
             excluded_updates = []
-            
+
             for key, value in paper_data.items():
                 # 处理特殊字段
                 if key in ["authors", "categories"] and value is not None:
                     # 确保列表类型被序列化为JSON
                     if isinstance(value, list):
                         value = json.dumps(value)
-                
+
                 cols.append(key)
                 vals.append(value)
-                
+
                 # 对于ON CONFLICT，排除主键
                 if key != "pwc_id":
                     excluded_updates.append(f"{key} = EXCLUDED.{key}")
-            
+
             # 构建查询
             if not excluded_updates:
                 # 如果只有pwc_id，至少添加一个更新字段
                 excluded_updates = ["updated_at = CURRENT_TIMESTAMP"]
-            
+
             query = f"""
                 INSERT INTO papers ({", ".join(cols)})
                 VALUES ({", ".join(["%s"] * len(vals))})
                 ON CONFLICT (pwc_id) DO UPDATE SET
                     {", ".join(excluded_updates)};
             """
-            
+
             self.logger.debug(f"Saving paper with pwc_id: {paper_data.get('pwc_id')}")
-            
+
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cur:
                     await cur.execute(query, vals)
@@ -390,7 +392,7 @@ class PostgresRepository:
 
         # 构建每行的VALUES部分
         placeholders = ", ".join(["%s"] * len(cols))
-        
+
         # Construct query (Ensure table and column names are correct)
         query = f"""
             INSERT INTO hf_models ({", ".join(cols)})
@@ -418,7 +420,7 @@ class PostgresRepository:
                     # 逐个执行插入，而不是使用executemany
                     for data_tuple in data_tuples:
                         await cur.execute(query, data_tuple)
-                    
+
                     self.logger.info(
                         f"Successfully saved/updated batch of {len(models_data)} HF models."
                     )
@@ -518,7 +520,7 @@ class PostgresRepository:
 
     async def close(self) -> None:
         """Closes the connection pool (if applicable and managed by this instance)."""
-        if hasattr(self, 'pool') and self.pool is not None:
+        if hasattr(self, "pool") and self.pool is not None:
             try:
                 await self.pool.close()
                 self.logger.info("PostgreSQL connection pool closed successfully.")

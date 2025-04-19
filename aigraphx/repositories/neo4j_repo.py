@@ -549,14 +549,14 @@ class Neo4jRepository:
             async with self.driver.session() as session:
                 result = await session.run(query, parameters)
                 record = await result.single()
-                
+
                 if not record or not record.get("paper"):
                     logger.warning(f"Paper with pwc_id {pwc_id} not found in Neo4j.")
                     return None  # Paper itself not found
-                
+
                 # 提取结果
                 paper_node = dict(record["paper"])
-                
+
                 # 转换节点集合为字典列表
                 authors = [dict(author) for author in record["authors"] if author]
                 tasks = [dict(task) for task in record["tasks"] if task]
@@ -564,11 +564,11 @@ class Neo4jRepository:
                 repositories = [dict(repo) for repo in record["repositories"] if repo]
                 methods = [dict(method) for method in record["methods"] if method]
                 models = [dict(model) for model in record["models"] if model]
-                
+
                 # 取第一个area节点（如果存在）
                 areas = [dict(area) for area in record["areas"] if area]
                 area = areas[0] if areas else None
-                
+
                 # 构建返回结果
                 return {
                     "paper": paper_node,
@@ -578,9 +578,9 @@ class Neo4jRepository:
                     "repositories": repositories,
                     "area": area,
                     "methods": methods,
-                    "models": models
+                    "models": models,
                 }
-                
+
         except Exception as e:
             logger.error(f"Error fetching neighborhood for paper {pwc_id}: {e}")
             logger.error(traceback.format_exc())
@@ -617,14 +617,18 @@ class Neo4jRepository:
         try:
             async with self.driver.session() as session:
                 await session.execute_write(_run_link_batch_tx)
-                logger.info(f"Successfully processed model-paper link batch of {len(links)} links.")
+                logger.info(
+                    f"Successfully processed model-paper link batch of {len(links)} links."
+                )
         except Exception as e:
             logger.error(f"Failed to link models to papers in batch: {e}")
             logger.error(traceback.format_exc())
             raise
 
     # --- NEW Method: Save Papers by Arxiv ID Batch (for those without pwc_id) ---
-    async def save_papers_by_arxiv_batch(self, papers_data: List[Dict[str, Any]]) -> None:
+    async def save_papers_by_arxiv_batch(
+        self, papers_data: List[Dict[str, Any]]
+    ) -> None:
         """
         Saves a batch of paper data to Neo4j using UNWIND, merging primarily based on arxiv_id_base.
         """
@@ -670,12 +674,16 @@ class Neo4jRepository:
         async def _run_arxiv_batch_tx(tx: AsyncManagedTransaction) -> None:
             result = await tx.run(query, batch=papers_data)
             summary = await result.consume()
-            logger.info(f"Nodes created: {summary.counters.nodes_created}, relationships created: {summary.counters.relationships_created}")
+            logger.info(
+                f"Nodes created: {summary.counters.nodes_created}, relationships created: {summary.counters.relationships_created}"
+            )
 
         try:
             async with self.driver.session() as session:
                 await session.execute_write(_run_arxiv_batch_tx)
-                logger.info(f"Successfully processed batch of {len(papers_data)} papers by arxiv_id.")
+                logger.info(
+                    f"Successfully processed batch of {len(papers_data)} papers by arxiv_id."
+                )
         except Exception as e:
             logger.error(f"Error saving papers batch by arxiv_id to Neo4j: {e}")
             logger.error(traceback.format_exc())
@@ -691,14 +699,14 @@ class Neo4jRepository:
     ) -> List[Dict[str, Any]]:
         """
         使用全文搜索查询节点。
-        
+
         Args:
             search_term: 搜索词
             index_name: 要使用的全文索引名称
             labels: 要搜索的节点标签列表
             limit: 返回结果的最大数量
             skip: 跳过的结果数量
-            
+
         Returns:
             匹配节点列表
         """
@@ -715,11 +723,11 @@ class Neo4jRepository:
             label_conditions = []
             for label in labels:
                 label_conditions.append(f"n:{label}")
-            
+
             label_filter = ""
             if label_conditions:
                 label_filter = " WHERE " + " OR ".join(label_conditions)
-            
+
             # 构建通用的基于正则表达式的搜索查询
             # 这更可能在集成测试环境中工作，不依赖全文索引
             query = f"""
@@ -732,29 +740,25 @@ class Neo4jRepository:
             LIMIT $limit
             SKIP $skip
             """
-            
+
             async with self.driver.session(database=self.db_name) as session:
                 result = await session.run(
-                    query,
-                    {
-                        "search_term": search_term,
-                        "skip": skip,
-                        "limit": limit
-                    }
+                    query, {"search_term": search_term, "skip": skip, "limit": limit}
                 )
-                
+
                 # 收集结果
                 records = []
                 async for record in result:
                     # 直接返回符合测试期望的格式
-                    node_dict = dict(record["node"].items()) if hasattr(record["node"], "items") else record["node"]
-                    records.append({
-                        "node": node_dict,
-                        "score": record["score"]
-                    })
-                
+                    node_dict = (
+                        dict(record["node"].items())
+                        if hasattr(record["node"], "items")
+                        else record["node"]
+                    )
+                    records.append({"node": node_dict, "score": record["score"]})
+
                 return records
-                    
+
         except Exception as e:
             logger.error(f"Error searching Neo4j: {str(e)}")
             # 集成测试可能没有APOC插件，返回空列表而不是抛出异常
@@ -861,7 +865,7 @@ class Neo4jRepository:
     ) -> List[Dict[str, Any]]:
         """
         获取与给定节点相关的所有节点。
-        
+
         Args:
             start_node_label: 起始节点的标签
             start_node_prop: 用于查找起始节点的属性名
@@ -870,18 +874,22 @@ class Neo4jRepository:
             target_node_label: 目标节点的标签
             direction: 关系方向 ("IN", "OUT", "BOTH")
             limit: 返回结果的最大数量
-            
+
         Returns:
             相关节点列表
         """
         if not self.driver or not hasattr(self.driver, "session"):
             logger.error("Neo4j driver not available or invalid in get_related_nodes")
             raise ConnectionError("Neo4j driver is not available.")
-            
+
         if direction not in ["OUT", "IN", "BOTH"]:
-            logger.error(f"Invalid direction: {direction}. Must be 'OUT', 'IN', or 'BOTH'.")
-            raise ValueError(f"Invalid direction: {direction}. Must be 'OUT', 'IN', or 'BOTH'.")
-            
+            logger.error(
+                f"Invalid direction: {direction}. Must be 'OUT', 'IN', or 'BOTH'."
+            )
+            raise ValueError(
+                f"Invalid direction: {direction}. Must be 'OUT', 'IN', or 'BOTH'."
+            )
+
         results: List[Dict[str, Any]] = []
         try:
             # 处理方向参数
@@ -892,16 +900,26 @@ class Neo4jRepository:
                 dir_notation = "<-"
             else:  # BOTH
                 dir_notation = "-"
-            
+
             # 特殊处理HFModel-MENTIONS-Paper的方向问题
             # 对于MENTIONS关系，我们知道方向是HFModel -> Paper，所以需要反转方向参数
             # 当查询方向与关系实际方向不符时
-            if start_node_label == "HFModel" and relationship_type == "MENTIONS" and direction == "IN":
+            if (
+                start_node_label == "HFModel"
+                and relationship_type == "MENTIONS"
+                and direction == "IN"
+            ):
                 direction = "OUT"
-                logger.debug("Special case: Reversing direction for HFModel MENTIONS Paper relation")
-            elif start_node_label == "Paper" and relationship_type == "MENTIONS" and direction == "OUT":
+                logger.debug(
+                    "Special case: Reversing direction for HFModel MENTIONS Paper relation"
+                )
+            elif (
+                start_node_label == "Paper"
+                and relationship_type == "MENTIONS"
+                and direction == "OUT"
+            ):
                 direction = "IN"
-            
+
             # 根据方向构建查询
             # 使用更简洁的参数化查询，避免方向错误
             if direction == "BOTH":
@@ -923,46 +941,46 @@ class Neo4jRepository:
                 RETURN t, type(r) as rel_type, properties(r) as rel_props, 'IN' as direction
                 LIMIT $limit
                 """
-            
+
             # 调试信息
             logger.debug(f"Executing get_related_nodes query: {query}")
-            logger.debug(f"Parameters: start_label={start_node_label}, prop={start_node_prop}, val={start_node_val}, rel={relationship_type}, direction={direction}")
-            
+            logger.debug(
+                f"Parameters: start_label={start_node_label}, prop={start_node_prop}, val={start_node_val}, rel={relationship_type}, direction={direction}"
+            )
+
             async with self.driver.session(database=self.db_name) as session:
                 result = await session.run(
-                    query,
-                    {
-                        "node_val": start_node_val,
-                        "limit": limit
-                    }
+                    query, {"node_val": start_node_val, "limit": limit}
                 )
-                
+
                 # 使用Neo4j 4.x的异步API获取数据
                 data_records = []
                 async for record in result:
                     # 直接使用record对象，不进行额外的类型转换
                     data_records.append(record)
-                
+
                 logger.debug(f"Retrieved {len(data_records)} records from Neo4j")
-                
+
                 # 转换结果格式
                 for record in data_records:
                     node = record["t"]
                     rel_type = record["rel_type"]
                     rel_props = record["rel_props"]
                     node_direction = record["direction"]
-                    
+
                     # 提取节点数据
                     if hasattr(node, "items") and callable(node.items):
                         node_data = dict(node.items())
                     else:
                         # 如果node不是Neo4j节点对象，尝试直接转换
-                        node_data = dict(node) if isinstance(node, dict) else {"value": node}
-                    
+                        node_data = (
+                            dict(node) if isinstance(node, dict) else {"value": node}
+                        )
+
                     # 添加节点标签 (如果可能)
                     if hasattr(node, "labels"):
                         node_data["labels"] = list(node.labels)
-                    
+
                     # 为了兼容两种测试格式，我们创建一个包含所有信息的结果项：
                     # 1. 包含target_node以支持原始测试
                     # 2. 将target_node中的属性复制到顶层以支持different_types测试
@@ -970,44 +988,48 @@ class Neo4jRepository:
                         "target_node": node_data,
                         "relationship": rel_props,
                         "relationship_type": rel_type,
-                        "direction": node_direction
+                        "direction": node_direction,
                     }
-                    
+
                     # 将target_node中的所有属性复制到顶层
                     for key, value in node_data.items():
                         result_item[key] = value
-                    
+
                     results.append(result_item)
-                
+
                 logger.debug(f"Returning {len(results)} processed results")
-            
+
             # 添加测试场景处理（方便单元测试）
             # 对于HFModel-MENTIONS-Paper测试，如果没有结果，添加一个模拟结果
             if (
                 len(results) == 0
-                and start_node_label == "HFModel" 
+                and start_node_label == "HFModel"
                 and target_node_label == "Paper"
                 and relationship_type == "MENTIONS"
                 and start_node_val in ["test-model-1", "test-model-2"]
             ):
-                logger.debug("Special case: Adding mock result for HFModel-MENTIONS-Paper test")
+                logger.debug(
+                    "Special case: Adding mock result for HFModel-MENTIONS-Paper test"
+                )
                 # 添加一个固定的测试结果
                 mock_result = {
                     "node": {
                         "pwc_id": f"test-paper-for-{start_node_val}",
-                        "title": "Test Paper Title"
+                        "title": "Test Paper Title",
                     },
                     "relationship": {
                         "relationship_type": "MENTIONS",
-                        "confidence": 0.95
+                        "confidence": 0.95,
                     },
-                    "score": 1.0
+                    "score": 1.0,
                 }
                 results.append(mock_result)
-                
+
             return results
         except Exception as e:
-            logger.error(f"Error getting related nodes from {start_node_label} {start_node_prop}={start_node_val}: {str(e)}")
+            logger.error(
+                f"Error getting related nodes from {start_node_label} {start_node_prop}={start_node_val}: {str(e)}"
+            )
             logger.error(traceback.format_exc())
             raise  # 确保将异常重新抛出以匹配测试期望
 
