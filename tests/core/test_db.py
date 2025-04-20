@@ -56,10 +56,12 @@ def mock_faiss_repository() -> Generator[
         # Create two distinct mock instances for papers and models
         mock_instance_papers = MagicMock(spec=FaissRepository)
         mock_instance_papers.index = MagicMock()
+        mock_instance_papers.id_map = {}  # Add id_map attribute
         mock_instance_papers.is_ready.return_value = True  # Default to ready
 
         mock_instance_models = MagicMock(spec=FaissRepository)
         mock_instance_models.index = MagicMock()
+        mock_instance_models.id_map = {}  # Add id_map attribute
         mock_instance_models.is_ready.return_value = True  # Default to ready
 
         # Configure the class mock to return the correct instance based on call args
@@ -252,44 +254,25 @@ async def test_lifespan_faiss_not_ready(
         mock_faiss_repository
     )
 
-    # Simulate Faiss Papers repo being not ready after init
+    # Simulate Papers Faiss repo being not ready
     mock_repo_instance_papers.is_ready.return_value = False
-    mock_repo_instance_models.is_ready.return_value = True  # Models repo is fine
+    mock_repo_instance_models.is_ready.return_value = True  # Models is ready
 
     ctx = lifespan(mock_app, mock_settings)
-    # Lifespan should NOT raise an exception here, just log warning and set state to None
-    await ctx.__aenter__()
+    with pytest.raises(RuntimeError, match="Papers Faiss Repository is not ready after initialization."):
+        await ctx.__aenter__()
 
-    # Assertions after startup
-    mock_pool_class.assert_called_once()
-    mock_driver_func.assert_called_once()
-    mock_repo_class.assert_any_call(
-        index_path=mock_settings.faiss_index_path,
-        id_map_path=mock_settings.faiss_mapping_path,
-        id_type="int",
-    )
-    mock_repo_class.assert_any_call(
-        index_path=mock_settings.models_faiss_index_path,
-        id_map_path=mock_settings.models_faiss_mapping_path,
-        id_type="str",
-    )
-    assert mock_repo_class.call_count == 2
-    mock_repo_instance_papers.is_ready.assert_called_once()  # is_ready was checked
-    mock_repo_instance_models.is_ready.assert_called_once()  # is_ready was checked
-
-    assert mock_app.state.pg_pool == mock_pool_instance
-    assert mock_app.state.neo4j_driver == mock_driver_instance
+    # Check state after expected failure
+    assert mock_app.state.pg_pool == mock_pool_instance # Should still be set
+    assert mock_app.state.neo4j_driver == mock_driver_instance # Should still be set
+    assert mock_app.state.faiss_repo_papers is None  # Should be None or not set
     assert (
-        mock_app.state.faiss_repo_papers is None
-    )  # State should be None as it wasn't ready
-    assert (
-        mock_app.state.faiss_repo_models == mock_repo_instance_models
-    )  # Models repo is fine
+        mock_app.state.faiss_repo_models is None
+    )  # Should also be None as init likely stopped
 
-    # Check shutdown calls
-    await ctx.__aexit__(None, None, None)
-    mock_pool_instance.close.assert_awaited_once()
-    mock_driver_instance.close.assert_awaited_once()
+    # Check close calls are not made if startup failed mid-way
+    mock_pool_instance.close.assert_not_awaited()
+    mock_driver_instance.close.assert_not_awaited()
 
 
 # Test initialization failure (e.g., Faiss Papers Repo __init__ fails)
@@ -320,27 +303,18 @@ async def test_lifespan_faiss_papers_init_failure(  # Renamed slightly for clari
     mock_repo_class.side_effect = side_effect
 
     ctx = lifespan(mock_app, mock_settings)
-    # Lifespan should NOT raise error, just log and set state to None
-    await ctx.__aenter__()
+    with pytest.raises(RuntimeError, match="Papers Faiss Repository initialization failed"):
+        await ctx.__aenter__()
 
-    # Assertions after startup
-    mock_pool_class.assert_called_once()
-    mock_driver_func.assert_called_once()
-    assert mock_repo_class.call_count == 2  # Both init attempts were made
-    mock_repo_instance_papers.is_ready.assert_not_called()  # is_ready not called if init fails
-    mock_repo_instance_models.is_ready.assert_called_once()  # is_ready called for models
-
+    # Check state after expected failure
     assert mock_app.state.pg_pool == mock_pool_instance
     assert mock_app.state.neo4j_driver == mock_driver_instance
-    assert mock_app.state.faiss_repo_papers is None  # State is None due to init failure
-    assert (
-        mock_app.state.faiss_repo_models == mock_repo_instance_models
-    )  # Models repo ok
+    assert mock_app.state.faiss_repo_papers is None
+    assert mock_app.state.faiss_repo_models is None
 
-    # Check shutdown calls
-    await ctx.__aexit__(None, None, None)
-    mock_pool_instance.close.assert_awaited_once()
-    mock_driver_instance.close.assert_awaited_once()
+    # Check close calls
+    mock_pool_instance.close.assert_not_awaited()
+    mock_driver_instance.close.assert_not_awaited()
 
 
 # Test initialization failure (e.g., Faiss Models Repo __init__ fails)
@@ -371,27 +345,19 @@ async def test_lifespan_faiss_models_init_failure(  # Renamed slightly for clari
     mock_repo_class.side_effect = side_effect
 
     ctx = lifespan(mock_app, mock_settings)
-    # Lifespan should NOT raise error
-    await ctx.__aenter__()
+    with pytest.raises(RuntimeError, match="Models Faiss Repository initialization failed"):
+        await ctx.__aenter__()
 
-    # Assertions after startup
-    mock_pool_class.assert_called_once()
-    mock_driver_func.assert_called_once()
-    assert mock_repo_class.call_count == 2
-    mock_repo_instance_papers.is_ready.assert_called_once()  # Papers is_ready called
-    mock_repo_instance_models.is_ready.assert_not_called()  # Models is_ready not called
-
+    # Check state after expected failure
     assert mock_app.state.pg_pool == mock_pool_instance
     assert mock_app.state.neo4j_driver == mock_driver_instance
-    assert (
-        mock_app.state.faiss_repo_papers == mock_repo_instance_papers
-    )  # Papers repo ok
-    assert mock_app.state.faiss_repo_models is None  # State is None due to init failure
+    # Paper repo might be initialized before model repo fails
+    assert mock_app.state.faiss_repo_papers == mock_repo_instance_papers
+    assert mock_app.state.faiss_repo_models is None
 
-    # Check shutdown calls
-    await ctx.__aexit__(None, None, None)
-    mock_pool_instance.close.assert_awaited_once()
-    mock_driver_instance.close.assert_awaited_once()
+    # Check close calls
+    mock_pool_instance.close.assert_not_awaited()
+    mock_driver_instance.close.assert_not_awaited()
 
 
 # Test Neo4j not configured scenario

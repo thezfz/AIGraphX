@@ -115,71 +115,89 @@ async def lifespan(
 
     # Initialize Faiss Repository for Papers (Simplified Error Handling)
     logger.info("Initializing Faiss Repository for Papers...")
+    faiss_repo_papers_instance = None # Temporary variable
     try:
-        app.state.faiss_repo_papers = FaissRepository(
+        # Only try to instantiate the repository here
+        faiss_repo_papers_instance = FaissRepository(
             index_path=settings.faiss_index_path,
             id_map_path=settings.faiss_mapping_path,
             id_type="int",
         )
-        # Check readiness immediately after instantiation
-        if not app.state.faiss_repo_papers.is_ready():
-            logger.error("Papers Faiss Repository is not ready after initialization.")
-            # Log the state from is_ready for more info
-            index_exists = app.state.faiss_repo_papers.index is not None
-            ntotal = (
-                app.state.faiss_repo_papers.index.ntotal
-                if app.state.faiss_repo_papers.index
-                else -1
-            )
-            map_exists_and_not_empty = bool(app.state.faiss_repo_papers.id_map)
+        app.state.faiss_repo_papers = faiss_repo_papers_instance # Assign if instantiation succeeded
+        logger.info("FaissRepository for Papers instantiated.")
+
+    except Exception as e:
+        # Catch only instantiation errors
+        logger.exception(f"Failed to initialize Papers Faiss Repository (Instantiation Error): {e}")
+        app.state.faiss_repo_papers = None  # Ensure state is None on instantiation exception
+        logger.error("CRITICAL: Papers Faiss Repository instantiation failed. Raising RuntimeError.")
+        raise RuntimeError("Papers Faiss Repository initialization failed") from e
+
+    # Now, check readiness *outside* the instantiation try...except block
+    # Only proceed if instantiation was successful (faiss_repo_papers_instance is not None)
+    if faiss_repo_papers_instance is not None:
+        logger.info("Checking readiness of Papers Faiss Repository...")
+        if not faiss_repo_papers_instance.is_ready():
+            index_exists = os.path.exists(settings.faiss_index_path)
+            ntotal = faiss_repo_papers_instance.index.ntotal if faiss_repo_papers_instance.index else None
+            map_exists_and_not_empty = bool(faiss_repo_papers_instance.id_map)
             logger.error(
                 f"[Lifespan Check Failed] Papers Faiss State: index_exists={index_exists}, ntotal={ntotal}, map_not_empty={map_exists_and_not_empty}"
             )
-            # Set state to None if not ready
+            # Raise the specific error for not being ready
+            logger.error("CRITICAL: Papers Faiss Repository is not ready. Raising RuntimeError.")
+            # Set state to None *before* raising, as the repo is unusable
             app.state.faiss_repo_papers = None
-            # Do not raise RuntimeError here to allow tests to check state
-            logger.warning(
-                "Papers Faiss Repository set to None due to initialization failure."
-            )
+            raise RuntimeError("Papers Faiss Repository is not ready after initialization.")
         else:
             logger.info("Papers Faiss Repository initialized and ready.")
-    except Exception as e:
-        logger.exception(f"Failed to initialize Papers Faiss Repository: {e}")
-        app.state.faiss_repo_papers = None  # Ensure state is None on exception
+    else:
+        # This case is technically handled by the raise in the except block,
+        # but adding an info log might be useful for clarity.
+        logger.info("Skipping readiness check for Papers Faiss Repository due to instantiation failure.")
+
 
     # Initialize Faiss Repository for Models (Simplified Error Handling)
     logger.info("Initializing Faiss Repository for Models...")
+    faiss_repo_models_instance = None # Temporary variable
     try:
-        app.state.faiss_repo_models = FaissRepository(
+        # Only try to instantiate the repository here
+        faiss_repo_models_instance = FaissRepository(
             index_path=settings.models_faiss_index_path,
             id_map_path=settings.models_faiss_mapping_path,
             id_type="str",
         )
-        # Check readiness immediately after instantiation
-        if not app.state.faiss_repo_models.is_ready():
-            logger.error("Models Faiss Repository is not ready after initialization.")
-            # Log the state from is_ready for more info
-            index_exists_m = app.state.faiss_repo_models.index is not None
-            ntotal_m = (
-                app.state.faiss_repo_models.index.ntotal
-                if app.state.faiss_repo_models.index
-                else -1
-            )
-            map_exists_and_not_empty_m = bool(app.state.faiss_repo_models.id_map)
+        app.state.faiss_repo_models = faiss_repo_models_instance # Assign if instantiation succeeded
+        logger.info("FaissRepository for Models instantiated.")
+
+    except Exception as e:
+        # Catch only instantiation errors
+        logger.exception(f"Failed to initialize Models Faiss Repository (Instantiation Error): {e}")
+        app.state.faiss_repo_models = None  # Ensure state is None on instantiation exception
+        logger.error("CRITICAL: Models Faiss Repository instantiation failed. Raising RuntimeError.")
+        raise RuntimeError("Models Faiss Repository initialization failed") from e
+
+    # Now, check readiness *outside* the instantiation try...except block
+    # Only proceed if instantiation was successful
+    if faiss_repo_models_instance is not None:
+        logger.info("Checking readiness of Models Faiss Repository...")
+        if not faiss_repo_models_instance.is_ready():
+            index_exists_m = os.path.exists(settings.models_faiss_index_path)
+            ntotal_m = faiss_repo_models_instance.index.ntotal if faiss_repo_models_instance.index else None
+            map_exists_and_not_empty_m = bool(faiss_repo_models_instance.id_map)
             logger.error(
                 f"[Lifespan Check Failed] Models Faiss State: index_exists={index_exists_m}, ntotal={ntotal_m}, map_not_empty={map_exists_and_not_empty_m}"
             )
-            # Set state to None if not ready
+            # Raise the specific error for not being ready
+            logger.error("CRITICAL: Models Faiss Repository is not ready. Raising RuntimeError.")
+            # Set state to None *before* raising
             app.state.faiss_repo_models = None
-            # Do not raise RuntimeError here to allow tests to check state
-            logger.warning(
-                "Models Faiss Repository set to None due to initialization failure."
-            )
+            raise RuntimeError("Models Faiss Repository is not ready after initialization.")
         else:
             logger.info("Models Faiss Repository initialized and ready.")
-    except Exception as e:
-        logger.exception(f"Failed to initialize Models Faiss Repository: {e}")
-        app.state.faiss_repo_models = None  # Ensure state is None on exception
+    else:
+        logger.info("Skipping readiness check for Models Faiss Repository due to instantiation failure.")
+
 
     logger.info("Resource initialization process completed.")
     print("--- DEBUG: Lifespan YIELDING (Resources should be initialized) ---")
