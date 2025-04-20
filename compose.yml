@@ -51,7 +51,7 @@ services:
     volumes:
       - .:/app:z # ':z' is important for SELinux systems like Fedora
       # Mount data and logs directories as named volumes
-      - aigraphx_data:/app/data
+      - ./data:/app/data
       - aigraphx_logs:/app/logs
     # Define dependencies: The app service depends on the database services
     depends_on:

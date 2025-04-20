@@ -81,7 +81,7 @@ class Neo4jRepository:
             logger.error("Neo4j driver not available or invalid in _execute_query")
             raise ConnectionError("Neo4j driver is not available.")
 
-        async with self.driver.session() as session:
+        async with self.driver.session(database=self.db_name) as session:
             try:
                 # Use execute_write for automatic transaction management
                 await session.execute_write(lambda tx: tx.run(query, parameters))
@@ -94,6 +94,22 @@ class Neo4jRepository:
                 logger.error(f"Query: {query}")
                 logger.error(f"Parameters: {parameters}")
                 raise  # Re-raise to indicate failure
+
+    async def reset_database(self) -> None:
+        """Clears all nodes and relationships from the Neo4j database."""
+        if not self.driver or not hasattr(self.driver, "session"):  # Basic check
+            logger.error("Neo4j driver not available or invalid in reset_database")
+            raise ConnectionError("Neo4j driver is not available.")
+
+        logger.warning("Executing query to delete all nodes and relationships...")
+        query = "MATCH (n) DETACH DELETE n"
+        try:
+            # Use _execute_query to handle the transaction
+            await self._execute_query(query)
+            logger.info("Successfully cleared the Neo4j database.")
+        except Exception as e:
+            logger.error(f"Failed to clear Neo4j database: {e}")
+            raise  # Re-raise after logging
 
     async def create_or_update_paper_node(
         self, pwc_id: str, title: Optional[str] = None

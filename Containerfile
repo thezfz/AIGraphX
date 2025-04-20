@@ -32,18 +32,11 @@ WORKDIR /app
 # Copy environment definition file first
 COPY environment.yml environment.yml
 
-# Create Conda environment from environment.yml (excluding pip for now)
-RUN echo "Creating Conda environment AIGraphX (conda parts)..." && \
-    conda env create -f environment.yml --name AIGraphX 
-
-# Extract pip requirements to a temporary file
-RUN echo "Extracting pip requirements..." && \
-    grep -A 100 -- '- pip:' environment.yml | tail -n +2 | sed 's/^- *//' | sed 's/"//g' > /tmp/requirements_pip.txt
-
-# Install pip dependencies using the temporary file inside the Conda env
-RUN echo "Installing pip dependencies..." && \
-    conda run -n AIGraphX pip install --no-cache-dir -r /tmp/requirements_pip.txt && \
-    rm /tmp/requirements_pip.txt # Clean up temporary file
+# Create Conda environment from environment.yml (Handles both Conda and Pip deps)
+RUN echo "Creating Conda environment AIGraphX from environment.yml..." && \
+    conda env create -f environment.yml --name AIGraphX && \
+    # Clean up conda caches after creating environment
+    conda clean -afy
 
 # --- Verification Step (depends on environment install) ---
 RUN echo "Verifying uvicorn installation in AIGraphX environment..." && \

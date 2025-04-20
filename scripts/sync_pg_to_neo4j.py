@@ -475,7 +475,7 @@ async def run_sync(
             if DATABASE_URL is None:
                 logger.error("DATABASE_URL is None")
                 return 0
-            pg_pool = AsyncConnectionPool(DATABASE_URL)
+            pg_pool = AsyncConnectionPool(conninfo=DATABASE_URL, open=True)
             pg_repo = PostgresRepository(pool=pg_pool)
             created_pg_repo = True
         except Exception as e:
@@ -544,140 +544,90 @@ async def run_sync(
 
 # --- Main Execution ---
 async def main(reset_neo4j: bool) -> None:
-    pg_pool: Optional[AsyncConnectionPool] = None  # Type hint
-    neo4j_driver: Optional[AsyncDriver] = None  # Type hint
-    exit_code = 0
+    """Main function to run the synchronization process."""
+    pg_pool = None
+    neo4j_driver = None
+    pg_repo = None # Initialize repo variable
+    neo4j_repo = None # Initialize repo variable
+    total_papers_synced = 0
+
     try:
-        # --- Neo4j Reset Logic ---
-        if reset_neo4j:
-            logger.warning("Reset flag specified. Connecting to Neo4j to clear data...")
-            temp_driver: Optional[AsyncDriver] = None
-            try:
-                # 确保NEO4J_URI不为空
-                if not NEO4J_URI:
-                    raise ValueError("NEO4J_URI is not set or empty")
+        # --- Initialize Connections ---
+        logger.info(f"Initializing PostgreSQL pool for {DATABASE_URL}...")
+        # Add assertion for DATABASE_URL
+        assert DATABASE_URL is not None, "DATABASE_URL environment variable must be set"
+        # Explicitly create the pool instance
+        pg_pool = AsyncConnectionPool(conninfo=DATABASE_URL, open=True)
+        logger.info("PostgreSQL pool initialized.")
 
-                temp_driver = AsyncGraphDatabase.driver(
-                    NEO4J_URI, auth=(NEO4J_USER or "", NEO4J_PASSWORD or "")
-                )
-                await temp_driver.verify_connectivity()
-                logger.info("Temporary connection to Neo4j established for reset.")
-                async with temp_driver.session() as session:
-                    logger.info(
-                        "Executing `MATCH (n) DETACH DELETE n` to clear Neo4j database..."
-                    )
-                    await session.run("MATCH (n) DETACH DELETE n")
-                    logger.info("Neo4j database cleared successfully.")
-            except Exception as reset_err:
-                logger.error(
-                    f"Error clearing Neo4j database: {reset_err}", exc_info=True
-                )
-                logger.error(
-                    "Synchronization cannot proceed safely after failed reset. Exiting."
-                )
-                sys.exit(1)
-            finally:
-                if temp_driver:
-                    await temp_driver.close()
-                    logger.info("Temporary Neo4j connection for reset closed.")
-        # --- End Neo4j Reset Logic ---
-
-        logger.info("Connecting to PostgreSQL...")
-        # Use asyncpg.create_pool directly - note: psycopg_pool is imported but asyncpg.create_pool used?
-        # Assuming asyncpg was intended here. If psycopg_pool was intended, the creation is different.
-        # Sticking with asyncpg based on the code:
-        pg_pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=5)
-
-        if pg_pool is None:
-            raise ValueError("Failed to create PostgreSQL connection pool")
-
-        # Verify pool connection immediately
-        async with pg_pool.acquire() as conn:  # type: ignore[attr-defined]
-            await conn.fetchval("SELECT 1")  # Use fetchval for single value
-        logger.info("PostgreSQL pool created and verified.")
-        # Pass the pool directly to the repository
-        pg_repo = PostgresRepository(
-            pool=pg_pool
-        )  # Assuming PostgresRepository takes the pool
-
-        logger.info(f"Connecting to Neo4j at {NEO4J_URI}...")
-        # 确保Neo4j连接参数不为空
-        if not NEO4J_URI:
-            raise ValueError("NEO4J_URI is not set or empty")
-
+        logger.info(f"Initializing Neo4j driver for {NEO4J_URI}...")
+        # Add assertions for Neo4j connection details
+        assert NEO4J_URI is not None, "NEO4J_URI environment variable must be set"
+        assert NEO4J_USER is not None, "NEO4J_USER environment variable must be set"
+        assert NEO4J_PASSWORD is not None, "NEO4J_PASSWORD environment variable must be set"
+        # Explicitly create the driver instance
         neo4j_driver = AsyncGraphDatabase.driver(
-            NEO4J_URI, auth=(NEO4J_USER or "", NEO4J_PASSWORD or "")
+            NEO4J_URI,
+            auth=(NEO4J_USER, NEO4J_PASSWORD),
         )
-        await neo4j_driver.verify_connectivity()
+        logger.info("Neo4j driver initialized.")
+
+        # --- Create Repository Instances with initialized pool/driver ---
+        # Pass the initialized pool and driver instances
+        pg_repo = PostgresRepository(pool=pg_pool)
         neo4j_repo = Neo4jRepository(driver=neo4j_driver)
-        logger.info("Neo4j driver created and connected.")
+        logger.info("Repositories initialized.")
 
-        # Run Synchronization Steps via the runner function
-        await run_sync(pg_repo, neo4j_repo)
+        # --- Optional: Reset Neo4j if requested ---
+        if reset_neo4j:
+            logger.warning("Resetting Neo4j database...")
+            await neo4j_repo.reset_database() # Assuming this method exists
+            logger.info("Neo4j database reset complete.")
+        else:
+            logger.info("Skipping Neo4j database reset.")
 
-        logger.info(
-            "--- Synchronization from PostgreSQL to Neo4j finished successfully ---"
-        )
+        # --- Run Synchronization ---
+        logger.info("--- Starting synchronization from PostgreSQL to Neo4j ---")
+        total_papers_synced = await run_sync(pg_repo=pg_repo, neo4j_repo=neo4j_repo)
 
-    except (
-        asyncpg.PostgresError,
-        asyncpg.InterfaceError,
-    ) as e:  # Catch pool/connection errors too
-        logger.critical(f"PostgreSQL error during setup or synchronization: {e}")
-        # No need to import traceback here
-        logger.critical(traceback.format_exc())
-        exit_code = 1
-    # Catch specific Neo4j connection errors if possible (check neo4j driver exceptions)
-    except ConnectionRefusedError as e:  # Example generic network error
-        logger.critical(f"Could not connect to Neo4j (Connection Refused): {e}")
-        # No need to import traceback here
-        logger.critical(traceback.format_exc())
-        exit_code = 1
-    except Exception as e:  # Catch any other unexpected error
+    except asyncpg.exceptions.CannotConnectNowError as pg_conn_err:
+        logger.critical(f"FATAL: Could not connect to PostgreSQL at {DATABASE_URL}. Check if DB is running and accessible. Error: {pg_conn_err}")
+    except ConnectionRefusedError as neo4j_conn_err:
+         logger.critical(f"FATAL: Could not connect to Neo4j at {NEO4J_URI}. Check if DB is running and accessible. Error: {neo4j_conn_err}")
+    except Exception as e:
         logger.critical(f"An unexpected error occurred during synchronization: {e}")
         # No need to import traceback here
         logger.critical(traceback.format_exc())
-        exit_code = 1
     finally:
-        # Cleanup connections
+        # --- Close Connections ---
         if pg_pool:
             logger.info("Closing PostgreSQL pool...")
-            try:
-                await asyncio.wait_for(pg_pool.close(), timeout=5.0)  # Add timeout
-            except asyncio.TimeoutError:
-                logger.warning("Timeout closing PostgreSQL pool.")
-            except Exception as e:
-                logger.error(f"Error closing PostgreSQL pool: {e}")
+            await pg_pool.close()
         if neo4j_driver:
             logger.info("Closing Neo4j driver...")
-            try:
-                await asyncio.wait_for(neo4j_driver.close(), timeout=5.0)  # Add timeout
-            except asyncio.TimeoutError:
-                logger.warning("Timeout closing Neo4j driver.")
-            except Exception as e:
-                logger.error(f"Error closing Neo4j driver: {e}")
-
+            await neo4j_driver.close()
         logger.info("Connections closed (or closing attempted).")
-        if exit_code != 0:
-            logger.warning(f"Script exiting with error code {exit_code}")
-            sys.exit(exit_code)  # Exit with error code if failed
+        # Log final paper count if sync was attempted
+        if total_papers_synced > 0:
+            logger.info(f"Final count of papers synced in this run: {total_papers_synced}")
 
 
 if __name__ == "__main__":
-    # --- Argument Parsing ---
     parser = argparse.ArgumentParser(
-        description="Synchronize data from PostgreSQL to Neo4j."
+        description="Synchronize data from PostgreSQL to Neo4j for AIGraphX."
     )
     parser.add_argument(
-        "--reset",
+        "--reset-neo4j",
         action="store_true",
-        help="Clear the Neo4j database before starting the synchronization.",
+        help="Clear the entire Neo4j database before starting synchronization.",
     )
     args = parser.parse_args()
-    # --- End Argument Parsing ---
 
-    logger.info("Starting PG to Neo4j Synchronization Script")
-    # Corrected Indentation: asyncio.run should not be indented
-    # Pass the reset argument to the main function
-    asyncio.run(main(reset_neo4j=args.reset))
-    logger.info("Script finished.")
+    # Run the main asynchronous function
+    try:
+        asyncio.run(main(reset_neo4j=args.reset_neo4j))
+        logger.info("Script finished successfully.")
+    except Exception as e:
+        # Catch errors happening during asyncio.run() itself if any
+        logger.critical(f"Script execution failed: {e}", exc_info=True)
+        sys.exit(1)

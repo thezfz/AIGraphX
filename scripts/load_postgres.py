@@ -295,8 +295,9 @@ async def insert_pwc_relation(
     """Inserts related items (tasks, datasets) for a paper."""
     if not items:
         return
-    table_name = f"pwc_{relation_type}"  # e.g., pwc_tasks, pwc_datasets
-    column_name = f"{relation_type[:-1]}_name"  # e.g., task_name, dataset_name
+    # Correctly generate table and column names
+    table_name = f"pwc_{relation_type}s" # e.g., pwc_tasks, pwc_datasets
+    column_name = f"{relation_type}_name" # e.g., task_name, dataset_name
 
     # Prepare data tuples: (paper_id, item_name)
     data_tuples = [(paper_id, item) for item in items]
@@ -372,69 +373,104 @@ async def insert_model_paper_link(
 async def process_batch(
     conn: psycopg.AsyncConnection, batch: List[Tuple[int, Dict[str, Any]]]
 ) -> int:
-    """Processes a batch of model data within a single transaction."""
+    """Processes a batch of records within a single transaction."""
     processed_in_batch = 0
-    # Start a transaction for the batch
+    successful_lines_in_batch = 0 # Track successful lines within the batch
     async with conn.transaction():
-        for line_num, model_record in batch:
-            hf_model_id = model_record.get("hf_model_id")
-            if not hf_model_id:
-                logger.warning(f"Skipping line {line_num}: Missing 'hf_model_id'.")
-                continue
-
+        logger.debug(f"Starting transaction for batch of {len(batch)} records.")
+        for line_num, record in batch:
             try:
-                # 1. Insert/Update HF Model
-                await insert_hf_model(conn, model_record)
+                # Assume record processing starts successfully unless exception occurs
+                record_processed_successfully = True
 
-                # 2. Process linked papers
-                linked_papers = model_record.get("linked_papers", [])
+                # --- Process Hugging Face Model ---
+                hf_model_id = record.get("hf_model_id")
+                if hf_model_id:
+                    await insert_hf_model(conn, record)
+                else:
+                    logger.warning(f"Record on line {line_num} missing hf_model_id.")
+                    record_processed_successfully = False # Mark as unsuccessful if critical ID missing
+                    # continue # Optionally skip further processing for this record
+
+                # --- Process Linked Papers (Iterate through the list) ---
+                linked_papers = record.get("linked_papers", [])
                 if not isinstance(linked_papers, list):
-                    logger.warning(
-                        f"Skipping papers for model {hf_model_id} on line {line_num}: 'linked_papers' is not a list."
-                    )
-                    linked_papers = []
+                    logger.warning(f"Record on line {line_num}: 'linked_papers' is not a list. Skipping paper processing.")
+                    linked_papers = [] # Treat as empty list
+
+                # Use a flag to track if *any* paper was successfully processed for this model record
+                at_least_one_paper_processed = False
 
                 for paper_data in linked_papers:
                     if not isinstance(paper_data, dict):
-                        logger.warning(
-                            f"Skipping invalid paper entry for model {hf_model_id} on line {line_num}: not a dictionary."
-                        )
-                        continue
+                        logger.warning(f"Skipping invalid paper entry for model {hf_model_id} on line {line_num}: not a dictionary.")
+                        continue # Skip this invalid paper entry
 
-                    # 3. Get or Insert Paper
+                    # --- Process Single Paper (Get or Insert) ---
+                    # Pass the individual paper_data dictionary here
                     paper_id = await get_or_insert_paper(conn, paper_data)
 
-                    if paper_id:
-                        # 4. Link Model to Paper (Call updated function)
-                        await insert_model_paper_link(
-                            conn,
-                            hf_model_id,
-                            paper_id,
-                        )
+                    # --- Link Model and Paper (only if both exist) ---
+                    if hf_model_id and paper_id:
+                        await insert_model_paper_link(conn, hf_model_id, paper_id)
+                        at_least_one_paper_processed = True # Mark success if linked
+                    # Log cases where linking didn't happen (optional)
+                    # elif paper_id and not hf_model_id:
+                    #     logger.debug(f"Paper on line {line_num} processed but no HF model ID.")
+                    # elif hf_model_id and not paper_id:
+                    #     logger.debug(f"HF model {hf_model_id} on line {line_num} processed but paper insertion failed.")
 
-                        # 5. Insert PWC Relations (Tasks, Datasets, Repos)
+                    # --- Process PWC Relations and Repositories (only if paper was successfully inserted/found) ---
+                    if paper_id:
+                        # IMPORTANT: Get pwc_entry from paper_data, not the top-level record
                         pwc_entry = paper_data.get("pwc_entry") or {}
                         await insert_pwc_relation(
-                            conn, paper_id, "tasks", pwc_entry.get("tasks")
+                            conn, paper_id, "task", pwc_entry.get("tasks")
                         )
                         await insert_pwc_relation(
-                            conn, paper_id, "datasets", pwc_entry.get("datasets")
+                            conn, paper_id, "method", pwc_entry.get("methods")
                         )
-                        # await insert_pwc_relation(conn, paper_id, "methods", pwc_entry.get("methods")) # Uncomment if methods are added
+                        await insert_pwc_relation(
+                            conn,
+                            paper_id,
+                            "dataset",
+                            pwc_entry.get("datasets_used"), # Assuming field name
+                        )
                         await insert_pwc_repositories(
                             conn, paper_id, pwc_entry.get("repositories")
                         )
+                        at_least_one_paper_processed = True # Also mark success here
+                    else:
+                        # If get_or_insert_paper returned None, the paper processing failed for this entry
+                        logger.warning(f"Failed to get or insert paper for entry in linked_papers on line {line_num}. Paper data: {paper_data}")
+                        # Consider if this failure should mark the whole model record as failed
+                        # record_processed_successfully = False
 
-                processed_in_batch += 1
+                # Increment the main counter only if the model record itself was deemed successful
+                # (e.g., hf_model_id was present, and potentially if at least one paper linked if required)
+                if record_processed_successfully: # Adjust this condition based on requirements
+                    processed_in_batch += 1
+                    successful_lines_in_batch += 1 # Increment success counter
+                    logger.debug(f"Successfully processed record from line {line_num} (including linked papers if any).")
+                else:
+                    logger.warning(f"Marked record from line {line_num} as processed with errors/skips.")
+                    # Even if marked as error, we might count it towards the total lines *attempted* in the batch
+                    processed_in_batch += 1
+
             except Exception as e:
-                logger.error(
-                    f"Error processing record for model {hf_model_id} on line {line_num}: {e}"
-                )
-                logger.error(traceback.format_exc())
-                # Decide whether to continue batch or raise error to rollback transaction
-                # For robustness, log error and continue processing other records in batch
+                # Log detailed error including traceback and the problematic record line number
+                tb_str = traceback.format_exc()
+                logger.error(f"Error processing record from line {line_num}: {e}\\nRecord: {record}\\nTraceback:\\n{tb_str}")
+                # Re-raise the exception to trigger the automatic rollback of conn.transaction()
+                raise # This will rollback the *entire* batch
 
-    return processed_in_batch
+    # If the 'with conn.transaction()' block completes without exceptions, commit is automatic.
+    # If an exception occurs, rollback is automatic.
+    logger.debug(f"Transaction for batch completed (Commit or Rollback occurred). Successfully processed {successful_lines_in_batch} lines in this attempt.")
+    # Return the count of lines successfully processed within the transaction
+    # If an exception caused rollback, this will be 0 from the perspective of the DB, but we return the count *attempted* before failure.
+    # Let's return successful_lines_in_batch to be more accurate about what potentially committed.
+    return successful_lines_in_batch
 
 
 async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> None:
