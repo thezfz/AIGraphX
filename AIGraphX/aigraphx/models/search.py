@@ -43,8 +43,8 @@ class HFSearchResultItem(BaseModel):
     last_modified: Optional[datetime] = Field(
         None, description="Last modification timestamp."
     )
-    score: float = Field(
-        ..., description="Relevance score from the search (0.0 to 1.0)."
+    score: Optional[float] = Field(
+        None, description="Relevance score from the search (0.0 to 1.0)."
     )
 
     @field_validator("last_modified", mode="before")
@@ -144,6 +144,9 @@ class SearchFilterModel(BaseModel):
     )
     filter_area: Optional[str] = Field(
         None, description="按研究领域筛选论文（例如 CV、NLP 等）。"
+    )
+    pipeline_tag: Optional[str] = Field(
+        None, description="按任务类型筛选模型（例如 text-generation、image-classification 等）。"
     )
     sort_by: Optional[str] = Field(
         None, description="结果排序依据（score、published_date、title 等）。"

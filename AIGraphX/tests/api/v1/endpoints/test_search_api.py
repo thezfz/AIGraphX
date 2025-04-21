@@ -257,6 +257,7 @@ async def test_search_hybrid_papers_success(
             filter_area=None,
             sort_by=None,  # API passes None if not specified
             sort_order="desc",  # API default
+            pipeline_tag=None, # Add missing argument
         )
 
         mock_service.perform_hybrid_search.assert_awaited_once_with(

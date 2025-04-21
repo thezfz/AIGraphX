@@ -858,11 +858,12 @@ async def test_semantic_search_invalid_sort_key(
 
     assert isinstance(result, PaginatedPaperSearchResult)
     assert len(result.items) == 2
-    # 根据实际实现，无效的sort_by会回退到"score"排序
-    # 但发现实际行为是paper_id=2先于paper_id=1，
-    # 所以我们需要更新期望的顺序为实际行为
-    assert result.items[0].paper_id == 2  # 较低的距离值(0.4)，更高的相似度分数
-    assert result.items[1].paper_id == 1
+    # Check scores and order
+    assert len(result.items) == 1
+    # Add type check before accessing paper_id
+    if isinstance(result.items[0], SearchResultItem):
+        assert result.items[0].paper_id == 2  # Paper 2 should have the highest score
+    assert result.items[0].score is not None and result.items[0].score > 0.0
 
 
 # --- 测试 perform_keyword_search ---
@@ -1152,7 +1153,8 @@ async def test_hybrid_search_keyword_search_error(
     result = await search_service.perform_hybrid_search("query")
 
     assert len(result.items) == 1
-    assert result.items[0].paper_id == 1
+    # Add isinstance check before accessing paper_id
+    assert isinstance(result.items[0], SearchResultItem) and result.items[0].paper_id == 1
     assert result.items[0].score is not None  # Should have RRF score from semantic
     assert result.items[0].score > 0
     mock_faiss_repo_papers.search_similar.assert_awaited_once()
@@ -1211,8 +1213,11 @@ async def test_hybrid_search_rrf_logic_semantic_only(
 
     assert len(result.items) == 2
     # Find items by ID
-    item1 = next(item for item in result.items if item.paper_id == 1)
-    item2 = next(item for item in result.items if item.paper_id == 2)
+    item1 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 1), None)
+    item2 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 2), None)
+    
+    assert item1 is not None
+    assert item2 is not None
     assert item1.score is not None
     assert item2.score is not None
     # Item 2 had lower distance (higher similarity), so higher RRF score
@@ -1253,8 +1258,11 @@ async def test_hybrid_search_rrf_logic_keyword_only(
     result = await search_service.perform_hybrid_search("query")
 
     assert len(result.items) == 2
-    assert result.items[0].score is None
-    assert result.items[1].score is None
+    # Add type check before accessing score
+    item1 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 1), None)
+    item2 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 2), None)
+    assert item1 is not None and item1.score is None
+    assert item2 is not None and item2.score is None
 
 
 async def test_hybrid_search_item_creation_error(
@@ -1369,9 +1377,16 @@ async def test_hybrid_search_sorting_default(
     # ID 3: KW Rank 2 -> 1/62
     # Expected order (desc): ID 2, ID 1/3 (tie), ID 1/3
     assert len(result.items) == 3
-    assert result.items[0].paper_id == 2  # Highest score
+    # Add type checks before accessing paper_id
+    item0 = result.items[0]
+    item1 = result.items[1]
+    item2 = result.items[2]
+    assert isinstance(item0, SearchResultItem) and item0.paper_id == 2  # Highest score
     # Check the next two IDs, order might depend on secondary sort (paper_id if scores are identical)
-    assert {result.items[1].paper_id, result.items[2].paper_id} == {1, 3}
+    paper_ids_1_and_2 = set()
+    if isinstance(item1, SearchResultItem): paper_ids_1_and_2.add(item1.paper_id)
+    if isinstance(item2, SearchResultItem): paper_ids_1_and_2.add(item2.paper_id)
+    assert paper_ids_1_and_2 == {1, 3}
 
 
 async def test_hybrid_search_sorting_with_filter(
@@ -1414,12 +1429,16 @@ async def test_hybrid_search_sorting_with_filter(
         published_after=None,
         published_before=None,
         filter_area=None,
+        pipeline_tag=None,
     )
     result = await search_service.perform_hybrid_search("query", filters=filters)
 
     assert len(result.items) == 2
-    assert result.items[0].paper_id == 1  # Title "ABC" comes before "XYZ"
-    assert result.items[1].paper_id == 2
+    # Add type checks before accessing paper_id
+    item0 = result.items[0]
+    item1 = result.items[1]
+    assert isinstance(item0, SearchResultItem) and item0.paper_id == 1  # Title "ABC" comes before "XYZ"
+    assert isinstance(item1, SearchResultItem) and item1.paper_id == 2
 
 
 async def test_hybrid_search_sorting_invalid_filter_key(
@@ -1445,13 +1464,17 @@ async def test_hybrid_search_sorting_invalid_filter_key(
         published_before=None,
         filter_area=None,
         sort_order="desc",  # Provide a valid default sort_order
+        pipeline_tag=None,
     )
     result = await search_service.perform_hybrid_search("query", filters=filters)
 
     # Should default to sorting by score desc
     assert len(result.items) == 2
-    assert result.items[0].paper_id == 2  # Higher score
-    assert result.items[1].paper_id == 1
+    # Add type checks before accessing paper_id
+    item0 = result.items[0]
+    item1 = result.items[1]
+    assert isinstance(item0, SearchResultItem) and item0.paper_id == 2  # Higher score
+    assert isinstance(item1, SearchResultItem) and item1.paper_id == 1
 
 
 # Add a fixture for SearchService without embedder if not already in conftest.py

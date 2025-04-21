@@ -159,6 +159,7 @@ async def search_papers(
                 filter_area=area,
                 sort_by=sort_by,
                 sort_order=sort_order or "desc",  # Ensure sort_order is not None
+                pipeline_tag=None, # Add missing argument
             )
             logger.debug(f"[search_papers] [{request_id}] 执行混合搜索，过滤器: {search_filters.model_dump()}")
 
@@ -229,15 +230,15 @@ async def search_papers(
     "/models/",  # New route for models
     response_model=ModelsSearchApiResponse,
     summary="Search Models",
-    description="Performs semantic or keyword search specifically for models.",
+    description="Performs semantic, keyword, or hybrid search specifically for models.",
 )
 async def search_models(
     # Remove Request parameter
     # request: Request, # Removed Request
     # --- Core Search Parameters ---
     q: str = Query(..., description="The search query string."),
-    # Note: search_type only allows semantic or keyword for models
-    search_type: Literal["semantic", "keyword"] = Query(
+    # Note: search_type now allows semantic, keyword or hybrid for models
+    search_type: Literal["semantic", "keyword", "hybrid"] = Query(
         "semantic", description="Type of search to perform."
     ),
     # --- Pagination Parameters ---
@@ -308,7 +309,32 @@ async def search_models(
                 sort_order=sort_order or "desc",
                 pipeline_tag=pipeline_tag
             )
+        elif search_type == "hybrid":
+            # 处理混合搜索
+            effective_sort_by = sort_by if sort_by is not None else "score"
+            logger.debug(f"[search_models] [{request_id}] 执行混合搜索，有效排序字段: {effective_sort_by}")
             
+            # 创建过滤器对象
+            search_filters = SearchFilterModel(
+                sort_by=effective_sort_by,
+                sort_order=sort_order or "desc",
+                pipeline_tag=pipeline_tag,
+                # Add missing arguments
+                published_after=None,
+                published_before=None,
+                filter_area=None,
+            )
+            logger.debug(f"[search_models] [{request_id}] 执行混合搜索，过滤器: {search_filters.model_dump()}")
+
+            # 调用服务层方法
+            results = await search_service.perform_hybrid_search(
+                query=q,
+                target=target,
+                page=skip // limit + 1,
+                page_size=limit,
+                filters=search_filters,
+            )
+        
         # 计算处理时间并记录结果信息
         process_time = (time.time() - start_time) * 1000
         logger.info(

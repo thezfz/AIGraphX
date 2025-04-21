@@ -1015,23 +1015,23 @@ class SearchService:
     async def perform_hybrid_search(
         self,
         query: str,
-        target: SearchTarget = "papers",  # 当前仅支持论文
+        target: SearchTarget = "papers",  # 支持 "papers" 或 "models"
         page: int = 1,
         page_size: int = 10,
         filters: Optional[SearchFilterModel] = None,
-    ) -> PaginatedPaperSearchResult:
+    ) -> PaginatedResult:
         """
         执行混合搜索（同时结合语义和关键词搜索）
 
         Args:
             query: 搜索查询字符串
-            target: 搜索目标类型（当前仅支持 papers）
+            target: 搜索目标类型（"papers" 或 "models"）
             page: 页码，从1开始
             page_size: 每页结果数量
             filters: 可选的过滤条件
 
         Returns:
-            PaginatedPaperSearchResult: 包含搜索结果的分页模型
+            PaginatedResult: 包含搜索结果的分页模型（PaginatedPaperSearchResult 或 PaginatedHFModelSearchResult）
         """
         logger.info(
             f"执行混合搜索: 查询='{query}', 目标='{target}', 页码={page}, 页大小={page_size}"
@@ -1042,14 +1042,20 @@ class SearchService:
 
         # 处理空查询
         if not query.strip():
-            return PaginatedPaperSearchResult(
-                items=[], total=0, skip=skip, limit=page_size
-            )
+            if target == "papers":
+                return PaginatedPaperSearchResult(
+                    items=[], total=0, skip=skip, limit=page_size
+                )
+            else:  # target == "models"
+                return PaginatedHFModelSearchResult(
+                    items=[], total=0, skip=skip, limit=page_size
+                )
 
         # 提取过滤条件
         published_after = None
         published_before = None
         filter_area = None
+        pipeline_tag = None  # 模型特有的过滤器
         sort_by = None
         sort_order = "desc"
 
@@ -1057,10 +1063,57 @@ class SearchService:
             published_after = filters.published_after
             published_before = filters.published_before
             filter_area = filters.filter_area
+            pipeline_tag = filters.pipeline_tag  # 模型特有的过滤器
             sort_by = filters.sort_by
             if filters.sort_order:
                 sort_order = filters.sort_order
-
+        
+        # 根据目标类型执行不同的混合搜索逻辑
+        if target == "papers":
+            return await self._perform_hybrid_search_papers(
+                query=query,
+                page=page,
+                page_size=page_size,
+                published_after=published_after,
+                published_before=published_before,
+                filter_area=filter_area,
+                sort_by=cast(Optional[PaperSortByLiteral], sort_by),
+                sort_order=cast(SortOrderLiteral, sort_order),
+                filters=filters,
+            )
+        elif target == "models":
+            return await self._perform_hybrid_search_models(
+                query=query,
+                page=page,
+                page_size=page_size,
+                pipeline_tag=pipeline_tag,
+                sort_by=cast(Optional[ModelSortByLiteral], sort_by),
+                sort_order=cast(SortOrderLiteral, sort_order),
+                filters=filters,
+            )
+        else:
+            logger.error(f"[perform_hybrid_search] Unsupported target: {target}")
+            return PaginatedSemanticSearchResult(
+                items=[], total=0, skip=skip, limit=page_size
+            )
+            
+    async def _perform_hybrid_search_papers(
+        self,
+        query: str,
+        page: int = 1,
+        page_size: int = 10,
+        published_after: Optional[date] = None,
+        published_before: Optional[date] = None,
+        filter_area: Optional[str] = None,
+        sort_by: Optional[PaperSortByLiteral] = None,
+        sort_order: SortOrderLiteral = "desc",
+        filters: Optional[SearchFilterModel] = None,
+    ) -> PaginatedPaperSearchResult:
+        """为论文执行混合搜索（语义 + 关键词）的原始实现"""
+        
+        # 计算分页参数
+        skip = (page - 1) * page_size
+        
         # --- Step 1: 执行语义搜索 ---
         semantic_results_map: Dict[int, float] = {}
         try:
@@ -1083,7 +1136,7 @@ class SearchService:
                         if isinstance(paper_id, (int, str))
                     }
         except Exception as e:
-            logger.error(f"Hybrid: Error in semantic search: {e}", exc_info=True)
+            logger.error(f"Hybrid (papers): Error in semantic search: {e}", exc_info=True)
 
         # --- Step 2: 执行关键词搜索 ---
         keyword_results_map: Dict[int, Dict[str, Any]] = {}
@@ -1106,7 +1159,7 @@ class SearchService:
                 if result.get("paper_id") is not None
             }
         except Exception as e:
-            logger.error(f"Hybrid: Error in keyword search: {e}", exc_info=True)
+            logger.error(f"Hybrid (papers): Error in keyword search: {e}", exc_info=True)
 
         # --- Step 3: 合并结果ID ---
         semantic_ids = set(semantic_results_map.keys())
@@ -1117,7 +1170,7 @@ class SearchService:
 
         if not all_combined_ids:
             logger.info(
-                "Hybrid search: No results from either semantic or keyword searches."
+                "Hybrid search (papers): No results from either semantic or keyword searches."
             )
             return PaginatedPaperSearchResult(
                 items=[], total=0, skip=skip, limit=page_size
@@ -1138,7 +1191,7 @@ class SearchService:
             }
         except Exception as fetch_error:
             logger.error(
-                f"Hybrid: Error fetching paper details: {fetch_error}", exc_info=True
+                f"Hybrid (papers): Error fetching paper details: {fetch_error}", exc_info=True
             )
             if not all_paper_details:
                 return PaginatedPaperSearchResult(
@@ -1238,11 +1291,11 @@ class SearchService:
                     all_items.append(item)
                 except ValidationError as ve:
                     logger.error(
-                        f"[perform_hybrid_search] Validation error creating SearchResultItem for paper_id={paper_id}: {ve}"
+                        f"[_perform_hybrid_search_papers] Validation error creating SearchResultItem for paper_id={paper_id}: {ve}"
                     )
                 except Exception as e:
                     logger.error(
-                        f"[perform_hybrid_search] Error creating SearchResultItem for paper_id={paper_id}: {e}"
+                        f"[_perform_hybrid_search_papers] Error creating SearchResultItem for paper_id={paper_id}: {e}"
                     )
 
         # --- Step 7: 应用过滤器 --- (过滤 all_items)
@@ -1280,7 +1333,7 @@ class SearchService:
                 final_sort_by = cast(PaperSortByLiteral, current_sort_by_from_filter)
             else:
                 logger.warning(
-                    f"[perform_hybrid_search] Invalid sort_by '{current_sort_by_from_filter}' in filter for hybrid paper search. Defaulting to 'score'."
+                    f"[_perform_hybrid_search_papers] Invalid sort_by '{current_sort_by_from_filter}' in filter for hybrid paper search. Defaulting to 'score'."
                 )
                 final_sort_by = "score"
         else:  # No sort specified in filter, default to score
@@ -1315,10 +1368,263 @@ class SearchService:
         )
 
         # --- Step 9: 返回分页结果 ---
-        # 修改返回类型为 PaginatedPaperSearchResult
         return PaginatedPaperSearchResult(
             items=paginated_items_list,
             total=total_items_after_filtering,  # 使用 *过滤后* (分页前) 的总数
+            skip=calculated_skip,
+            limit=calculated_limit,
+        )
+        
+    async def _perform_hybrid_search_models(
+        self,
+        query: str,
+        page: int = 1,
+        page_size: int = 10,
+        pipeline_tag: Optional[str] = None,
+        sort_by: Optional[ModelSortByLiteral] = None,
+        sort_order: SortOrderLiteral = "desc",
+        filters: Optional[SearchFilterModel] = None,
+    ) -> PaginatedHFModelSearchResult:
+        """为模型执行混合搜索（语义 + 关键词）"""
+        
+        # 计算分页参数
+        skip = (page - 1) * page_size
+        
+        # --- Step 1: 执行语义搜索 ---
+        semantic_results_map: Dict[str, float] = {}
+        try:
+            # 检查嵌入器是否可用
+            if self.embedder is None:
+                logger.warning("嵌入器不可用，无法执行模型的语义搜索部分")
+            else:
+                # 生成嵌入向量
+                embedding = self.embedder.embed(query)
+                if embedding is not None:
+                    # 执行相似度搜索
+                    semantic_results = await self.faiss_repo_models.search_similar(
+                        embedding,
+                        k=30,  # 获取更多结果，以便后续排序和过滤
+                    )
+                    # 转换为ID -> 分数的映射
+                    semantic_results_map = {
+                        str(model_id): self._convert_distance_to_score(distance)
+                        for model_id, distance in semantic_results
+                        if model_id is not None
+                    }
+        except Exception as e:
+            logger.error(f"Hybrid (models): Error in semantic search: {e}", exc_info=True)
+
+        # --- Step 2: 执行关键词搜索 ---
+        keyword_results_map: Dict[str, Dict[str, Any]] = {}
+        try:
+            keyword_results, _ = await self.pg_repo.search_models_by_keyword(
+                query=query,
+                limit=30,  # 获取更多结果
+                skip=0,
+                sort_by=cast(Optional[Literal["likes", "downloads", "last_modified"]], 
+                     "last_modified" if sort_by is None else sort_by),
+                sort_order=sort_order,
+                pipeline_tag=pipeline_tag,
+            )
+
+            # 转换为ID -> 详情的映射 (使用 hf_model_id 作为键)
+            keyword_results_map = {
+                str(result.get("hf_model_id", "")): result
+                for result in keyword_results
+                if result.get("hf_model_id") is not None
+            }
+        except Exception as e:
+            logger.error(f"Hybrid (models): Error in keyword search: {e}", exc_info=True)
+
+        # --- Step 3: 合并结果ID ---
+        semantic_ids = set(semantic_results_map.keys())
+        keyword_ids = set(keyword_results_map.keys())
+        all_combined_ids: Set[str] = semantic_ids.union(keyword_ids)
+        
+        if not all_combined_ids:
+            logger.info(
+                "Hybrid search (models): No results from either semantic or keyword searches."
+            )
+            return PaginatedHFModelSearchResult(
+                items=[], total=0, skip=skip, limit=page_size
+            )
+
+        # --- Step 4: 获取所有模型详情 ---
+        all_model_details: Dict[str, Dict[str, Any]] = {}
+        try:
+            # 获取所有模型的详情
+            model_details_list = await self.pg_repo.get_hf_models_by_ids(
+                list(all_combined_ids)
+            )
+            # 创建ID到详情的映射
+            all_model_details = {
+                str(details.get("hf_model_id", "")): details
+                for details in model_details_list
+                if details.get("hf_model_id") is not None
+            }
+        except Exception as fetch_error:
+            logger.error(
+                f"Hybrid (models): Error fetching model details: {fetch_error}", exc_info=True
+            )
+            if not all_model_details:
+                return PaginatedHFModelSearchResult(
+                    items=[], total=0, skip=skip, limit=page_size
+                )
+
+        # --- Step 5: 使用 RRF 合并结果 ---
+        valid_ids_with_details = set(all_model_details.keys())
+
+        # 语义排名 (只对有详情的ID)
+        semantic_ranks: Dict[str, int] = {}
+        if semantic_results_map:
+            valid_semantic_results = {
+                mid: score
+                for mid, score in semantic_results_map.items()
+                if mid in valid_ids_with_details
+            }
+            semantic_ranks = {
+                mid: rank + 1
+                for rank, (mid, _) in enumerate(
+                    sorted(
+                        valid_semantic_results.items(),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    )
+                )
+            }
+
+        # 关键词排名 (只对有详情的ID)
+        keyword_ranks: Dict[str, int] = {}
+        if keyword_results_map:
+            valid_keyword_results = {
+                mid: details
+                for mid, details in keyword_results_map.items()
+                if mid in valid_ids_with_details
+            }
+            keyword_ranks = {
+                str(mid): rank + 1
+                for rank, mid in enumerate(valid_keyword_results.keys())
+            }
+
+        # 计算融合分数
+        combined_scores: Dict[str, Optional[float]] = {}
+        is_keyword_only = bool(keyword_ranks) and not semantic_ranks
+        rrf_k = self.DEFAULT_RRF_K
+
+        for model_id in valid_ids_with_details:
+            score = 0.0
+            sem_rank = semantic_ranks.get(model_id)
+            kw_rank = keyword_ranks.get(model_id)
+
+            # RRF 公式
+            if sem_rank is not None:
+                score += 1.0 / (rrf_k + sem_rank)
+            if kw_rank is not None:
+                score += 1.0 / (rrf_k + kw_rank)
+
+            # 存储融合分数
+            if score > 0:
+                if is_keyword_only:
+                    combined_scores[model_id] = None
+                else:
+                    combined_scores[model_id] = score
+
+        # --- Step 6: 创建 HFSearchResultItem 对象 ---
+        all_items: List[HFSearchResultItem] = []
+        for model_id in valid_ids_with_details:
+            if details := all_model_details.get(model_id):
+                # 处理可能的 JSON 字符串字段
+                try:
+                    # 处理 tags
+                    tags = details.get("hf_tags", [])
+                    if isinstance(tags, str):
+                        try:
+                            tags = json.loads(tags)
+                        except (json.JSONDecodeError, TypeError):
+                            tags = []
+                    
+                    # 创建结果项
+                    item = HFSearchResultItem(
+                        model_id=model_id,
+                        author=details.get("hf_author", ""),
+                        pipeline_tag=details.get("hf_pipeline_tag", ""),
+                        last_modified=details.get("hf_last_modified"),
+                        tags=tags,
+                        likes=details.get("hf_likes", 0),
+                        downloads=details.get("hf_downloads", 0),
+                        library_name=details.get("hf_library_name", ""),
+                        score=combined_scores.get(model_id),
+                    )
+                    all_items.append(item)
+                except ValidationError as ve:
+                    logger.error(
+                        f"[_perform_hybrid_search_models] Validation error creating HFSearchResultItem for model_id={model_id}: {ve}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[_perform_hybrid_search_models] Error creating HFSearchResultItem for model_id={model_id}: {e}"
+                    )
+
+        # --- Step 7: 应用过滤器 ---
+        filtered_items: List[HFSearchResultItem] = all_items
+
+        # pipeline_tag 过滤
+        if pipeline_tag:
+            filtered_items = [
+                item
+                for item in filtered_items
+                if item.pipeline_tag and item.pipeline_tag.lower() == pipeline_tag.lower()
+            ]
+
+        # --- Step 8: 排序和分页 ---
+        total_items_after_filtering = len(filtered_items)
+
+        # 确定排序键
+        final_sort_by: Optional[ModelSortByLiteral] = None
+        current_sort_by_from_filter = filters.sort_by if filters else None
+
+        if current_sort_by_from_filter:
+            if current_sort_by_from_filter in get_args(ModelSortByLiteral):
+                final_sort_by = cast(ModelSortByLiteral, current_sort_by_from_filter)
+            else:
+                logger.warning(
+                    f"[_perform_hybrid_search_models] Invalid sort_by '{current_sort_by_from_filter}' in filter for hybrid model search. Defaulting to 'score'."
+                )
+                final_sort_by = "score"
+        else:
+            final_sort_by = "score"
+
+        # 确定排序顺序
+        final_sort_order: SortOrderLiteral = "desc"
+        if (
+            filters
+            and filters.sort_order
+            and filters.sort_order in get_args(SortOrderLiteral)
+        ):
+            final_sort_order = filters.sort_order
+        final_sort_order = cast(SortOrderLiteral, final_sort_order)
+
+        (
+            paginated_items_list_uncasted,
+            total_items,
+            calculated_skip,
+            calculated_limit,
+        ) = self._apply_sorting_and_pagination(
+            filtered_items,
+            sort_by=final_sort_by,
+            sort_order=final_sort_order,
+            page=page,
+            page_size=page_size,
+        )
+
+        paginated_items_list = cast(
+            List[HFSearchResultItem], paginated_items_list_uncasted
+        )
+
+        # --- Step 9: 返回分页结果 ---
+        return PaginatedHFModelSearchResult(
+            items=paginated_items_list,
+            total=total_items_after_filtering,
             skip=calculated_skip,
             limit=calculated_limit,
         )

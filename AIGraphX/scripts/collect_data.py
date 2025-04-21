@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple, Set, TypedDict, Union
 from datetime import datetime, timezone, timedelta
 import sys  # For exiting early on critical errors
 import re  # For extracting ArXiv IDs
+import argparse # 添加 argparse
 
 # --- Library Imports ---
 from dotenv import load_dotenv
@@ -39,8 +40,8 @@ if not GITHUB_TOKEN:
     )
 
 # Collection Parameters
-MAX_MODELS_TO_PROCESS = 15000
-MODELS_SORT_BY = "downloads"
+# MAX_MODELS_TO_PROCESS = 15000 # 改为通过命令行参数控制
+# MODELS_SORT_BY = "downloads" # 改为通过命令行参数控制
 OUTPUT_JSONL_FILE = "data/aigraphx_knowledge_data.jsonl"
 # CHECKPOINT_FILE = "data/collection_checkpoint.txt"
 # CHECKPOINT_INTERVAL = 50
@@ -998,10 +999,34 @@ async def fetch_target_model_ids(limit: int, sort_by: str) -> List[str]:
 
 # --- Main Orchestration ---
 async def main() -> None:
+    # --- Argument Parsing ---
+    parser = argparse.ArgumentParser(
+        description="Collect Hugging Face model data with linked papers and GitHub stars.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--sort-by",
+        type=str,
+        choices=["likes", "downloads"],
+        default="likes", # 默认按点赞量排序
+        help="Sort models from Hugging Face Hub by 'likes' or 'downloads'.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5000, # 默认获取前 5000 个
+        help="Maximum number of models to fetch from Hugging Face Hub based on sorting.",
+    )
+    args = parser.parse_args()
+    sort_by = args.sort_by
+    limit = args.limit
+    # --- End Argument Parsing ---
+
     # Load already processed IDs instead of count
     processed_ids_set = _load_processed_ids()  # This set will be updated directly
     logger.info(
-        f"Starting data collection run. Will attempt to process up to {MAX_MODELS_TO_PROCESS} target models."
+        # f"Starting data collection run. Will attempt to process up to {MAX_MODELS_TO_PROCESS} target models."
+        f"Starting data collection run. Target: Top {limit} models sorted by {sort_by}." # 使用命令行参数更新日志
     )
     logger.info(f"Loaded {len(processed_ids_set)} previously processed model IDs.")
 
@@ -1025,15 +1050,18 @@ async def main() -> None:
     # Ensure data dir for processed IDs also exists (handled in _save_processed_ids)
 
     target_model_ids = await fetch_target_model_ids(
-        MAX_MODELS_TO_PROCESS, MODELS_SORT_BY
+        # MAX_MODELS_TO_PROCESS, MODELS_SORT_BY
+        limit, sort_by # 使用命令行参数
     )
     if not target_model_ids:
-        logger.warning("Could not fetch target model IDs. Exiting.")
+        # logger.warning("Could not fetch target model IDs. Exiting.")
+        logger.warning(f"Could not fetch target model IDs (Top {limit} sorted by {sort_by}). Exiting.") # 使用命令行参数更新日志
         await close_http_client_safely()  # Ensure client is closed
         return
 
     models_to_run = [mid for mid in target_model_ids if mid not in processed_ids_set]
-    logger.info(f"Target models from HF: {len(target_model_ids)}")
+    # logger.info(f"Target models from HF: {len(target_model_ids)}")
+    logger.info(f"Target models from HF (Top {limit}, sorted by {sort_by}): {len(target_model_ids)}") # 使用命令行参数更新日志
     logger.info(f"Already processed models: {len(processed_ids_set)}")
     logger.info(f"Models to process in this run: {len(models_to_run)}")
 

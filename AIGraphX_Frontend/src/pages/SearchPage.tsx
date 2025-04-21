@@ -69,9 +69,8 @@ const SearchPage: React.FC = () => {
 
     // --- 调整模型搜索的 search_type --- //
     if (searchTarget === 'models' && apiSearchType === 'hybrid') {
-        apiSearchType = 'semantic'; // 模型不支持 hybrid，强制改为 semantic
-        // 或者可以改为 'keyword'，取决于您的偏好
-        // apiSearchType = 'keyword'; 
+        // 删除此限制，因为后端现在支持模型的混合搜索
+        // apiSearchType = 'semantic'; // 不再需要将 hybrid 强制转换为 semantic
     }
 
     if (sortBy.includes('_')) {
