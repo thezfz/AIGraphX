@@ -1,16 +1,15 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
+# These are typically Python specific and might appear deep in the backend structure
+AIGraphX/**/*.py[cod]
+AIGraphX/**/__pycache__/
+# Keep *.so global as C extensions might be anywhere if used
 *.so
 
-# Distribution / packaging
+# Distribution / packaging - Generally keep global, but prefix backend build outputs if needed
+# build/ # Potentially conflicts with frontend build, remove generic
+# dist/ # Potentially conflicts with frontend dist, remove generic
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -25,110 +24,146 @@ wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-# Usually these files are written by a CI, but they might be copied to vicinity of the source code.
+# PyInstaller - Keep global
 *.manifest
 *.spec
 
-# Installer logs
+# Installer logs - Keep global
 pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
+# Backend specific coverage
+AIGraphX/htmlcov/
+AIGraphX/.coverage
+AIGraphX/.coverage.*
+AIGraphX/nosetests.xml
+AIGraphX/coverage.xml
+AIGraphX/*.cover
+AIGraphX/*.py,cover
+# General cache/test dirs - prefix backend ones
+AIGraphX/.tox/
+AIGraphX/.nox/
+AIGraphX/.cache
+AIGraphX/.hypothesis/
+AIGraphX/.pytest_cache/
 
-# Translations
+# Translations - Keep global
 *.mo
 *.pot
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+# Django stuff - Prefix with backend path
+AIGraphX/*.log # Backend specific logs
+AIGraphX/local_settings.py
+AIGraphX/db.sqlite3
+AIGraphX/db.sqlite3-journal
 
-# Flask stuff:
-instance/
-.webassets-cache
+# Flask stuff - Prefix with backend path
+AIGraphX/instance/
+AIGraphX/.webassets-cache
 
-# Scrapy stuff:
-.scrapy
+# Scrapy stuff - Prefix with backend path
+AIGraphX/.scrapy
 
-# Sphinx documentation
-docs/_build/
+# Sphinx documentation - Prefix with backend path
+AIGraphX/docs/_build/
 
-# PyBuilder
-target/
+# PyBuilder - Prefix with backend path
+AIGraphX/target/
 
-# Jupyter Notebook
+# Jupyter Notebook - Keep global for now, refine if needed
 .ipynb_checkpoints
 
-# IPython
+# IPython - Keep global for now
 profile_default/
 ipython_config.py
 
-# pyenv
+# pyenv - Keep global
 .python-version
 
-# pipenv
-# According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+# pipenv - Keep global comment
 # Pipfile.lock
 
-# PEP 582; used by PDM.
-__pypackages__/
+# PEP 582; used by PDM - Prefix with backend path
+AIGraphX/__pypackages__/
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+# Celery stuff - Prefix with backend path
+AIGraphX/celerybeat-schedule
+AIGraphX/celerybeat.pid
 
-# SageMath parsed files
+# SageMath parsed files - Keep global
 *.sage.py
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Environments - Apply specific rules per project
+# Backend env files
+AIGraphX/.env
+AIGraphX/env/
+AIGraphX/venv/
+AIGraphX/ENV/
+AIGraphX/env.bak/
+AIGraphX/venv.bak/
+# Frontend env files are handled later
 
-# Spyder project settings
+# Spyder project settings - Keep global
 .spyderproject
 .spyproject
 
-# Rope project settings
+# Rope project settings - Keep global
 .ropeproject
 
-# mkdocs documentation
+# mkdocs documentation - Keep global for now
 /site
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# mypy - Prefix with backend path
+AIGraphX/.mypy_cache/
+AIGraphX/.dmypy.json
+AIGraphX/dmypy.json
 
-# Pyre type checker
-.pyre/ data/
-logs/
-current_environment.txt
-.mypy_cache/
-.pytest_cache/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Pyre type checker - Prefix with backend path
+AIGraphX/.pyre/
 
-# Cursor AI history
-.specstory/
+# Backend specific (AIGraphX) - Already prefixed or handled above
+AIGraphX/data/
+AIGraphX/logs/
+AIGraphX/*.pyc
+AIGraphX/*.pyo
+AIGraphX/*.pyd
+AIGraphX/current_environment.txt # Added based on list_dir
+AIGraphX/test_output.log # Added based on list_dir
+
+# Cursor AI history - Specify for each project
+AIGraphX/.specstory/
+AIGraphX_Frontend/.specstory/
+
+# Frontend specific (AIGraphX_Frontend)
+AIGraphX_Frontend/node_modules/
+AIGraphX_Frontend/dist/
+AIGraphX_Frontend/build/
+AIGraphX_Frontend/.env* # Handles .env, .env.local, etc.
+AIGraphX_Frontend/*.log # Frontend specific logs
+AIGraphX_Frontend/coverage/ # Frontend specific coverage
+
+# IDE specific - Keep global
+.vscode/
+
+# OS specific - Keep global
+.DS_Store
+
+# Remove potentially duplicated/obsolete global rules from previous version
+# build/ # Removed
+# dist/ # Removed
+# *.log # Replaced by specific rules
+# .env # Replaced by specific rules
+# .venv # Replaced by specific rules
+# env/ # Replaced by specific rules
+# venv/ # Replaced by specific rules
+# ENV/ # Replaced by specific rules
+# env.bak/ # Replaced by specific rules
+# venv.bak/ # Replaced by specific rules
+# .mypy_cache/ # Replaced by specific rules
+# .pytest_cache/ # Replaced by specific rules
+# __pycache__/ # Replaced by specific rules
+# *.pyc # Replaced by specific rules
+# *.pyo # Replaced by specific rules
+# *.pyd # Replaced by specific rules
+# .specstory/ # Replaced by specific rules
