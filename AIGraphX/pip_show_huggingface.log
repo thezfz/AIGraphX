@@ -1,0 +1,10 @@
+Name: huggingface_hub
+Version: 0.30.2
+Summary: Client library to download and publish models, datasets and other repos on the huggingface.co hub
+Home-page: https://github.com/huggingface/huggingface_hub
+Author: Hugging Face, Inc.
+Author-email: julien@huggingface.co
+License: Apache
+Location: /home/thezfz/miniconda/envs/AIGraphX/lib/python3.11/site-packages
+Requires: filelock, fsspec, packaging, pyyaml, requests, tqdm, typing-extensions
+Required-by: datasets, sentence-transformers, tokenizers, transformers

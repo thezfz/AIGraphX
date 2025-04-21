@@ -1,6 +1,10 @@
 # Containerfile for AIGraphX FastAPI application
 FROM python:3.11-slim
 
+# 设置中国时区
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
@@ -13,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     build-essential \
     curl \
+    tzdata \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -57,4 +62,4 @@ EXPOSE 8000
 # ENTRYPOINT ["/opt/conda/envs/AIGraphX/bin/python", "-m"]
 
 # Use shell form CMD to allow shell variable substitution before conda run
-CMD conda run -n AIGraphX --no-capture-output uvicorn aigraphx.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000} --reload
+CMD conda run -n AIGraphX --no-capture-output uvicorn aigraphx.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000} --reload --log-level ${UVICORN_LOG_LEVEL:-debug} --access-log

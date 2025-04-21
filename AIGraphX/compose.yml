@@ -10,6 +10,8 @@ services:
     env_file: 
       - .env # Load variables from .env file
     environment:
+      # --- 系统时区设置 ---
+      - TZ=Asia/Shanghai
       # --- Proxy Settings (Using reliable host DNS name) ---
       # Use values from .env if defined, otherwise use these defaults
       - http_proxy=${HTTP_PROXY:-http://172.23.176.1:7890}
@@ -40,6 +42,9 @@ services:
       - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY} # Use placeholder
       - GITHUB_API_KEY=${GITHUB_API_KEY} # Use placeholder
       - RELOAD=true # For uvicorn --reload flag in CMD
+      # 添加详细的Uvicorn日志配置
+      - UVICORN_LOG_LEVEL=debug # 设置Uvicorn日志级别为debug
+      - UVICORN_ACCESS_LOG=true # 启用访问日志记录
       # Add other necessary variables from .env or config if needed
     # Name the container for easier identification
     container_name: aigraphx_app

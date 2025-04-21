@@ -14,7 +14,7 @@ import httpx  # Using httpx for async requests
 import tenacity
 from aiolimiter import AsyncLimiter
 import arxiv  # type: ignore[import-untyped]
-from huggingface_hub import HfApi, ModelInfo, ModelFilter
+from huggingface_hub import HfApi, ModelInfo
 from huggingface_hub.utils import (
     RepositoryNotFoundError,
     GatedRepoError,
@@ -943,28 +943,57 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
 
 # --- New function to fetch target model IDs (Reusable) ---
 async def fetch_target_model_ids(limit: int, sort_by: str) -> List[str]:
-    """Fetches the initial list of model IDs from HF Hub."""
-    logger.info(
-        f"Fetching list of top {limit} model IDs from HF Hub (sorted by {sort_by})..."
-    )
-    ids = []
+    """Fetches a list of model IDs from Hugging Face Hub, sorted and limited."""
+    logger.info(f"Fetching top {limit} model IDs from HF Hub, sorted by {sort_by}...")
+    target_ids: List[str] = []
     try:
-        # Use the module-level hf_api client
-        all_models_iterator = await asyncio.to_thread(
-            hf_api.list_models,
-            sort=sort_by,
-            direction=-1,
-            limit=limit,
-            fetch_config=False,
+        # Use tenacity for retrying the list_models call
+        @tenacity.retry(
+            stop=tenacity.stop_after_attempt(4),
+            wait=tenacity.wait_exponential(multiplier=1, min=2, max=20)
+            + tenacity.wait_random(0, 2),
+            retry=(
+                tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS)
+                | tenacity.retry_if_exception(
+                    lambda e: isinstance(e, httpx.HTTPStatusError)
+                    and e.response.status_code in RETRYABLE_STATUS_CODES
+                )
+            ),
+            before_sleep=tenacity.before_sleep_log(
+                logger, logging.WARNING
+            ),
+            reraise=True,
         )
-        ids = [m.id for m in all_models_iterator]
-        logger.info(f"Obtained {len(ids)} target model IDs.")
-    except Exception as e:
-        logger.critical(f"CRITICAL: Failed to fetch target model list from HF Hub: {e}")
-        logger.critical(traceback.format_exc())
-        # Decide if script should exit or return empty list
-        # Returning empty list for now
-    return ids
+        async def get_models_list() -> List[ModelInfo]:
+            # Run the synchronous call in a thread to avoid blocking asyncio loop
+            loop = asyncio.get_running_loop()
+            models_iterator = await loop.run_in_executor(
+                None,  # Use default executor
+                lambda: hf_api.list_models(
+                    full=False,  # Only need modelId
+                    sort=sort_by,
+                    direction=-1,  # Descending order (most downloads/likes first)
+                    limit=limit,  # Apply the limit directly
+                    # Removed fetch_config=False - list_models doesn't have this param
+                ),
+            )
+            return list(models_iterator)
+
+        models = await get_models_list()
+        target_ids = [model.id for model in models if model.id]
+        logger.info(f"Successfully fetched {len(target_ids)} model IDs from HF Hub.")
+
+    except tenacity.RetryError as e:
+        logger.error(
+            f"Failed to fetch model list from HF Hub after multiple retries: {e}. Returning empty list."
+        )
+    except (HfHubHTTPError, Exception) as e:
+        logger.error(
+            f"An unexpected error occurred while fetching model list from HF Hub: {e}. Returning empty list."
+        )
+        logger.debug(traceback.format_exc())  # Log full traceback for debugging
+
+    return target_ids
 
 
 # --- Main Orchestration ---

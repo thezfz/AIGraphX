@@ -199,6 +199,27 @@ async def lifespan(
         logger.info("Skipping readiness check for Models Faiss Repository due to instantiation failure.")
 
 
+    # Initialize Text Embedder (New)
+    logger.info("Initializing Text Embedder...")
+    try:
+        if settings.sentence_transformer_model:
+            logger.info(f"Loading sentence transformer model: {settings.sentence_transformer_model} on device: {settings.embedder_device}")
+            app.state.embedder = TextEmbedder(
+                model_name=settings.sentence_transformer_model,
+                device=settings.embedder_device
+            )
+            logger.info(f"Text Embedder initialized successfully with model. Model loaded: {app.state.embedder.model is not None}")
+        else:
+            logger.warning("SENTENCE_TRANSFORMER_MODEL not specified in settings. Embedder not initialized.")
+            app.state.embedder = None
+    except Exception as e:
+        logger.exception(f"Failed to initialize Text Embedder: {e}")
+        # Depending on criticality, you might want to raise an error here
+        logger.error("CRITICAL: Text Embedder initialization failed. Semantic search will be unavailable.")
+        app.state.embedder = None # Ensure it's None if init fails
+        # Optionally raise RuntimeError if embedder is absolutely required
+        # raise RuntimeError("Text Embedder initialization failed") from e
+
     logger.info("Resource initialization process completed.")
     print("--- DEBUG: Lifespan YIELDING (Resources should be initialized) ---")
     yield  # Application runs here

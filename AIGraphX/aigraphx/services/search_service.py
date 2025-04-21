@@ -5,7 +5,7 @@ import numpy as np
 import asyncio
 import math
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import (
     List,
     Dict,
@@ -171,41 +171,56 @@ class SearchService:
         """
         Helper to fetch HF model details from Postgres for a list of model IDs.
         """
+        # 添加日志记录
+        logger.debug(f"[_get_model_details_for_ids] Received {len(model_ids)} IDs: {model_ids[:10]}...")
         if not model_ids:
-            logger.debug("No model IDs provided to _get_model_details_for_ids.")
+            logger.debug("[_get_model_details_for_ids] No model IDs provided, returning empty list.")
             return []
 
-        logger.debug(f"Fetching details for {len(model_ids)} model IDs from PG.")
+        logger.debug(f"[_get_model_details_for_ids] Fetching details for {len(model_ids)} model IDs from PG.")
         result_items_map: Dict[str, HFSearchResultItem] = {}
         model_details_list: List[Dict[str, Any]] = []  # Initialize
 
         # Check if the method exists before calling
         if not hasattr(self.pg_repo, "get_hf_models_by_ids"):
             logger.error(
-                "PostgresRepository does not have method 'get_hf_models_by_ids'. Cannot fetch model details."
+                "[_get_model_details_for_ids] PostgresRepository does not have method 'get_hf_models_by_ids'."
             )
             return []
 
         try:
             model_details_list = await self.pg_repo.get_hf_models_by_ids(model_ids)
-            logger.debug(f"Fetched {len(model_details_list)} detail records from PG.")
+            logger.debug(f"[_get_model_details_for_ids] Fetched {len(model_details_list)} detail records from PG.")
         except Exception as e:
             logger.error(
-                f"Failed to fetch details for {len(model_ids)} model IDs from PG: {e}",
+                f"[_get_model_details_for_ids] Failed to fetch details from PG: {e}",
                 exc_info=True,
             )
             return []  # Return empty on DB error
+        
+        if not model_details_list:
+            logger.warning("[_get_model_details_for_ids] PG returned no details for the given model IDs.")
+            return [] 
 
+        # 修正：使用正确的数据库列名 'hf_model_id' 作为键
         details_map = {
-            detail.get("model_id"): detail
+            detail.get("hf_model_id"): detail
             for detail in model_details_list
-            if detail.get("model_id")
+            if detail.get("hf_model_id")
         }
+        logger.debug(f"[_get_model_details_for_ids] Created details_map with {len(details_map)} entries.")
 
-        for model_id in model_ids:
+        # 添加日志记录处理结果数量
+        processed_count = 0
+        skipped_count = 0
+        creation_errors = 0
+
+        for model_id in model_ids: # model_id 是从 Faiss 来的 ID
             detail_result = details_map.get(model_id)
             if detail_result is None:
-                logger.warning(f"Details not found in PG for model_id {model_id}.")
+                # This log might be less frequent now, but good to keep
+                logger.warning(f"[_get_model_details_for_ids] Details not found in details_map for model_id {model_id} (from Faiss). This might indicate inconsistency between Faiss and DB.")
+                skipped_count += 1
                 continue
 
             # Process fields safely
@@ -220,11 +235,11 @@ class SearchService:
                         processed_tags = parsed_tags
                     else:
                         logger.warning(
-                            f"Decoded tags for model {model_id} is not a list of strings."
+                            f"[_get_model_details_for_ids] Decoded tags for model {model_id} is not a list of strings."
                         )
                 except json.JSONDecodeError:
                     logger.warning(
-                        f"Failed to decode tags JSON for model_id {model_id}: {tags_list}"
+                        f"[_get_model_details_for_ids] Failed to decode tags JSON for model_id {model_id}: {tags_list}"
                     )
             elif isinstance(tags_list, list) and all(
                 isinstance(t, str) for t in tags_list
@@ -233,7 +248,6 @@ class SearchService:
 
             score_float = scores.get(model_id, 0.0) if scores else 0.0
 
-            # Linter Fix 1: Process last_modified BEFORE instantiating HFSearchResultItem
             processed_last_modified_str: Optional[str] = (
                 None  # Initialize as Optional[str]
             )
@@ -241,77 +255,81 @@ class SearchService:
             if isinstance(last_modified_val, (datetime, date)):
                 processed_last_modified_str = last_modified_val.isoformat()
             elif isinstance(last_modified_val, str):
-                # Attempt to parse and reformat to ensure consistency, or just pass through
                 try:
                     dt_obj = datetime.fromisoformat(
                         last_modified_val.replace("Z", "+00:00")
                     )
                     processed_last_modified_str = dt_obj.isoformat()  # Store as string
                 except ValueError:
-                    # Handle potential date string YYYY-MM-DD
                     try:
                         d = date.fromisoformat(last_modified_val)
-                        # Convert date to datetime then to ISO string
                         processed_last_modified_str = datetime.combine(
                             d, datetime.min.time()
                         ).isoformat()
                     except ValueError:
                         logger.warning(
-                            f"Could not parse last_modified string '{last_modified_val}' for model {model_id}, using as is."
+                            f"[_get_model_details_for_ids] Could not parse last_modified string '{last_modified_val}' for model {model_id}, using as is."
                         )
                         processed_last_modified_str = (
                             last_modified_val  # Pass through if unparseable
                         )
             elif last_modified_val is not None:
                 logger.warning(
-                    f"Unexpected type for last_modified: {type(last_modified_val)}, converting to str."
+                    f"[_get_model_details_for_ids] Unexpected type for last_modified: {type(last_modified_val)}, converting to str."
                 )
                 processed_last_modified_str = str(last_modified_val)
-            # If last_modified_val is None, processed_last_modified_str remains None
 
-            # Linter Fix 2: Convert processed string back to datetime if not None for model instantiation
             final_last_modified_dt: Optional[datetime] = None
             if processed_last_modified_str:
                 try:
-                    # Attempt to parse the ISO format string back to datetime
                     final_last_modified_dt = datetime.fromisoformat(
                         processed_last_modified_str.replace("Z", "+00:00")
                     )
                 except ValueError:
                     logger.warning(
-                        f"Could not parse final last_modified string '{processed_last_modified_str}' back to datetime for model {model_id}. Setting to None."
+                        f"[_get_model_details_for_ids] Could not parse final last_modified string '{processed_last_modified_str}' back to datetime for model {model_id}. Setting to None."
                     )
 
             try:
+                # 修正：创建实例时，使用 detail_result.get('hf_model_id') 对应 Pydantic 的 model_id
+                # 并确认其他字段名与数据库列名匹配 (hf_pipeline_tag, hf_likes, hf_downloads, hf_author, hf_library_name)
                 result_item = HFSearchResultItem(
-                    model_id=model_id,
-                    pipeline_tag=str(detail_result.get("pipeline_tag", "")),
-                    likes=int(detail_result.get("likes", 0))
-                    if detail_result.get("likes") is not None
+                    model_id=str(detail_result.get("hf_model_id", "")), # 修正: 对应 Pydantic 字段
+                    pipeline_tag=str(detail_result.get("hf_pipeline_tag", "")), # 修正: 数据库列名
+                    likes=int(detail_result.get("hf_likes", 0))
+                    if detail_result.get("hf_likes") is not None
                     else None,
-                    downloads=int(detail_result.get("downloads", 0))
-                    if detail_result.get("downloads") is not None
+                    downloads=int(detail_result.get("hf_downloads", 0))
+                    if detail_result.get("hf_downloads") is not None
                     else None,
-                    last_modified=final_last_modified_dt,  # Use the datetime object or None
+                    last_modified=final_last_modified_dt,
                     score=score_float,
                     tags=processed_tags,
-                    author=str(detail_result.get("author", "")),
-                    library_name=str(detail_result.get("library_name", "")),
+                    author=str(detail_result.get("hf_author", "")), # 修正: 数据库列名
+                    library_name=str(detail_result.get("hf_library_name", "")), # 修正: 数据库列名
                 )
-                result_items_map[model_id] = result_item
+                # 使用 hf_model_id (数据库中的真实ID) 作为 result_items_map 的键
+                db_model_id = detail_result.get("hf_model_id")
+                if db_model_id:
+                     result_items_map[str(db_model_id)] = result_item
+                     processed_count += 1
+                else:
+                    logger.warning(f"[_get_model_details_for_ids] Skipping item due to missing 'hf_model_id' in detail_result: {detail_result}")
+                    creation_errors += 1
             except Exception as item_creation_error:
                 logger.error(
-                    f"Error creating HFSearchResultItem for model_id {model_id}: {item_creation_error}",
+                    f"[_get_model_details_for_ids] Error creating HFSearchResultItem for hf_model_id {detail_result.get('hf_model_id')}: {item_creation_error}",
                     exc_info=True,
                 )
+                creation_errors += 1
                 continue  # Skip this model if item creation fails
 
-        # Preserve original order
+        # Preserve original order using Faiss IDs, looking up in the potentially re-keyed map
         ordered_results = [
             result_items_map[mid] for mid in model_ids if mid in result_items_map
         ]
         logger.debug(
-            f"Successfully processed details for {len(ordered_results)} model IDs."
+            f"[_get_model_details_for_ids] Completed processing. Processed: {processed_count}, Skipped (Not Found in Map): {skipped_count}, Creation Errors: {creation_errors}. Returning {len(ordered_results)} items."
         )
         return ordered_results
 
@@ -512,6 +530,19 @@ class SearchService:
         """
         Performs semantic search using Faiss and fetches details.
         """
+        # 添加日志
+        logger.info(
+            f"[perform_semantic_search] Target: {target}, Query: '{query}', Page: {page}, PageSize: {page_size}"
+        )
+        if self.embedder is None:
+            logger.error(
+                "[perform_semantic_search] Embedder not available."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Text embedding service is required for semantic search but is not available.",
+            )
+        
         # --- Check if embedder is available --- #
         if self.embedder is None:
             logger.error(
@@ -565,11 +596,8 @@ class SearchService:
 
         config = target_configs.get(target)
         if not config:
-            # Should be caught by earlier validation, but defensively check
-            logger.error(f"Configuration not found for target '{target}'.")
-            return PaginatedSemanticSearchResult(
-                items=[], total=0, skip=skip, limit=page_size
-            )
+            logger.error(f"[perform_semantic_search] Invalid target: {target}")
+            return PaginatedSemanticSearchResult(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         # Assign variables from config with explicit casting for type checker
         faiss_repo: FaissRepository = cast(FaissRepository, config["faiss_repo"])
@@ -578,14 +606,9 @@ class SearchService:
             config["fetch_details_func"],
         )
         id_type: Type = cast(Type, config["id_type"])
-        # ResultModel = config["ResultModel"] # We don't use ResultModel later, can omit
-        PaginatedModel: Type[PaginatedResult] = cast(
-            Type[PaginatedResult], config["PaginatedModel"]
-        )
+        PaginatedModel: Type[PaginatedResult] = cast(Type[PaginatedResult], config["PaginatedModel"])
         target_sort_options: Tuple = cast(Tuple, config["sort_options"])
-        EmptyModel: Type[PaginatedResult] = cast(
-            Type[PaginatedResult], config["EmptyModel"]
-        )
+        EmptyModel: Type[PaginatedResult] = cast(Type[PaginatedResult], config["EmptyModel"])
 
         # --- Query Validation ---
         if not query:
@@ -598,46 +621,43 @@ class SearchService:
         try:
             embedding = self.embedder.embed(query)
             if embedding is None:
-                logger.error("Failed to generate embedding for the query.")
-                return EmptyModel(
-                    items=[], total=0, skip=skip, limit=page_size
-                )  # Use specific EmptyModel
+                logger.error("[perform_semantic_search] Failed to generate embedding.")
+                return EmptyModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
+            logger.debug("[perform_semantic_search] Embedding generated successfully.")
         except Exception as embed_error:
-            logger.error(f"Error generating embedding: {embed_error}", exc_info=True)
-            # Return generic empty semantic result on embedding error
-            return PaginatedSemanticSearchResult(
-                items=[], total=0, skip=skip, limit=page_size
-            )
+            logger.error(f"[perform_semantic_search] Error generating embedding: {embed_error}", exc_info=True)
+            return PaginatedSemanticSearchResult(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         # --- Faiss Repo Check ---
         if not faiss_repo.is_ready():
-            logger.error(f"Faiss repository for target '{target}' is not ready.")
-            return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
+            logger.error(f"[perform_semantic_search] Faiss repository for target '{target}' is not ready.")
+            return PaginatedModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         # --- Validate Faiss ID Type ---
         if getattr(faiss_repo, "id_type", None) != id_type.__name__:
             logger.error(
-                f"Mismatched ID types: Faiss repo for '{target}' expects '{getattr(faiss_repo, 'id_type', 'UNKNOWN')}' but service configured for '{id_type.__name__}'"
+                f"[perform_semantic_search] Mismatched ID types: Faiss repo for '{target}' expects '{getattr(faiss_repo, 'id_type', 'UNKNOWN')}' but service configured for '{id_type.__name__}'"
             )
-            return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
+            return PaginatedModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         # --- Perform Faiss Search ---
         search_results_raw: List[Tuple[FaissID, float]] = []
         try:
             search_results_raw = await faiss_repo.search_similar(embedding, k=top_n)
+            # 添加日志记录原始结果
             logger.debug(
-                f"Faiss search for '{target}' returned {len(search_results_raw)} raw results."
+                f"[perform_semantic_search] Faiss search for '{target}' returned {len(search_results_raw)} raw results. Sample: {search_results_raw[:5]}"
             )
         except Exception as e:
             logger.error(
-                f"Error during Faiss search for target '{target}': {e}", exc_info=True
+                f"[perform_semantic_search] Error during Faiss search for target '{target}': {e}", exc_info=True
             )
-            return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
+            return PaginatedModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         # --- Process Faiss Results ---
         if not search_results_raw:
-            logger.info(f"Faiss search for '{target}' returned no results.")
-            return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
+            logger.info(f"[perform_semantic_search] Faiss search for '{target}' returned no results.")
+            return PaginatedModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         result_ids: list = []
         result_scores: dict = {}
@@ -650,28 +670,31 @@ class SearchService:
                 result_scores[original_id] = score
             else:
                 logger.warning(
-                    f"Skipping Faiss result. Expected ID type '{id_type.__name__}', got {type(original_id_union)} for ID {original_id_union}"
+                    f"[perform_semantic_search] Skipping Faiss result. Expected ID type '{id_type.__name__}', got {type(original_id_union)} for ID {original_id_union}"
                 )
 
         if not result_ids:
             logger.warning(
-                "No valid IDs extracted from Faiss results after type check."
+                "[perform_semantic_search] No valid IDs extracted from Faiss results after type check."
             )
-            return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
+            return PaginatedModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
+        
+        # 添加日志记录提取的ID
+        logger.debug(f"[perform_semantic_search] Extracted {len(result_ids)} valid IDs for target '{target}'. Sample: {result_ids[:10]}")
 
         # --- Fetch Details from Postgres ---
         all_items_list: List[ResultItem] = []
         try:
-            # Pass correctly typed IDs and scores
-            # Note: The fetch_details_func is already correctly assigned for the target
+            logger.debug(f"[perform_semantic_search] Fetching details for {len(result_ids)} IDs using {fetch_details_func.__name__}...")
             all_items_list = await fetch_details_func(result_ids, result_scores)
-
+            # 添加日志记录获取到的详情数量
+            logger.debug(f"[perform_semantic_search] Fetched {len(all_items_list)} items with details for target '{target}'.")
         except Exception as fetch_error:
             logger.error(
-                f"Error fetching details for target '{target}': {fetch_error}",
+                f"[perform_semantic_search] Error fetching details for target '{target}': {fetch_error}",
                 exc_info=True,
             )
-            return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
+            return PaginatedModel(items=[], total=0, skip=(page - 1) * page_size, limit=page_size)
 
         # --- Filter by Date ---
         filtered_items: List[ResultItem] = self._filter_results_by_date(
@@ -688,7 +711,7 @@ class SearchService:
                 valid_sort_by = "score"
             else:
                 logger.warning(
-                    f"Invalid sort_by key '{sort_by}' for target '{target}'. Defaulting to 'score'."
+                    f"[perform_semantic_search] Invalid sort_by key '{sort_by}' for target '{target}'. Defaulting to 'score'."
                 )
                 valid_sort_by = "score"
 
@@ -709,8 +732,11 @@ class SearchService:
         # --- Construct Final Response ---
         # Pass the original paginated list and cast for type checker.
         # We are confident based on the target that the items are of the correct type.
+        # 添加日志记录最终返回数量
+        logger.debug(f"[perform_semantic_search] Returning {len(paginated_items_list)} items for target '{target}' after filtering/sorting/pagination.")
+
         return PaginatedModel(
-            items=cast(List[Any], paginated_items_list),  # Cast to satisfy MyPy
+            items=cast(List[Any], paginated_items_list),
             total=total_items,
             skip=calculated_skip,
             limit=calculated_limit,
@@ -725,6 +751,7 @@ class SearchService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         area: Optional[str] = None,  # Paper specific
+        pipeline_tag: Optional[str] = None, # Model specific: 添加 pipeline_tag 参数
         # Allow target-specific sort options
         sort_by: Optional[Union[PaperSortByLiteral, ModelSortByLiteral]] = None,
         sort_order: SortOrderLiteral = "desc",
@@ -733,9 +760,9 @@ class SearchService:
         Performs keyword search using Postgres capabilities.
         Postgres repo method handles filtering, sorting, and LIMIT/OFFSET.
         """
+        # 添加日志
         logger.info(
-            f"Performing keyword search: query='{query}', target='{target}', "
-            f"page={page}, page_size={page_size}, filters/sort handled by PG"
+            f"[perform_keyword_search] Target: {target}, Query: '{query}', Page: {page}, PageSize: {page_size}"
         )
 
         # --- Basic Validation ---
@@ -769,7 +796,7 @@ class SearchService:
         if target == "papers":
             if not hasattr(self.pg_repo, "search_papers_by_keyword"):
                 logger.error(
-                    "PostgresRepository missing 'search_papers_by_keyword' method."
+                    "[perform_keyword_search] PostgresRepository missing 'search_papers_by_keyword' method."
                 )
                 return PaginatedPaperSearchResult(
                     items=[], total=0, skip=skip, limit=page_size
@@ -786,7 +813,7 @@ class SearchService:
                 sort_by not in target_sort_options or sort_by == "score"
             ):  # score not valid for PG keyword
                 logger.warning(
-                    f"Invalid or unsupported sort_by '{sort_by}' for paper keyword search. Using 'published_date'."
+                    f"[perform_keyword_search] Invalid or unsupported sort_by '{sort_by}' for paper keyword search. Using 'published_date'."
                 )
                 valid_pg_sort_by = "published_date"
             else:
@@ -798,7 +825,7 @@ class SearchService:
         elif target == "models":
             if not hasattr(self.pg_repo, "search_models_by_keyword"):
                 logger.error(
-                    "PostgresRepository missing 'search_models_by_keyword' method."
+                    "[perform_keyword_search] PostgresRepository missing 'search_models_by_keyword' method."
                 )
                 return PaginatedHFModelSearchResult(
                     items=[], total=0, skip=skip, limit=page_size
@@ -815,7 +842,7 @@ class SearchService:
                 sort_by not in target_sort_options or sort_by == "score"
             ):  # score not valid for PG keyword
                 logger.warning(
-                    f"Invalid or unsupported sort_by '{sort_by}' for model keyword search. Using 'last_modified'."
+                    f"[perform_keyword_search] Invalid or unsupported sort_by '{sort_by}' for model keyword search. Using 'last_modified'."
                 )
                 valid_pg_sort_by = "last_modified"
             else:
@@ -829,29 +856,33 @@ class SearchService:
         ] = []  # Results from PG repo (List[Dict] for both targets now)
         total_items: int = 0
         try:
-            # Pass validated sort key and correct keyword arguments to PG function
-            # The function signature for both paper/model search now returns List[Dict], int
-            pg_results, total_items = await search_pg_func(
-                query=query,
-                limit=page_size,
-                skip=skip,  # Changed from offset
-                sort_by=valid_pg_sort_by,  # Pass the validated key
-                sort_order=sort_order,
-                # Pass target-specific arguments with correct parameter names
-                **(
-                    {
-                        "published_after": date_from,
-                        "published_before": date_to,
-                        "filter_area": area,
-                    }
-                    if target == "papers"
-                    else {}
-                ),
-            )
+            # 记录传递给PG repo的参数
+            pg_params = {
+                "query": query,
+                "limit": page_size,
+                "skip": skip,
+                "sort_by": valid_pg_sort_by,
+                "sort_order": sort_order,
+                # Pass target-specific arguments, including pipeline_tag for models
+                **({
+                    "published_after": date_from,
+                    "published_before": date_to,
+                    "filter_area": area,
+                 } if target == "papers" else
+                 {
+                     "pipeline_tag": pipeline_tag, # 添加 pipeline_tag 到模型参数
+                 } if target == "models" else {})
+            }
+            logger.debug(f"[perform_keyword_search] Calling {search_pg_func.__name__} with params: {pg_params}")
+            
+            pg_results, total_items = await search_pg_func(**pg_params)
+            
+            # 记录从PG repo获取的结果
+            logger.debug(f"[perform_keyword_search] PG search returned {len(pg_results)} raw items, total count: {total_items}")
 
         except Exception as search_error:
             logger.error(
-                f"Error executing keyword search for target '{target}': {search_error}",
+                f"[perform_keyword_search] Error executing keyword search for target '{target}': {search_error}",
                 exc_info=True,
             )
             # Return empty PaginatedModel based on target
@@ -870,7 +901,7 @@ class SearchService:
                             item["authors"] = json.loads(item["authors"])
                         except (json.JSONDecodeError, TypeError):
                             logger.warning(
-                                f"Could not decode authors JSON for paper_id {item.get('paper_id')}"
+                                f"[perform_keyword_search] Could not decode authors JSON for paper_id {item.get('paper_id')}"
                             )
                             item["authors"] = []
 
@@ -879,7 +910,7 @@ class SearchService:
                         paper_items.append(SearchResultItem(**item))
                     except Exception as item_error:
                         logger.error(
-                            f"Error creating SearchResultItem from dict: {item_error}\nData: {item}",
+                            f"[perform_keyword_search] Error creating SearchResultItem from dict: {item_error}\nData: {item}",
                             exc_info=True,
                         )
                         # 跳过不符合规范的结果项
@@ -891,7 +922,7 @@ class SearchService:
                 )
             except Exception as e:
                 logger.error(
-                    f"Error converting paper keyword results to SearchResultItem: {e}",
+                    f"[perform_keyword_search] Error converting paper keyword results to SearchResultItem: {e}",
                     exc_info=True,
                 )
                 return PaginatedPaperSearchResult(
@@ -903,10 +934,61 @@ class SearchService:
                 model_items: List[HFSearchResultItem] = []
                 for item in pg_results:
                     try:
-                        model_items.append(HFSearchResultItem(**item))
+                        # Manually map DB fields to Pydantic model fields
+                        # Provide default score for keyword search
+                        
+                        # Process tags safely (copied from _get_model_details_for_ids)
+                        processed_tags: Optional[List[str]] = None
+                        tags_list = item.get("hf_tags") # Use correct DB column name
+                        if isinstance(tags_list, str):
+                            try:
+                                parsed_tags = json.loads(tags_list)
+                                if isinstance(parsed_tags, list) and all(isinstance(t, str) for t in parsed_tags):
+                                    processed_tags = parsed_tags
+                            except json.JSONDecodeError:
+                                logger.warning(f"[perform_keyword_search] Could not decode hf_tags JSON for model {item.get('hf_model_id')}")
+                        elif isinstance(tags_list, list) and all(isinstance(t, str) for t in tags_list):
+                             processed_tags = tags_list
+                             
+                        # Process last_modified safely (copied and adapted from _get_model_details_for_ids)
+                        final_last_modified_dt: Optional[datetime] = None
+                        last_modified_val = item.get("hf_last_modified") # Use correct DB column name
+                        if isinstance(last_modified_val, (datetime, date)):
+                             final_last_modified_dt = last_modified_val if isinstance(last_modified_val, datetime) else datetime.combine(last_modified_val, datetime.min.time())
+                             # Ensure timezone aware
+                             if final_last_modified_dt.tzinfo is None:
+                                 final_last_modified_dt = final_last_modified_dt.replace(tzinfo=timezone.utc) 
+                        elif isinstance(last_modified_val, str):
+                            try:
+                                dt_obj = datetime.fromisoformat(last_modified_val.replace("Z", "+00:00"))
+                                if dt_obj.tzinfo is None:
+                                     dt_obj = dt_obj.replace(tzinfo=timezone.utc)
+                                final_last_modified_dt = dt_obj
+                            except ValueError:
+                                logger.warning(f"[perform_keyword_search] Could not parse last_modified string '{last_modified_val}' for model {item.get('hf_model_id')}. Setting to None.")
+                        
+                        model_instance = HFSearchResultItem(
+                            model_id=str(item.get("hf_model_id", "")), 
+                            author=str(item.get("hf_author", "")),
+                            pipeline_tag=str(item.get("hf_pipeline_tag", "")),
+                            library_name=str(item.get("hf_library_name", "")),
+                            tags=processed_tags,
+                            likes=int(item["hf_likes"]) if item.get("hf_likes") is not None else None,
+                            downloads=int(item["hf_downloads"]) if item.get("hf_downloads") is not None else None,
+                            last_modified=final_last_modified_dt,
+                            score=0.0, # Assign default score for keyword results
+                            # sha=item.get("hf_sha") # sha is not in HFSearchResultItem model
+                        )
+                        model_items.append(model_instance)
+                    except ValidationError as val_err:
+                         logger.error(
+                            f"[perform_keyword_search] Validation error creating HFSearchResultItem: {val_err}\nData: {item}",
+                            exc_info=False # Don't need full stack usually
+                        )
+                         continue # Skip invalid item
                     except Exception as item_error:
                         logger.error(
-                            f"Error creating HFSearchResultItem from dict: {item_error}\nData: {item}",
+                            f"[perform_keyword_search] Unexpected error creating HFSearchResultItem from dict: {item_error}\nData: {item}",
                             exc_info=True,
                         )
                         continue
@@ -917,7 +999,7 @@ class SearchService:
                 )
             except Exception as e:
                 logger.error(
-                    f"Error converting model keyword results to HFSearchResultItem: {e}",
+                    f"[perform_keyword_search] Error converting model keyword results to HFSearchResultItem: {e}",
                     exc_info=True,
                 )
                 return PaginatedHFModelSearchResult(
@@ -925,7 +1007,7 @@ class SearchService:
                 )
         else:
             # Fallback for unexpected target (should not happen due to earlier checks)
-            logger.error(f"Keyword search reached end with unexpected target: {target}")
+            logger.error(f"[perform_keyword_search] Keyword search reached end with unexpected target: {target}")
             return PaginatedSemanticSearchResult(
                 items=[], total=0, skip=skip, limit=page_size
             )
@@ -1156,11 +1238,11 @@ class SearchService:
                     all_items.append(item)
                 except ValidationError as ve:
                     logger.error(
-                        f"Validation error creating SearchResultItem for paper_id={paper_id}: {ve}"
+                        f"[perform_hybrid_search] Validation error creating SearchResultItem for paper_id={paper_id}: {ve}"
                     )
                 except Exception as e:
                     logger.error(
-                        f"Error creating SearchResultItem for paper_id={paper_id}: {e}"
+                        f"[perform_hybrid_search] Error creating SearchResultItem for paper_id={paper_id}: {e}"
                     )
 
         # --- Step 7: 应用过滤器 --- (过滤 all_items)
@@ -1198,7 +1280,7 @@ class SearchService:
                 final_sort_by = cast(PaperSortByLiteral, current_sort_by_from_filter)
             else:
                 logger.warning(
-                    f"Invalid sort_by '{current_sort_by_from_filter}' in filter for hybrid paper search. Defaulting to 'score'."
+                    f"[perform_hybrid_search] Invalid sort_by '{current_sort_by_from_filter}' in filter for hybrid paper search. Defaulting to 'score'."
                 )
                 final_sort_by = "score"
         else:  # No sort specified in filter, default to score

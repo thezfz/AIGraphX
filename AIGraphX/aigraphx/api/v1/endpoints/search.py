@@ -96,7 +96,11 @@ async def search_papers(
     search_service: SearchService = Depends(deps.get_search_service),
 ) -> PapersSearchApiResponse:
     """Endpoint to search specifically for papers."""
+    # 为每个请求生成唯一ID以便跟踪
+    request_id = id(search_service)
     target = cast(Literal["papers", "models", "all"], "papers")  # 显式转换为Literal类型
+    
+    # 收集所有参数并记录详细日志
     log_params = {
         "query": q,
         "search_type": search_type,
@@ -113,12 +117,16 @@ async def search_papers(
         "top_n_semantic": top_n_semantic if search_type == "hybrid" else None,
         "top_n_keyword": top_n_keyword if search_type == "hybrid" else None,
     }
-    logger.info(f"Received paper search request with parameters: {log_params}")
+    logger.debug(f"[search_papers] [{request_id}] 开始处理论文搜索请求，参数: {log_params}")
 
     try:
+        start_time = time.time()
+        
         if search_type == "semantic":
             # Determine default sort_by for semantic if None
             effective_sort_by = sort_by if sort_by is not None else "score"
+            logger.debug(f"[search_papers] [{request_id}] 执行语义搜索，有效排序字段: {effective_sort_by}")
+            
             results = await search_service.perform_semantic_search(
                 query=q,
                 target=target,
@@ -130,6 +138,8 @@ async def search_papers(
         elif search_type == "keyword":
             # Determine default sort_by for keyword if None
             effective_sort_by = sort_by if sort_by is not None else "published_date"
+            logger.debug(f"[search_papers] [{request_id}] 执行关键词搜索，有效排序字段: {effective_sort_by}")
+            
             results = await search_service.perform_keyword_search(
                 query=q,
                 target=target,
@@ -150,6 +160,7 @@ async def search_papers(
                 sort_by=sort_by,
                 sort_order=sort_order or "desc",  # Ensure sort_order is not None
             )
+            logger.debug(f"[search_papers] [{request_id}] 执行混合搜索，过滤器: {search_filters.model_dump()}")
 
             # FIXED: Pass filters object, remove individual args and RRF params
             results = await search_service.perform_hybrid_search(
@@ -159,18 +170,33 @@ async def search_papers(
                 page_size=limit,
                 filters=search_filters,
             )
-        # else: # Should be unreachable due to Literal validation
-        #     raise HTTPException(status_code=400, detail="Invalid search_type specified.")
-
+        
+        # 计算处理时间并记录结果信息
+        process_time = (time.time() - start_time) * 1000
         logger.info(
-            f"Paper search successful, returning {len(results.items)} items out of {results.total} total."
+            f"[search_papers] [{request_id}] 论文搜索成功完成，返回 {len(results.items)} 项，共 {results.total} 项，耗时: {process_time:.2f}ms"
         )
+        
+        # 如有需要，记录返回的数据摘要
+        if results.items and logger.isEnabledFor(logging.DEBUG):
+            try:
+                # 根据结果类型安全地获取样本数据
+                if isinstance(results, PaginatedPaperSearchResult):
+                    sample_data = [{"title": item.title, "paper_id": item.paper_id} for item in results.items[:2]]
+                else:
+                    # 对于PaginatedSemanticSearchResult或其他类型，使用更安全的方式
+                    sample_data = [{"id": str(i), "type": type(item).__name__} for i, item in enumerate(results.items[:2])]
+                logger.debug(f"[search_papers] [{request_id}] 返回数据样例: {sample_data}")
+            except Exception as e:
+                logger.warning(f"[search_papers] [{request_id}] 无法记录返回数据样例: {str(e)}")
+        
         # 确保返回类型兼容
         if isinstance(results, PaginatedSemanticSearchResult):
             # 已经是PaginatedSemanticSearchResult类型，可以直接返回
             return results
         elif isinstance(results, PaginatedHFModelSearchResult):
             # 不应该出现这种情况，但如果发生了，需要转换为合法的返回类型
+            logger.warning(f"[search_papers] [{request_id}] 收到意外的PaginatedHFModelSearchResult类型，正在转换")
             paper_items = [
                 SearchResultItem(**item.model_dump()) for item in results.items
             ]
@@ -184,11 +210,17 @@ async def search_papers(
         return results
 
     except HTTPException as http_exc:
+        logger.warning(f"[search_papers] [{request_id}] HTTP异常: {http_exc.status_code} - {http_exc.detail}")
         raise http_exc
     except Exception as e:
-        logger.exception(f"An error occurred during paper search: {e}")
+        # 使用exception()方法自动包含堆栈跟踪
+        logger.exception(f"[search_papers] [{request_id}] 论文搜索过程中发生错误")
+        # 记录更多诊断信息
+        logger.error(f"[search_papers] [{request_id}] 异常类型: {type(e).__name__}, 详情: {str(e)}")
+        logger.error(f"[search_papers] [{request_id}] 搜索参数: {log_params}")
+        
         raise HTTPException(
-            status_code=500, detail="Internal server error during paper search."
+            status_code=500, detail=f"Internal server error during paper search: {str(e)}"
         )
 
 
@@ -214,7 +246,7 @@ async def search_models(
         10, description="Maximum number of results to return.", ge=1, le=100
     ),
     # --- Filtering Parameters (Model Specific - Example: Add later if needed) ---
-    # filter_pipeline_tag: Optional[str] = Query(None, description="Filter models by pipeline tag."),
+    pipeline_tag: Optional[str] = Query(None, description="Filter models by Hugging Face pipeline tag."),
     # --- Sorting Parameters (Model Specific - Example) ---
     sort_by: Optional[Literal["score", "likes", "downloads", "last_modified"]] = Query(
         None,
@@ -228,7 +260,11 @@ async def search_models(
     search_service: SearchService = Depends(deps.get_search_service),
 ) -> ModelsSearchApiResponse:
     """Endpoint to search specifically for models."""
+    # 为每个请求生成唯一ID以便跟踪
+    request_id = id(search_service)
     target = cast(Literal["papers", "models", "all"], "models")  # 显式转换为Literal类型
+    
+    # 收集所有参数并记录详细日志
     log_params = {
         "query": q,
         "search_type": search_type,
@@ -236,55 +272,77 @@ async def search_models(
         "skip": skip,
         "limit": limit,
         # Add model-specific filters/sorts here if defined
-        # "filter_pipeline_tag": filter_pipeline_tag,
+        "pipeline_tag": pipeline_tag,
         "sort_by": sort_by,
         "sort_order": sort_order,
     }
-    logger.info(f"Received model search request with parameters: {log_params}")
-
+    logger.debug(f"[search_models] [{request_id}] 开始处理模型搜索请求，参数: {log_params}")
+    
     try:
+        start_time = time.time()
+        
         if search_type == "semantic":
             # Determine default sort_by for semantic if None
             effective_sort_by = sort_by if sort_by is not None else "score"
+            logger.debug(f"[search_models] [{request_id}] 执行语义搜索，有效排序字段: {effective_sort_by}")
+            
             results = await search_service.perform_semantic_search(
                 query=q,
                 target=target,
-                page=skip // limit + 1,  # Convert skip/limit to page
+                page=skip // limit + 1,
                 page_size=limit,
                 sort_by=effective_sort_by,
-                sort_order=sort_order or "desc",  # 确保sort_order非None
+                sort_order=sort_order or "desc",
             )
         elif search_type == "keyword":
             # Determine default sort_by for keyword if None
-            effective_sort_by = sort_by if sort_by is not None else "likes"
+            effective_sort_by = sort_by if sort_by is not None else "last_modified"  # 模型特有默认值
+            logger.debug(f"[search_models] [{request_id}] 执行关键词搜索，有效排序字段: {effective_sort_by}")
+            
             results = await search_service.perform_keyword_search(
                 query=q,
                 target=target,
-                page=skip // limit + 1,  # Convert skip/limit to page
+                page=skip // limit + 1,
                 page_size=limit,
                 sort_by=effective_sort_by,
-                sort_order=sort_order or "desc",  # 确保sort_order非None
+                sort_order=sort_order or "desc",
+                pipeline_tag=pipeline_tag
             )
-        # else: # Should be unreachable due to Literal validation
-        #     raise HTTPException(status_code=400, detail="Invalid search_type specified for models.")
-
+            
+        # 计算处理时间并记录结果信息
+        process_time = (time.time() - start_time) * 1000
         logger.info(
-            f"Model search successful, returning {len(results.items)} items out of {results.total} total."
+            f"[search_models] [{request_id}] 模型搜索成功完成，返回 {len(results.items)} 项，共 {results.total} 项，耗时: {process_time:.2f}ms"
         )
-        # Convert to response model
-        items = [HFSearchResultItem(**item.model_dump()) for item in results.items]
-        response = PaginatedHFModelSearchResult(  # 不使用类型标注，避免类型错误
-            items=items,
-            total=results.total,
-            skip=results.skip,
-            limit=results.limit,
-        )
-        return response
 
+        # Check the type before returning to satisfy mypy and ensure correctness
+        if not isinstance(results, (PaginatedHFModelSearchResult, PaginatedSemanticSearchResult)):
+            logger.error(f"[search_models] [{request_id}] Search service returned unexpected type: {type(results).__name__} for target 'models'")
+            raise HTTPException(status_code=500, detail="Internal server error: Unexpected search result type")
+
+        # 如有需要，记录返回的数据摘要
+        if results.items and logger.isEnabledFor(logging.DEBUG):
+            try:
+                # 安全记录模型搜索结果
+                sample_ids = [str(i) for i in range(min(2, len(results.items)))]
+                result_type = type(results).__name__
+                sample_data = {"result_type": result_type, "sample_ids": sample_ids}
+                logger.debug(f"[search_models] [{request_id}] 返回数据样例: {sample_data}")
+            except Exception as e:
+                logger.warning(f"[search_models] [{request_id}] 无法记录返回数据样例: {str(e)}")
+        
+        return results
+        
     except HTTPException as http_exc:
+        logger.warning(f"[search_models] [{request_id}] HTTP异常: {http_exc.status_code} - {http_exc.detail}")
         raise http_exc
     except Exception as e:
-        logger.exception(f"An error occurred during model search: {e}")
+        # 使用exception()方法自动包含堆栈跟踪
+        logger.exception(f"[search_models] [{request_id}] 模型搜索过程中发生错误")
+        # 记录更多诊断信息
+        logger.error(f"[search_models] [{request_id}] 异常类型: {type(e).__name__}, 详情: {str(e)}")
+        logger.error(f"[search_models] [{request_id}] 搜索参数: {log_params}")
+        
         raise HTTPException(
-            status_code=500, detail="Internal server error during model search."
+            status_code=500, detail=f"Internal server error during model search: {str(e)}"
         )

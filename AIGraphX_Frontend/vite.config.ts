@@ -11,7 +11,7 @@ export default defineConfig({
       // 将 /api 开头的请求代理到后端容器
       // 'app' 是 compose.yml 中后端服务的名称
       '/api': {
-        target: 'http://app:8000', // 后端服务地址和端口 (使用服务名 app)
+        target: 'http://app:8000', // 修改为后端服务的容器名和端口
         changeOrigin: true,       // 需要虚拟主机站点
         // secure: false,         // 如果后端是 https 但证书无效，可能需要
         // rewrite: (path) => path.replace(/^\/api/, ''), // 如果后端路径不包含 /api，取消注释此行

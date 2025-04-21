@@ -1,7 +1,3 @@
-Okay, let's refine the frontend documentation (building upon v1.1) to fully leverage the described backend capabilities, including multi-modal search, advanced parameters, and graph features.
-
----
-
 **AIGraphX Frontend - 用户界面设计文档 (v1.1 - Expanded Scope - 含容器化开发环境)**
 
 **1. 引言与指导原则**

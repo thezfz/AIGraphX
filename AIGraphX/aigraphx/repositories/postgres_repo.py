@@ -213,65 +213,92 @@ class PostgresRepository:
             return []
 
     async def search_models_by_keyword(
-        self, query: str, limit: int = 10, skip: int = 0
+        self, 
+        query: str, 
+        limit: int = 10, 
+        skip: int = 0,
+        sort_by: Optional[Literal["likes", "downloads", "last_modified"]] = "last_modified",
+        sort_order: Optional[Literal["asc", "desc"]] = "desc",
+        pipeline_tag: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Searches hf_models table by keyword across relevant fields."""
+        """Searches hf_models table by keyword, with sorting and optional filtering."""
         search_term = f"%{query}%"
-        # Use COALESCE for potentially null fields like hf_pipeline_tag
-        # Ensure correct column names are used
-        where_clause = """
-            hf_model_id ILIKE %s OR 
-            hf_author ILIKE %s OR 
-            COALESCE(hf_pipeline_tag, '') ILIKE %s
-        """
-        params = [search_term] * 3  # Repeat search term for each ILIKE
+        params: Dict[str, Any] = {"search_term": search_term, "limit": limit, "offset": skip}
+        
+        # WHERE conditions list
+        where_conditions = [
+            "(hf_model_id ILIKE %(search_term)s OR hf_author ILIKE %(search_term)s OR COALESCE(hf_pipeline_tag, '') ILIKE %(search_term)s)"
+        ]
+        if pipeline_tag:
+            # Ensure pipeline_tag key is safe before adding to params
+            safe_pipeline_tag_key = "pipeline_tag"
+            where_conditions.append(f"hf_pipeline_tag = %({safe_pipeline_tag_key})s")
+            params[safe_pipeline_tag_key] = pipeline_tag
+        
+        final_where_clause = " AND ".join(where_conditions)
 
-        # Fields to select (adjust as needed)
+        # Fields to select
         select_fields = "hf_model_id, hf_author, hf_pipeline_tag, hf_last_modified, hf_tags, hf_likes, hf_downloads, hf_library_name, hf_sha"
 
-        count_sql = f"""
+        # --- Safely construct ORDER BY clause --- 
+        valid_sort_columns = {
+            "likes": "hf_likes",
+            "downloads": "hf_downloads",
+            "last_modified": "hf_last_modified",
+        }
+        # Validate sort_by against allowed keys
+        db_sort_column = valid_sort_columns.get(sort_by or "last_modified", "hf_last_modified") 
+        # Validate sort_order
+        db_sort_order = "DESC" if sort_order == "desc" else "ASC"
+        # Construct the ORDER BY string safely (column name is validated)
+        # Use double quotes for potential case sensitivity or reserved words
+        order_by_sql_str = f'ORDER BY "{db_sort_column}" {db_sort_order} NULLS LAST, "hf_model_id" {db_sort_order}'
+        # --- End Safe ORDER BY --- 
+
+        # Construct final SQL strings using f-strings 
+        # (Placeholders %(...)s are handled by psycopg execute)
+        count_sql_str = f"""
             SELECT COUNT(*) 
             FROM hf_models 
-            WHERE ({where_clause})
+            WHERE {final_where_clause}
         """
-
-        select_sql = f"""
+        
+        select_sql_str = f"""
             SELECT {select_fields} 
             FROM hf_models 
-            WHERE ({where_clause}) 
-            ORDER BY hf_last_modified DESC 
-            LIMIT %s OFFSET %s
+            WHERE {final_where_clause} 
+            {order_by_sql_str} 
+            LIMIT %(limit)s OFFSET %(offset)s
         """
 
-        # Add limit and offset to params
-        query_params_paginated = params + [limit, skip]
+        total_count = 0
+        results: List[Dict[str, Any]] = []
 
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    # Get total count first
-                    logger.debug(
-                        f"Executing count SQL: {count_sql} with params: {params}"
-                    )
-                    await cur.execute(count_sql, params)
-                    total_count_result = await cur.fetchone()
-                    total_count = (
-                        total_count_result["count"] if total_count_result else 0
-                    )
+                    # Execute count query using the param dict
+                    await cur.execute(count_sql_str, params)
+                    count_result = await cur.fetchone()
+                    total_count = count_result["count"] if count_result else 0
+                    logger.debug(f"[search_models_by_keyword] Total count: {total_count} for query '{query}' and filters {{\"pipeline_tag\": {pipeline_tag}}}")
 
-                    if total_count == 0:
-                        return [], 0
-
-                    # Get paginated results
-                    logger.debug(
-                        f"Executing select SQL: {select_sql} with params: {query_params_paginated}"
-                    )
-                    await cur.execute(select_sql, query_params_paginated)
-                    results = await cur.fetchall()
-                    return results, total_count
+                    # Execute main select query only if needed
+                    if total_count > skip:
+                        # Execute the built SQL string with the param dict
+                        await cur.execute(select_sql_str, params)
+                        results = await cur.fetchall()
+                        logger.debug(f"[search_models_by_keyword] Fetched {len(results)} rows for page.")
+                    else:
+                        logger.debug("[search_models_by_keyword] Skip is >= total_count, not fetching rows.")
+            
+            return results, total_count
+        
+        except psycopg.Error as db_err:
+            logger.error(f"Database error during keyword model search: {db_err}", exc_info=True)
+            return [], 0
         except Exception as e:
-            logger.error(f"Error searching hf_models by keyword '{query}': {e}")
-            # Consider logging the SQL and params here too if needed
+            logger.error(f"Unexpected error during keyword model search: {e}", exc_info=True)
             return [], 0
 
     async def count_hf_models(self) -> int:
