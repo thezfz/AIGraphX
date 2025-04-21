@@ -43,4 +43,20 @@ export const usePaperSearch = (params: PaperSearchQuery) => {
   );
 };
 
+/**
+ * 获取可用论文领域列表的 React Query Hook。
+ * 
+ * @returns React Query 查询结果对象，包含所有可用的论文领域
+ */
+export const usePaperAreas = () => {
+  return useQuery<string[], Error>({
+    queryKey: ['paperAreas'],
+    queryFn: async () => {
+      const response = await apiClient.get<string[]>('/search/paper-areas/');
+      return response.data;
+    },
+    staleTime: 24 * 60 * 60 * 1000, // 数据保持新鲜24小时，因为领域列表变化不频繁
+  });
+};
+
 // TODO: 添加 useModelSearch, usePaperDetail, useModelDetail 等 Hook 

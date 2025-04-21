@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { usePaperAreas } from '../../services/apiQueries'; // 引入 usePaperAreas hook
 
 // 定义过滤参数类型 (根据需要扩展)
 export interface Filters {
   year_from?: number | null;
   year_to?: number | null;
   pipeline_tag?: string | null; // 添加 pipeline_tag 过滤器
-  // 可以添加其他过滤，例如:
-  // area?: string | null;
+  area?: string[]; // 更新为字符串数组，支持多选
 }
 
 interface FilterPanelProps {
@@ -39,12 +39,17 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
   const [yearFrom, setYearFrom] = useState<string>('');
   const [yearTo, setYearTo] = useState<string>('');
   const [selectedPipelineTag, setSelectedPipelineTag] = useState<string>('');
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]); // 添加领域多选状态
+  
+  // 使用 React Query 获取可用的论文领域
+  const { data: availableAreas = [], isLoading: isLoadingAreas } = usePaperAreas();
 
   // 当 initialFilters 改变时，更新本地状态
   useEffect(() => {
     setYearFrom(initialFilters.year_from?.toString() ?? '');
     setYearTo(initialFilters.year_to?.toString() ?? '');
     setSelectedPipelineTag(initialFilters.pipeline_tag ?? '');
+    setSelectedAreas(initialFilters.area || []);
   }, [initialFilters]);
 
   const handleApplyFilters = () => {
@@ -52,12 +57,15 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
       year_from: yearFrom ? parseInt(yearFrom, 10) : null,
       year_to: yearTo ? parseInt(yearTo, 10) : null,
       pipeline_tag: selectedPipelineTag || null,
+      area: selectedAreas.length > 0 ? selectedAreas : undefined, // 只在有选中值时添加
     };
     // 移除值为 null 或 NaN 或空字符串的键
     Object.keys(newFilters).forEach(key => {
       const filterKey = key as keyof Filters;
       const value = newFilters[filterKey];
-      if (value === null || value === '' || (typeof value === 'number' && isNaN(value))) {
+      if (value === null || value === '' || 
+          (typeof value === 'number' && isNaN(value)) || 
+          (Array.isArray(value) && value.length === 0)) {
         delete newFilters[filterKey];
       }
     });
@@ -65,15 +73,26 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
   };
 
   const handleClearFilters = () => {
-      setYearFrom('');
-      setYearTo('');
-      setSelectedPipelineTag('');
-      onFilterChange({}); // 清空所有过滤器
+    setYearFrom('');
+    setYearTo('');
+    setSelectedPipelineTag('');
+    setSelectedAreas([]);
+    onFilterChange({}); // 清空所有过滤器
+  };
+
+  // 处理领域选中状态变化
+  const handleAreaToggle = (area: string) => {
+    setSelectedAreas(prev => 
+      prev.includes(area) 
+        ? prev.filter(a => a !== area) // 如果已选中，则移除
+        : [...prev, area] // 如果未选中，则添加
+    );
   };
 
   // 根据目标决定显示哪些过滤器
   const showYearFilter = target === 'papers';
   const showPipelineTagFilter = target === 'models';
+  const showAreaFilter = target === 'papers';
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -101,6 +120,38 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
                 className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+          </div>
+        )}
+
+        {/* 论文领域多选过滤器 (仅论文) */}
+        {showAreaFilter && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-600">研究领域</label>
+            {isLoadingAreas ? (
+              <div className="text-sm text-gray-500">加载中...</div>
+            ) : availableAreas.length > 0 ? (
+              <div className="max-h-40 overflow-y-auto p-1 border border-gray-200 rounded-md">
+                {availableAreas.map(area => (
+                  <div key={area} className="flex items-center mb-1">
+                    <input
+                      id={`area-${area}`}
+                      type="checkbox"
+                      checked={selectedAreas.includes(area)}
+                      onChange={() => handleAreaToggle(area)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label
+                      htmlFor={`area-${area}`}
+                      className="ml-2 block text-sm text-gray-700"
+                    >
+                      {area}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">暂无可用领域</div>
+            )}
           </div>
         )}
 

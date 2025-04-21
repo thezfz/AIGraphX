@@ -495,7 +495,7 @@ async def test_search_papers_by_keyword_with_filters(
     query = "paper"
     date_from = date_type(2024, 1, 1)
     date_to = date_type(2024, 12, 31)
-    area = "NLP"
+    area = ["NLP"]  # 修改为列表类型
 
     results_list, total_count = await repository.search_papers_by_keyword(
         query=query,

@@ -65,9 +65,9 @@ async def search_papers(
     date_to: Optional[date] = Query(
         None, description="Filter papers published on or before this date (YYYY-MM-DD)."
     ),
-    area: Optional[str] = Query(
+    area: Optional[List[str]] = Query(
         None,
-        description="Filter papers by research area (exact match, case-sensitive).",
+        description="Filter papers by research area(s). 支持多选过滤。",
     ),
     # --- Sorting Parameters (Paper Specific) ---
     sort_by: Optional[Literal["score", "published_date"]] = Query(
@@ -371,4 +371,27 @@ async def search_models(
         
         raise HTTPException(
             status_code=500, detail=f"Internal server error during model search: {str(e)}"
+        )
+
+
+# --- 新增端点，获取所有可用的论文领域列表 ---
+@router.get(
+    "/paper-areas/",
+    response_model=List[str],
+    summary="获取论文领域列表",
+    description="获取系统中所有可用的论文研究领域(area)列表，用于前端过滤器选项。"
+)
+async def get_paper_areas(
+    search_service: SearchService = Depends(deps.get_search_service),
+) -> List[str]:
+    """获取所有可用的论文领域列表，供前端过滤器使用。"""
+    try:
+        areas = await search_service.get_available_paper_areas()
+        logger.info(f"成功获取 {len(areas)} 个论文领域")
+        return areas
+    except Exception as e:
+        logger.exception(f"获取论文领域列表时出错: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取论文领域列表失败: {str(e)}"
         )

@@ -324,9 +324,9 @@ async def test_perform_keyword_search_papers_filter_sort(
     page_size = 10
     date_from = date(2023, 1, 10)
     date_to = date(2023, 2, 1)
-    area = "NLP"
-    sort_by: PaperSortByLiteral = "title"
-    sort_order: SortOrderLiteral = "asc"
+    area = ["NLP"]
+    sort_by = cast(PaperSortByLiteral, "title")
+    sort_order = cast(SortOrderLiteral, "asc")
 
     # Access mock data via fixture
     MOCK_PAPER_KEY_1 = mock_pg_repo.paper_details_map[101]
@@ -358,7 +358,7 @@ async def test_perform_keyword_search_papers_filter_sort(
     assert result.total == 1
     assert len(result.items) == 1
     assert result.items[0].pwc_id == MOCK_PAPER_KEY_1["pwc_id"]
-    assert result.items[0].area == area  # Check if filter applied (mock simulates it)
+    assert result.items[0].area == area[0]  # Check if filter applied (mock simulates it)
 
     # Check search_papers_by_keyword was called with filters/sort
     mock_pg_repo.search_papers_by_keyword.assert_awaited_once_with(
@@ -471,7 +471,7 @@ async def test_perform_keyword_search_papers_filter_sort_duplicate(
     target = cast(SearchTarget, "papers")
     date_from = date(2023, 1, 1)
     date_to = date(2023, 12, 31)
-    area = "CV"
+    area = ["CV"]
     sort_by = cast(PaperSortByLiteral, "title")
     sort_order = cast(SortOrderLiteral, "desc")
 

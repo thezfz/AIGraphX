@@ -99,7 +99,7 @@ class PostgresRepository:
         limit: int = 10,
         published_after: Optional[date] = None,
         published_before: Optional[date] = None,
-        filter_area: Optional[str] = None,
+        filter_area: Optional[List[str]] = None,
         # Use Literal for specific valid column names
         sort_by: Optional[
             Literal["published_date", "title", "paper_id"]
@@ -117,8 +117,9 @@ class PostgresRepository:
         if published_before:
             where_clauses.append(f"published_date <= %(published_before)s")
             params["published_before"] = published_before
-        if filter_area:
-            where_clauses.append(f"area = %(filter_area)s")
+        if filter_area and len(filter_area) > 0:
+            # 使用 ANY 操作符支持多选
+            where_clauses.append(f"area = ANY(%(filter_area)s)")
             params["filter_area"] = filter_area
 
         where_sql = " AND ".join(where_clauses)
@@ -856,3 +857,32 @@ class PostgresRepository:
             return results_map
 
     # --- END: Corrected implementations for specific relation fetching methods --- #
+
+    async def get_unique_paper_areas(self) -> List[str]:
+        """
+        获取论文表中所有唯一的领域（area）值。
+        
+        返回:
+            List[str]: 所有唯一的论文领域列表
+        """
+        query = """
+            SELECT DISTINCT area 
+            FROM papers 
+            WHERE area IS NOT NULL AND area != ''
+            ORDER BY area;
+        """
+        try:
+            areas = []
+            async with self.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(query)
+                    results = await cur.fetchall()
+                    # 结果是包含单个元素的元组列表，提取字符串值
+                    areas = [row[0] for row in results if row[0]]
+            
+            self.logger.info(f"从数据库获取到 {len(areas)} 个唯一论文领域")
+            return areas
+        except Exception as e:
+            self.logger.error(f"获取唯一论文领域列表时出错: {e}")
+            self.logger.debug(traceback.format_exc())
+            return []

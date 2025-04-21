@@ -142,8 +142,8 @@ class SearchFilterModel(BaseModel):
     published_before: Optional[date] = Field(
         None, description="筛选在此日期之前发布的论文（包含该日期）。"
     )
-    filter_area: Optional[str] = Field(
-        None, description="按研究领域筛选论文（例如 CV、NLP 等）。"
+    filter_area: Optional[List[str]] = Field(
+        None, description="按研究领域筛选论文（例如 CV、NLP 等），支持多选。"
     )
     pipeline_tag: Optional[str] = Field(
         None, description="按任务类型筛选模型（例如 text-generation、image-classification 等）。"

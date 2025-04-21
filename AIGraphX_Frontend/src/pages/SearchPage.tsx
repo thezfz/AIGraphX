@@ -120,6 +120,16 @@ const SearchPage: React.FC = () => {
     if (searchTarget === 'models' && filters.pipeline_tag) {
         currentFilters.pipeline_tag = filters.pipeline_tag;
     }
+    // 添加 area 过滤器 (后端API期望是单个字符串，而不是数组)
+    if (searchTarget === 'papers' && filters.area && filters.area.length > 0) {
+        // 如果是数组，将其转换为字符串 (使用第一个选择项)
+        // 这是临时解决方案，理想情况下后端应支持多选
+        currentFilters.area = filters.area[0];
+        
+        // 如果想支持多个领域的搜索结果（但目前API不支持），
+        // 将来可以考虑改进后端API以支持数组：
+        // currentFilters.area = filters.area; // 后端需修改为支持数组
+    }
 
     return { ...baseParams, ...currentFilters } as PaperSearchParams | ModelSearchParams;
   }, [debouncedQuery, searchMode, sortBy, currentPage, searchTarget, filters]);

@@ -750,7 +750,7 @@ class SearchService:
         page_size: int = 10,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-        area: Optional[str] = None,  # Paper specific
+        area: Optional[List[str]] = None,  # Paper specific - 改为列表支持多选
         pipeline_tag: Optional[str] = None, # Model specific: 添加 pipeline_tag 参数
         # Allow target-specific sort options
         sort_by: Optional[Union[PaperSortByLiteral, ModelSortByLiteral]] = None,
@@ -857,22 +857,22 @@ class SearchService:
         total_items: int = 0
         try:
             # 记录传递给PG repo的参数
-            pg_params = {
+            pg_params: Dict[str, Any] = {
                 "query": query,
                 "limit": page_size,
                 "skip": skip,
                 "sort_by": valid_pg_sort_by,
                 "sort_order": sort_order,
-                # Pass target-specific arguments, including pipeline_tag for models
-                **({
-                    "published_after": date_from,
-                    "published_before": date_to,
-                    "filter_area": area,
-                 } if target == "papers" else
-                 {
-                     "pipeline_tag": pipeline_tag, # 添加 pipeline_tag 到模型参数
-                 } if target == "models" else {})
             }
+            
+            # 根据目标添加特定参数
+            if target == "papers":
+                pg_params["published_after"] = date_from
+                pg_params["published_before"] = date_to
+                pg_params["filter_area"] = area
+            elif target == "models":
+                pg_params["pipeline_tag"] = pipeline_tag
+                
             logger.debug(f"[perform_keyword_search] Calling {search_pg_func.__name__} with params: {pg_params}")
             
             pg_results, total_items = await search_pg_func(**pg_params)
@@ -1104,7 +1104,7 @@ class SearchService:
         page_size: int = 10,
         published_after: Optional[date] = None,
         published_before: Optional[date] = None,
-        filter_area: Optional[str] = None,
+        filter_area: Optional[List[str]] = None,
         sort_by: Optional[PaperSortByLiteral] = None,
         sort_order: SortOrderLiteral = "desc",
         filters: Optional[SearchFilterModel] = None,
@@ -1313,12 +1313,12 @@ class SearchService:
                 )
             ]
 
-        # 领域过滤
-        if filter_area:
+        # 领域多选过滤
+        if filter_area and len(filter_area) > 0:
             filtered_items = [
                 item
                 for item in filtered_items
-                if item.area and item.area.lower() == filter_area.lower()
+                if item.area and any(area.lower() == item.area.lower() for area in filter_area)
             ]
 
         # --- Step 8: 排序和分页 ---
@@ -1628,3 +1628,23 @@ class SearchService:
             skip=calculated_skip,
             limit=calculated_limit,
         )
+
+    async def get_available_paper_areas(self) -> List[str]:
+        """
+        获取系统中所有可用的论文领域（Area）列表。
+        
+        返回:
+            List[str]: 所有唯一的论文领域列表
+        """
+        try:
+            # 从 PostgreSQL 仓库获取所有唯一的论文领域
+            if hasattr(self.pg_repo, "get_unique_paper_areas"):
+                areas = await self.pg_repo.get_unique_paper_areas()
+                logger.info(f"获取到 {len(areas)} 个唯一论文领域")
+                return sorted(areas)  # 返回排序后的领域列表，便于前端展示
+            else:
+                logger.error("PostgreSQL 仓库中缺少 get_unique_paper_areas 方法")
+                return []
+        except Exception as e:
+            logger.error(f"获取论文领域列表时出错: {e}", exc_info=True)
+            return []
