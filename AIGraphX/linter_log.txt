@@ -1,1 +1,0 @@
-/home/thezfz/miniconda/envs/AIGraphX/bin/python: No module named pylint
