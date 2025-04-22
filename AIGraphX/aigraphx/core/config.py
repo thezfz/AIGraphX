@@ -5,14 +5,14 @@ from dotenv import load_dotenv
 from loguru import logger
 
 # Import ConfigDict for type hint if needed, but pydantic-settings handles config internally
-from pydantic import Field  # Field might be needed if we use alias
+from pydantic import Field, field_validator, ValidationInfo
 
 # Re-import BaseSettings and SettingsConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Try importing SettingsConfigDict for stricter typing if available
 # from pydantic_settings import SettingsConfigDict # May not be directly available
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 # --- REMOVE Manual .env loading --- #
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # General
     project_name: str = Field(default="AIGraphX", alias="PROJECT_NAME")
     api_v1_str: str = Field(default="/api/v1", alias="API_V1_STR")
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO", alias="LOG_LEVEL")
     environment: str = Field(default="development", alias="ENVIRONMENT")
 
     # Database URLs (Primary)
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
 
     # Embedding Settings
     sentence_transformer_model: str = Field(
-        default="all-MiniLM-L6-v2", alias="SENTENCE_TRANSFORMER_MODEL"
+        default="intfloat/multilingual-e5-large", alias="SENTENCE_TRANSFORMER_MODEL"
     )
     embedder_device: str = Field(default="cpu", alias="EMBEDDER_DEVICE")
 
@@ -114,6 +114,16 @@ class Settings(BaseSettings):
     )
 
     # --- REMOVED old class Config --- #
+
+    # --- Validation ---
+    @field_validator("database_url", "neo4j_uri", mode='before')
+    @classmethod
+    def check_not_empty(cls, value: Optional[str], info: ValidationInfo) -> Optional[str]:
+        """Ensure essential URLs are provided if set."""
+        if value == "":
+            logger.warning(f"{info.field_name} is set to an empty string. Treating as None.")
+            return None
+        return value
 
 
 # Instantiate settings
