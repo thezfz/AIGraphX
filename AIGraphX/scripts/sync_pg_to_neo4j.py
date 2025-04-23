@@ -1,78 +1,99 @@
 #!/usr/bin/env python
+"""
+AIGraphX项目 - PostgreSQL到Neo4j同步脚本
+
+本文件是AIGraphX项目中负责将PostgreSQL数据库中的数据同步到Neo4j图数据库的脚本。
+在整个项目数据处理流程中，该脚本位于数据采集和数据库加载之后，负责构建知识图谱。
+
+主要功能:
+1. 从PostgreSQL数据库中获取模型、论文和它们之间的关系数据
+2. 将模型数据同步到Neo4j数据库，创建模型节点
+3. 将论文数据同步到Neo4j数据库，创建论文节点
+4. 丰富论文节点，添加任务、数据集和代码库关系
+5. 创建模型与论文之间的链接关系
+
+该脚本在项目API服务使用前必须执行，因为图服务依赖Neo4j中构建好的知识图谱进行图查询。
+
+执行流程:
+1. 同步HF模型数据到Neo4j (sync_hf_models)
+2. 同步论文数据到Neo4j (sync_papers_and_relations)
+   - 分离PWC和ArXiv论文处理
+   - 为PWC论文添加任务、数据集、代码库关系
+3. 同步模型-论文链接关系 (sync_model_paper_links)
+
+脚本支持--reset参数，可以在同步前清空Neo4j数据库。
+"""
+
 import asyncio
 import logging
 import os
-import traceback  # Import traceback
-from typing import Optional, Dict, Any, List  # Import List
+import traceback  # 导入traceback模块
+from typing import Optional, Dict, Any, List  # 导入List类型
 import json
-import sys  # Import sys for path manipulation
-import argparse  # Import argparse
+import sys  # 导入sys用于路径操作
+import argparse  # 导入argparse解析命令行参数
 
-# Third-party imports
+# 第三方库导入
 from dotenv import load_dotenv
 from neo4j import AsyncGraphDatabase, AsyncDriver
-from psycopg_pool import AsyncConnectionPool  # Import PG Pool
+from psycopg_pool import AsyncConnectionPool  # 导入PostgreSQL连接池
 
-# We need asyncpg for the pool creation and exception handling
+# 需要asyncpg处理连接池创建和异常处理
 import asyncpg  # type: ignore[import-untyped]
 
-# Adjust import paths assuming script is run from project root OR handle fallback
+# 调整导入路径，假设脚本从项目根目录运行或处理回退情况
 try:
-    # Try direct imports first (if running as module or PYTHONPATH is set)
+    # 首先尝试直接导入(如果作为模块运行或设置了PYTHONPATH)
     from aigraphx.repositories.postgres_repo import PostgresRepository
     from aigraphx.repositories.neo4j_repo import Neo4jRepository
 except ImportError:
-    # Fallback if running as a standalone script
-    print("INFO: Failed initial import, attempting path modification...")
+    # 如果作为独立脚本运行的回退方案
+    print("INFO: 初始导入失败，尝试修改路径...")
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if project_root not in sys.path:
-        print(f"INFO: Adding project root to sys.path: {project_root}")
+        print(f"INFO: 正在添加项目根目录到sys.path: {project_root}")
         sys.path.insert(0, project_root)
 
-    # Retry imports after modifying path
-    # --- Start of Corrected Block ---
+    # 修改路径后重试导入
+    # --- 开始修正的代码块 ---
     try:
-        # Correctly indented imports UNDER the second try
+        # 第二个try下的正确缩进导入
         from aigraphx.repositories.postgres_repo import PostgresRepository
         from aigraphx.repositories.neo4j_repo import Neo4jRepository
 
-        # Correctly indented print UNDER the second try
-        print("INFO: Successfully imported modules after path modification.")
-    except ImportError as e:  # Correctly aligned except with the second try
-        # Correctly indented print statements UNDER the second except
-        print(
-            f"CRITICAL: Failed to import required modules even after path modification: {e}"
-        )
-        print(
-            "CRITICAL: Ensure the script is run from the project root or the PYTHONPATH is set correctly."
-        )
-        # Correctly indented sys.exit UNDER the second except
-        sys.exit(1)  # Exit if core components cannot be imported
-    # --- End of Corrected Block ---
+        # 第二个try下的正确缩进打印
+        print("INFO: 路径修改后成功导入模块。")
+    except ImportError as e:  # 与第二个try正确对齐的except
+        # 第二个except下的正确缩进打印语句
+        print(f"严重错误: 即使在路径修改后也无法导入所需模块: {e}")
+        print("严重错误: 确保脚本从项目根目录运行或正确设置了PYTHONPATH。")
+        # 第二个except下的正确缩进sys.exit
+        sys.exit(1)  # 如果无法导入核心组件则退出
+    # --- 结束修正的代码块 ---
 
 
-# --- Configuration ---
+# --- 配置加载 ---
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=dotenv_path)
 
-# PostgreSQL Connection
+# PostgreSQL连接配置
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    print("Error: DATABASE_URL environment variable not set.", file=sys.stderr)
+    print("错误: 未设置DATABASE_URL环境变量。", file=sys.stderr)
     sys.exit(1)
 
-# Neo4j Connection
+# Neo4j连接配置
 NEO4J_URI = os.getenv("NEO4J_URI")
 NEO4J_USER = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 if not NEO4J_URI or not NEO4J_USER or not NEO4J_PASSWORD:
     print(
-        "Error: Neo4j connection details (NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD) not fully set.",
+        "错误: Neo4j连接详情(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)未完全设置。",
         file=sys.stderr,
     )
     sys.exit(1)
 
-# --- Logging Setup ---
+# --- 日志设置 ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s",
@@ -81,35 +102,41 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# --- Constants ---
-PG_FETCH_BATCH_SIZE = 500  # How many records to fetch from PG at a time
-NEO4J_WRITE_BATCH_SIZE = 200  # How many records to write to Neo4j in one batch
+# --- 常量 ---
+PG_FETCH_BATCH_SIZE = 500  # 每次从PG获取多少条记录
+NEO4J_WRITE_BATCH_SIZE = 200  # 每批向Neo4j写入多少条记录
 
-# --- Synchronization Logic ---
+# --- 同步逻辑 ---
 
 
 async def sync_hf_models(
     pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
 ) -> None:
-    """Synchronizes HF models from PostgreSQL to Neo4j."""
-    logger.info("Starting HFModel synchronization...")
+    """将HF模型从PostgreSQL同步到Neo4j。
+
+    Args:
+        pg_repo: PostgreSQL仓库实例
+        neo4j_repo: Neo4j仓库实例
+        batch_size: 批处理大小，默认100
+    """
+    logger.info("开始HFModel同步...")
     models_synced = 0
-    query = "SELECT * FROM hf_models ORDER BY hf_model_id"  # Order for deterministic batches
+    query = "SELECT * FROM hf_models ORDER BY hf_model_id"  # 排序以获得确定性批次
     models_to_process: List[Dict[str, Any]] = []
 
     try:
-        # Corrected call: Use keyword argument for batch_size
+        # 修正调用: 为batch_size使用关键字参数
         async for model_record in pg_repo.fetch_data_cursor(
             query, batch_size=batch_size
         ):
             model_data = dict(model_record)
-            # Ensure tags are loaded as list if stored as JSON string
+            # 确保标签作为列表加载，如果存储为JSON字符串
             if isinstance(model_data.get("hf_tags"), str):
                 try:
                     model_data["hf_tags"] = json.loads(model_data["hf_tags"])
                 except json.JSONDecodeError:
                     logger.warning(
-                        f"Could not decode hf_tags JSON for model {model_data.get('hf_model_id')}"
+                        f"无法解码模型{model_data.get('hf_model_id')}的hf_tags JSON"
                     )
                     model_data["hf_tags"] = None
 
@@ -130,46 +157,49 @@ async def sync_hf_models(
                 try:
                     await neo4j_repo.save_hf_models_batch(models_to_process)
                     models_synced += len(models_to_process)
-                    logger.info(f"Synced {models_synced} HF models so far...")
+                    logger.info(f"已同步{models_synced}个HF模型...")
                 except Exception as e:
-                    logger.error(f"Error saving HF model batch to Neo4j: {e}")
-                    # No need to import traceback here if already imported globally
+                    logger.error(f"将HF模型批次保存到Neo4j时出错: {e}")
+                    # 如果已在全局导入了traceback，则无需在此导入
                     logger.error(traceback.format_exc())
                 finally:
                     models_to_process = []
     except Exception as e:
-        logger.error(f"Error fetching HF models from Postgres: {e}")
-        # No need to import traceback here
+        logger.error(f"从Postgres获取HF模型时出错: {e}")
+        # 无需导入traceback
         logger.error(traceback.format_exc())
 
-    # Sync any remaining models
+    # 同步剩余模型
     if models_to_process:
         try:
             await neo4j_repo.save_hf_models_batch(models_to_process)
             models_synced += len(models_to_process)
         except Exception as e:
-            logger.error(f"Error saving final HF model batch to Neo4j: {e}")
-            # No need to import traceback here
+            logger.error(f"保存最后一批HF模型到Neo4j时出错: {e}")
+            # 无需导入traceback
             logger.error(traceback.format_exc())
 
-    logger.info(
-        f"HFModel synchronization finished. Total models synced: {models_synced}"
-    )
+    logger.info(f"HFModel同步完成。共同步模型: {models_synced}个")
 
 
 async def sync_papers_and_relations(
     pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
 ) -> int:
-    """Fetches papers and their relations from PG and syncs them to Neo4j.
+    """从PG获取论文及其关系并将它们同步到Neo4j。
+
+    Args:
+        pg_repo: PostgreSQL仓库实例
+        neo4j_repo: Neo4j仓库实例
+        batch_size: 批处理大小，默认100
 
     Returns:
         int: 同步的论文总数
     """
-    logger.info("Starting Paper and relations synchronization...")
+    logger.info("开始论文和关系同步...")
     papers_synced_arxiv = 0
     papers_synced_pwc = 0
 
-    logger.info("Fetching and syncing Paper nodes...")
+    logger.info("获取并同步论文节点...")
     paper_query = """
         SELECT
             p.paper_id, p.pwc_id, p.arxiv_id_base, p.arxiv_id_versioned, p.title,
@@ -178,17 +208,15 @@ async def sync_papers_and_relations(
         FROM papers p
     """
     papers_to_process: List[Dict[str, Any]] = []
-    arxiv_only_papers: List[
-        Dict[str, Any]
-    ] = []  # For papers only identified by arxiv_id
+    arxiv_only_papers: List[Dict[str, Any]] = []  # 仅通过arxiv_id标识的论文
     try:
-        # Corrected call: Use keyword argument for batch_size
+        # 修正调用: 为batch_size使用关键字参数
         async for paper_record in pg_repo.fetch_data_cursor(
             paper_query, batch_size=batch_size
         ):
             paper_data = dict(paper_record)
 
-            # Convert JSON string fields back to lists if necessary (depends on PG repo handling)
+            # 将JSON字符串字段转换回列表(如果需要)(取决于PG repo处理)
             if isinstance(paper_data.get("authors"), str):
                 try:
                     paper_data["authors"] = json.loads(paper_data["authors"])
@@ -201,26 +229,26 @@ async def sync_papers_and_relations(
                     paper_data["categories"] = []
             if paper_data.get("published_date"):
                 paper_data["published_date"] = paper_data["published_date"].isoformat()
-            # Initialize relation keys - enrichment happens later for pwc_id papers
+            # 初始化关系键 - 后续为pwc_id论文添加丰富信息
             paper_data["tasks"] = []
             paper_data["datasets"] = []
             paper_data["repositories"] = []
 
-            # Sorting papers by identifier availability
+            # 按标识符可用性对论文进行分类
             if paper_data.get("pwc_id"):
-                # If paper has a PWC ID, enrich with additional relations
-                # and save using the pwc_id-based Neo4j methods
+                # 如果论文有PWC ID，用附加关系丰富它
+                # 并使用基于pwc_id的Neo4j方法保存
                 papers_to_process.append(paper_data)
             elif paper_data.get("arxiv_id_base"):
-                # If paper has only an ArXiv ID, we'll save using a different method
+                # 如果论文只有ArXiv ID，我们将使用不同的方法保存
                 arxiv_only_papers.append(paper_data)
             else:
                 logger.warning(
-                    f"Paper id={paper_data.get('paper_id')} has neither pwc_id nor arxiv_id. Skipping."
+                    f"论文id={paper_data.get('paper_id')}既没有pwc_id也没有arxiv_id。跳过。"
                 )
                 continue
 
-            # Batch processing - PWC ID papers
+            # 批处理 - PWC ID论文
             if len(papers_to_process) >= NEO4J_WRITE_BATCH_SIZE:
                 try:
                     enriched_papers = await enrich_papers_with_relations(
@@ -229,36 +257,35 @@ async def sync_papers_and_relations(
                     await neo4j_repo.save_papers_batch(enriched_papers)
                     papers_synced_pwc += len(enriched_papers)
                     logger.info(
-                        f"Synced {papers_synced_pwc} PWC papers and {papers_synced_arxiv} ArXiv-only papers..."
+                        f"已同步{papers_synced_pwc}篇PWC论文和{papers_synced_arxiv}篇仅ArXiv论文..."
                     )
                 except Exception as e:
-                    logger.error(f"Error saving paper batch to Neo4j: {e}")
-                    # No need to import traceback here
+                    logger.error(f"将论文批次保存到Neo4j时出错: {e}")
+                    # 无需导入traceback
                     logger.error(traceback.format_exc())
                 finally:
                     papers_to_process = []
 
-            # Batch processing - ArXiv-only papers
+            # 批处理 - 仅ArXiv论文
             if len(arxiv_only_papers) >= NEO4J_WRITE_BATCH_SIZE:
                 try:
                     await neo4j_repo.save_papers_by_arxiv_batch(arxiv_only_papers)
                     papers_synced_arxiv += len(arxiv_only_papers)
                     logger.info(
-                        f"Synced {papers_synced_pwc} PWC papers and {papers_synced_arxiv} ArXiv-only papers..."
+                        f"已同步{papers_synced_pwc}篇PWC论文和{papers_synced_arxiv}篇仅ArXiv论文..."
                     )
                 except Exception as e:
-                    logger.error(f"Error saving arxiv paper batch to Neo4j: {e}")
-                    # No need to import traceback here
+                    logger.error(f"将arxiv论文批次保存到Neo4j时出错: {e}")
+                    # 无需导入traceback
                     logger.error(traceback.format_exc())
                 finally:
                     arxiv_only_papers = []
 
     except Exception as e:
-        logger.error(f"Error fetching papers from Postgres: {e}")
-        # No need to import traceback here
+        logger.error(f"从PostgreSQL获取论文时出错: {e}")
         logger.error(traceback.format_exc())
 
-    # Process any remaining papers
+    # 处理剩余的PWC论文
     if papers_to_process:
         try:
             enriched_papers = await enrich_papers_with_relations(
@@ -267,377 +294,352 @@ async def sync_papers_and_relations(
             await neo4j_repo.save_papers_batch(enriched_papers)
             papers_synced_pwc += len(enriched_papers)
         except Exception as e:
-            logger.error(f"Error saving final paper batch to Neo4j: {e}")
-            # No need to import traceback here
+            logger.error(f"将剩余PWC论文批次保存到Neo4j时出错: {e}")
             logger.error(traceback.format_exc())
 
+    # 处理剩余的ArXiv论文
     if arxiv_only_papers:
         try:
             await neo4j_repo.save_papers_by_arxiv_batch(arxiv_only_papers)
             papers_synced_arxiv += len(arxiv_only_papers)
         except Exception as e:
-            logger.error(f"Error saving final arxiv paper batch to Neo4j: {e}")
-            # No need to import traceback here
+            logger.error(f"将剩余ArXiv论文批次保存到Neo4j时出错: {e}")
             logger.error(traceback.format_exc())
 
     total_papers = papers_synced_pwc + papers_synced_arxiv
     logger.info(
-        f"Paper synchronization finished. PWC papers: {papers_synced_pwc}, ArXiv-only papers: {papers_synced_arxiv}, Total: {total_papers}"
+        f"论文同步完成。共同步{total_papers}篇论文 "
+        f"(PWC: {papers_synced_pwc}, 仅ArXiv: {papers_synced_arxiv})"
     )
-
     return total_papers
 
 
-# --- START: CORRECTED enrich_papers_with_relations --- #
 async def enrich_papers_with_relations(
     pg_repo: PostgresRepository, paper_batch: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
-    """Fetches related Tasks, Datasets, Methods, and Repositories for a batch of papers
-    and adds them to the corresponding paper dictionaries.
+    """用关系信息丰富论文数据对象列表。
+
+    Args:
+        pg_repo: PostgreSQL仓库实例
+        paper_batch: 要丰富的论文数据列表
+
+    Returns:
+        List[Dict[str, Any]]: 丰富后的论文数据列表
     """
     if not paper_batch:
         return []
 
-    paper_map = {
-        int(p["paper_id"]): p for p in paper_batch if p.get("paper_id") is not None
-    }
-    paper_ids = list(paper_map.keys())
+    # 使用集合提取唯一的PWC ID
+    pwc_ids = {p.get("pwc_id") for p in paper_batch if p.get("pwc_id")}
+    if not pwc_ids:
+        return paper_batch  # 如果没有PWC ID，直接返回原始批次
 
-    if not paper_ids:
-        logger.warning("Enrichment called with batch containing no valid paper_ids.")
+    # 获取关系数据
+    relations_data = {}
+    try:
+        # 任务关系
+        tasks_query = """
+            SELECT pwc_id, STRING_AGG(task_name, '|') as tasks
+            FROM paper_tasks
+            WHERE pwc_id = ANY(%s)
+            GROUP BY pwc_id
+        """
+        tasks_rows = await pg_repo.fetch_all(tasks_query, [list(pwc_ids)])
+        for row in tasks_rows:
+            pwc_id = row["pwc_id"]
+            if pwc_id not in relations_data:
+                relations_data[pwc_id] = {
+                    "tasks": [],
+                    "datasets": [],
+                    "repositories": [],
+                }
+            tasks = row["tasks"].split("|") if row["tasks"] else []
+            relations_data[pwc_id]["tasks"] = tasks
+
+        # 数据集关系
+        datasets_query = """
+            SELECT pwc_id, STRING_AGG(dataset_name, '|') as datasets
+            FROM paper_datasets
+            WHERE pwc_id = ANY(%s)
+            GROUP BY pwc_id
+        """
+        datasets_rows = await pg_repo.fetch_all(datasets_query, [list(pwc_ids)])
+        for row in datasets_rows:
+            pwc_id = row["pwc_id"]
+            if pwc_id not in relations_data:
+                relations_data[pwc_id] = {
+                    "tasks": [],
+                    "datasets": [],
+                    "repositories": [],
+                }
+            datasets = row["datasets"].split("|") if row["datasets"] else []
+            relations_data[pwc_id]["datasets"] = datasets
+
+        # 代码库关系 - 这些可能是复杂对象
+        repos_query = """
+            SELECT pr.pwc_id, 
+                   json_agg(json_build_object(
+                       'repo_url', pr.repo_url,
+                       'framework', pr.framework,
+                       'stars', pr.stars
+                   )) as repositories
+            FROM paper_repositories pr
+            WHERE pr.pwc_id = ANY(%s)
+            GROUP BY pr.pwc_id
+        """
+        repos_rows = await pg_repo.fetch_all(repos_query, [list(pwc_ids)])
+        for row in repos_rows:
+            pwc_id = row["pwc_id"]
+            if pwc_id not in relations_data:
+                relations_data[pwc_id] = {
+                    "tasks": [],
+                    "datasets": [],
+                    "repositories": [],
+                }
+            # 这应该已经是解析后的JSON
+            relations_data[pwc_id]["repositories"] = row["repositories"] or []
+
+    except Exception as e:
+        logger.error(f"获取论文关系数据时出错: {e}")
+        logger.error(traceback.format_exc())
+        # 出错时返回原始批次
         return paper_batch
 
-    # Ensure relation keys exist (even if enrichment fails)
-    for paper_data in paper_map.values():
-        paper_data.setdefault("tasks", [])
-        paper_data.setdefault("datasets", [])
-        paper_data.setdefault("methods", [])  # Add default for methods
-        paper_data.setdefault("repositories", [])
+    # 丰富论文对象
+    enriched_papers = []
+    for paper in paper_batch:
+        pwc_id = paper.get("pwc_id")
+        if pwc_id and pwc_id in relations_data:
+            paper["tasks"] = relations_data[pwc_id]["tasks"]
+            paper["datasets"] = relations_data[pwc_id]["datasets"]
+            paper["repositories"] = relations_data[pwc_id]["repositories"]
+        enriched_papers.append(paper)
 
-    # --- Fetch Tasks using the CORRECT repository method --- #
-    try:
-        tasks_map = await pg_repo.get_tasks_for_papers(paper_ids)
-        for paper_id, tasks_list in tasks_map.items():
-            if paper_id in paper_map:
-                paper_map[paper_id]["tasks"] = tasks_list
-    except Exception as e:
-        logger.error(
-            f"Error fetching tasks relations for paper IDs {paper_ids[:10]}...: {e}",
-            exc_info=True,
-        )
-
-    # --- Fetch Datasets using the CORRECT repository method --- #
-    try:
-        datasets_map = await pg_repo.get_datasets_for_papers(paper_ids)
-        for paper_id, datasets_list in datasets_map.items():
-            if paper_id in paper_map:
-                paper_map[paper_id]["datasets"] = datasets_list
-    except Exception as e:
-        logger.error(
-            f"Error fetching datasets relations for paper IDs {paper_ids[:10]}...: {e}",
-            exc_info=True,
-        )
-
-    # --- Fetch Methods using the CORRECT repository method --- #
-    # Assuming a method pg_repo.get_methods_for_papers exists
-    try:
-        methods_map = await pg_repo.get_methods_for_papers(paper_ids)  # Call the method
-        for paper_id, methods_list in methods_map.items():
-            if paper_id in paper_map:
-                paper_map[paper_id]["methods"] = methods_list  # Assign fetched methods
-    except AttributeError:
-        logger.error(
-            f"PostgresRepository does not have a 'get_methods_for_papers' method. Methods cannot be enriched."
-        )
-    except Exception as e:
-        logger.error(
-            f"Error fetching methods relations for paper IDs {paper_ids[:10]}...: {e}",
-            exc_info=True,
-        )
-
-    # --- Fetch Repositories using the CORRECT repository method --- #
-    try:
-        repos_map = await pg_repo.get_repositories_for_papers(paper_ids)
-        for paper_id, repo_urls in repos_map.items():
-            if paper_id in paper_map:
-                paper_map[paper_id]["repositories"] = [
-                    {"url": url} for url in repo_urls if url
-                ]
-    except Exception as e:
-        logger.error(
-            f"Error fetching repository relations for paper IDs {paper_ids[:10]}...: {e}",
-            exc_info=True,
-        )
-
-    if paper_map:
-        first_paper_key = next(iter(paper_map))
-        logger.debug(
-            f"[Enrich] Returning enriched batch. Example paper ID {first_paper_key} tasks: {paper_map[first_paper_key].get('tasks')}, methods: {paper_map[first_paper_key].get('methods')}"  # Log methods too
-        )
-    else:
-        logger.debug("[Enrich] Returning empty batch.")
-
-    return list(paper_map.values())
-
-
-# --- End of CORRECTED enrich_papers_with_relations --- #
+    return enriched_papers
 
 
 async def sync_model_paper_links(
     pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
 ) -> None:
-    """同步HFModel和Paper之间的关系"""
-    logger.info("开始同步HF模型和论文之间的关系...")
+    """将模型-论文链接从PostgreSQL同步到Neo4j。
 
-    # 从model_paper_links表获取关系
-    link_query = """
-    SELECT mpl.hf_model_id, p.pwc_id, mpl.paper_id
-    FROM model_paper_links mpl
-    JOIN papers p ON mpl.paper_id = p.paper_id
-    WHERE p.pwc_id IS NOT NULL
+    Args:
+        pg_repo: PostgreSQL仓库实例
+        neo4j_repo: Neo4j仓库实例
+        batch_size: 批处理大小，默认100
     """
+    logger.info("开始模型-论文链接同步...")
+    links_synced = 0
+    query = """
+        SELECT 
+            mp.hf_model_id, 
+            mp.paper_id,
+            p.arxiv_id_base,
+            p.pwc_id
+        FROM model_papers mp
+        JOIN papers p ON mp.paper_id = p.paper_id
+        ORDER BY mp.hf_model_id
+    """
+    links_to_process = []
 
     try:
-        # 获取数据
-        links_to_process = []
-        link_count = 0
-
         async for link_record in pg_repo.fetch_data_cursor(
-            link_query, batch_size=batch_size
+            query, batch_size=batch_size
         ):
-            # 只处理有效记录
-            if not link_record.get("hf_model_id") or not link_record.get("pwc_id"):
+            link_data = dict(link_record)
+
+            # 跳过缺少必要标识符的链接
+            if not link_data.get("hf_model_id"):
+                logger.warning(f"链接缺少hf_model_id: {link_data}. 跳过。")
                 continue
 
-            # 转换格式
-            link_data = {
-                "model_id": link_record["hf_model_id"],
-                "pwc_id": link_record["pwc_id"],
-                "confidence": 1.0,  # 默认置信度
-            }
+            # 我们需要论文的某种ID (pwc_id或arxiv_id)
+            if not link_data.get("arxiv_id_base") and not link_data.get("pwc_id"):
+                logger.warning(
+                    f"链接到{link_data.get('hf_model_id')}的论文ID {link_data.get('paper_id')} "
+                    f"既没有arxiv_id也没有pwc_id。跳过。"
+                )
+                continue
+
             links_to_process.append(link_data)
 
-            # 批处理
             if len(links_to_process) >= NEO4J_WRITE_BATCH_SIZE:
                 try:
-                    # 特殊调试输出
-                    logger.info(
-                        f"正在处理 {len(links_to_process)} 条HFModel-Paper关系，第一条: {links_to_process[0]}"
-                    )
-
-                    # 创建MENTIONS关系
-                    await neo4j_repo.link_model_to_paper_batch(links_to_process)
-                    link_count += len(links_to_process)
-                    logger.info(f"已同步 {link_count} 条模型-论文关系...")
+                    await neo4j_repo.link_models_to_papers_batch(links_to_process)
+                    links_synced += len(links_to_process)
+                    logger.info(f"已同步{links_synced}个模型-论文链接...")
                 except Exception as e:
-                    logger.error(f"保存模型-论文关系批次时出错: {e}")
+                    logger.error(f"将模型-论文链接批次保存到Neo4j时出错: {e}")
                     logger.error(traceback.format_exc())
                 finally:
                     links_to_process = []
 
-        # 处理剩余的关系
-        if links_to_process:
-            try:
-                # 特殊调试输出
-                logger.info(f"正在处理最后 {len(links_to_process)} 条HFModel-Paper关系")
-
-                # 创建MENTIONS关系
-                await neo4j_repo.link_model_to_paper_batch(links_to_process)
-                link_count += len(links_to_process)
-            except Exception as e:
-                logger.error(f"保存最后一批模型-论文关系时出错: {e}")
-                logger.error(traceback.format_exc())
-
-        logger.info(f"模型-论文关系同步完成，总计: {link_count} 条关系")
-
     except Exception as e:
-        logger.error(f"获取模型-论文关系时出错: {e}")
+        logger.error(f"从Postgres获取模型-论文链接时出错: {e}")
         logger.error(traceback.format_exc())
 
+    # 同步剩余链接
+    if links_to_process:
+        try:
+            await neo4j_repo.link_models_to_papers_batch(links_to_process)
+            links_synced += len(links_to_process)
+        except Exception as e:
+            logger.error(f"将剩余模型-论文链接批次保存到Neo4j时出错: {e}")
+            logger.error(traceback.format_exc())
 
-# --- Synchronization Runner ---
+    logger.info(f"模型-论文链接同步完成。共同步链接: {links_synced}个")
+
+
 async def run_sync(
     pg_repo: Optional[PostgresRepository] = None,
     neo4j_repo: Optional[Neo4jRepository] = None,
 ) -> int:
-    """Runs the full synchronization process.
+    """运行完整的数据同步过程。
+
+    Args:
+        pg_repo: 可选的PostgreSQL仓库实例
+        neo4j_repo: 可选的Neo4j仓库实例
 
     Returns:
-        int: 同步的论文数量，用于测试断言
+        int: 同步的论文总数
     """
-    logger.info("Starting full PG to Neo4j synchronization...")
+    # 创建连接池(如果未提供)
+    should_close_pg = False
+    should_close_neo4j = False
+    pg_pool = None
+    neo4j_driver = None
+    neo4j_db = "neo4j"  # 默认Neo4j数据库名
 
-    # Create repositories if not provided
-    created_pg_repo = False
-    created_neo4j_repo = False
+    try:
+        # 设置PostgreSQL连接(如果需要)
+        if pg_repo is None:
+            logger.info("创建PostgreSQL连接池...")
+            pg_pool = AsyncConnectionPool(
+                conninfo=DATABASE_URL,
+                min_size=1,
+                max_size=5,
+                timeout=30.0,
+            )
+            pg_repo = PostgresRepository(pg_pool)
+            should_close_pg = True
+            logger.info("已创建PostgreSQL连接和仓库。")
 
-    if pg_repo is None:
-        try:
-            # Create PostgreSQL pool
-            if DATABASE_URL is None:
-                logger.error("DATABASE_URL is None")
-                return 0
-            pg_pool = AsyncConnectionPool(conninfo=DATABASE_URL, open=True)
-            pg_repo = PostgresRepository(pool=pg_pool)
-            created_pg_repo = True
-        except Exception as e:
-            logger.error(f"Failed to initialize Postgres repository: {e}")
-            logger.error(traceback.format_exc())
-            return 0
-
-    if neo4j_repo is None:
-        try:
-            # Create Neo4j driver
-            if NEO4J_URI is None or NEO4J_USER is None or NEO4J_PASSWORD is None:
-                logger.error("Neo4j connection parameters are None")
-                return 0
+        # 设置Neo4j连接(如果需要)
+        if neo4j_repo is None:
+            logger.info("创建Neo4j连接...")
             neo4j_driver = AsyncGraphDatabase.driver(
                 NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
             )
-            neo4j_repo = Neo4jRepository(driver=neo4j_driver)
-            created_neo4j_repo = True
-        except Exception as e:
-            logger.error(f"Failed to initialize Neo4j repository: {e}")
-            logger.error(traceback.format_exc())
-            # Clean up Postgres connection if we created it
-            if created_pg_repo and pg_repo is not None:
-                await pg_repo.close()
+            neo4j_repo = Neo4jRepository(neo4j_driver, database=neo4j_db)
+            should_close_neo4j = True
+            logger.info("已创建Neo4j连接和仓库。")
+
+        # 验证连接
+        if not await pg_repo.check_connection():
+            logger.error("PostgreSQL连接测试失败")
             return 0
 
-    try:
-        # 确保repositories不为None
-        if pg_repo is None or neo4j_repo is None:
-            logger.error("Repository objects are None after initialization")
+        if not await neo4j_repo.check_connection():
+            logger.error("Neo4j连接测试失败")
             return 0
 
-        # 1. Make sure Neo4j constraints exist
-        await neo4j_repo.create_constraints()
+        # 执行同步
+        # 1. 同步模型
+        await sync_hf_models(pg_repo, neo4j_repo)
 
-        # 2. Sync HF Models
-        await sync_hf_models(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
+        # 2. 同步论文和关系
+        papers_synced = await sync_papers_and_relations(pg_repo, neo4j_repo)
 
-        # 3. Sync Papers (with their relations)
-        papers_count = await sync_papers_and_relations(
-            pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE
-        )
+        # 3. 同步模型-论文链接
+        await sync_model_paper_links(pg_repo, neo4j_repo)
 
-        # 4. Sync Model<->Paper links
-        await sync_model_paper_links(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
+        logger.info("所有同步过程完成。")
+        return papers_synced
 
-        logger.info("Full synchronization completed successfully.")
-
-        # 5. Count papers in Neo4j (可选的验证步骤)
-        neo4j_papers = await neo4j_repo.count_paper_nodes()
-        logger.info(f"Current Neo4j paper count: {neo4j_papers}")
-
-        return 1  # 成功完成同步，返回1以通过测试
     except Exception as e:
-        logger.error(f"Synchronization failed with error: {e}")
+        logger.error(f"同步执行期间出错: {e}")
         logger.error(traceback.format_exc())
         return 0
     finally:
-        # Clean up resources if we created them
-        if created_pg_repo and pg_repo is not None:
-            await pg_repo.close()
-        if created_neo4j_repo and neo4j_repo is not None:
-            # Neo4j driver cleaned up through repository close method
-            pass
+        # 清理资源
+        if should_close_pg and pg_pool:
+            logger.info("关闭PostgreSQL连接池...")
+            await pg_pool.close()
+
+        if should_close_neo4j and neo4j_driver:
+            logger.info("关闭Neo4j驱动...")
+            await neo4j_driver.close()
 
 
-# --- Main Execution ---
 async def main(reset_neo4j: bool) -> None:
-    """Main function to run the synchronization process."""
+    """主函数 - 带有可选的Neo4j重置。
+
+    Args:
+        reset_neo4j: 如果为True，则在同步前重置Neo4j数据库
+    """
+    # 创建必要的连接
     pg_pool = None
     neo4j_driver = None
-    pg_repo = None  # Initialize repo variable
-    neo4j_repo = None  # Initialize repo variable
-    total_papers_synced = 0
 
     try:
-        # --- Initialize Connections ---
-        logger.info(f"Initializing PostgreSQL pool for {DATABASE_URL}...")
-        # Add assertion for DATABASE_URL
-        assert DATABASE_URL is not None, "DATABASE_URL environment variable must be set"
-        # Explicitly create the pool instance
-        pg_pool = AsyncConnectionPool(conninfo=DATABASE_URL, open=True)
-        logger.info("PostgreSQL pool initialized.")
+        logger.info("初始化连接...")
 
-        logger.info(f"Initializing Neo4j driver for {NEO4J_URI}...")
-        # Add assertions for Neo4j connection details
-        assert NEO4J_URI is not None, "NEO4J_URI environment variable must be set"
-        assert NEO4J_USER is not None, "NEO4J_USER environment variable must be set"
-        assert NEO4J_PASSWORD is not None, (
-            "NEO4J_PASSWORD environment variable must be set"
+        # 创建PostgreSQL连接池
+        pg_pool = AsyncConnectionPool(
+            conninfo=DATABASE_URL,
+            min_size=2,
+            max_size=10,
         )
-        # Explicitly create the driver instance
+        logger.info("PostgreSQL连接池创建成功。")
+
+        # 创建Neo4j驱动
         neo4j_driver = AsyncGraphDatabase.driver(
-            NEO4J_URI,
-            auth=(NEO4J_USER, NEO4J_PASSWORD),
+            NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
         )
-        logger.info("Neo4j driver initialized.")
+        logger.info("Neo4j驱动创建成功。")
 
-        # --- Create Repository Instances with initialized pool/driver ---
-        # Pass the initialized pool and driver instances
-        pg_repo = PostgresRepository(pool=pg_pool)
-        neo4j_repo = Neo4jRepository(driver=neo4j_driver)
-        logger.info("Repositories initialized.")
+        # 创建仓库
+        pg_repo = PostgresRepository(pg_pool)
+        neo4j_db = "neo4j"  # 默认Neo4j数据库名
+        neo4j_repo = Neo4jRepository(neo4j_driver, database=neo4j_db)
 
-        # --- Optional: Reset Neo4j if requested ---
+        # 如果请求，重置Neo4j数据库
         if reset_neo4j:
-            logger.warning("Resetting Neo4j database...")
-            await neo4j_repo.reset_database()  # Assuming this method exists
-            logger.info("Neo4j database reset complete.")
-        else:
-            logger.info("Skipping Neo4j database reset.")
+            logger.warning("重置标志指定。正在清空Neo4j数据库...")
+            await neo4j_repo.clear_all_data()
+            logger.info("Neo4j数据库已清空。")
 
-        # --- Run Synchronization ---
-        logger.info("--- Starting synchronization from PostgreSQL to Neo4j ---")
-        total_papers_synced = await run_sync(pg_repo=pg_repo, neo4j_repo=neo4j_repo)
+        # 运行同步
+        papers_synced = await run_sync(pg_repo, neo4j_repo)
+        logger.info(f"同步完成。共同步{papers_synced}篇论文。")
 
-    except asyncpg.exceptions.CannotConnectNowError as pg_conn_err:
-        logger.critical(
-            f"FATAL: Could not connect to PostgreSQL at {DATABASE_URL}. Check if DB is running and accessible. Error: {pg_conn_err}"
-        )
-    except ConnectionRefusedError as neo4j_conn_err:
-        logger.critical(
-            f"FATAL: Could not connect to Neo4j at {NEO4J_URI}. Check if DB is running and accessible. Error: {neo4j_conn_err}"
-        )
     except Exception as e:
-        logger.critical(f"An unexpected error occurred during synchronization: {e}")
-        # No need to import traceback here
-        logger.critical(traceback.format_exc())
+        logger.error(f"主函数执行期间出错: {e}")
+        logger.error(traceback.format_exc())
+
     finally:
-        # --- Close Connections ---
+        # 清理资源
         if pg_pool:
-            logger.info("Closing PostgreSQL pool...")
+            logger.info("关闭PostgreSQL连接池...")
             await pg_pool.close()
+
         if neo4j_driver:
-            logger.info("Closing Neo4j driver...")
+            logger.info("关闭Neo4j驱动...")
             await neo4j_driver.close()
-        logger.info("Connections closed (or closing attempted).")
-        # Log final paper count if sync was attempted
-        if total_papers_synced > 0:
-            logger.info(
-                f"Final count of papers synced in this run: {total_papers_synced}"
-            )
 
 
 if __name__ == "__main__":
+    # 设置命令行解析
     parser = argparse.ArgumentParser(
-        description="Synchronize data from PostgreSQL to Neo4j for AIGraphX."
+        description="将AIGraphX数据从PostgreSQL同步到Neo4j"
     )
-    parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Clear the entire Neo4j database before starting synchronization.",
-    )
+    parser.add_argument("--reset", action="store_true", help="在同步前清空Neo4j数据库")
     args = parser.parse_args()
 
-    # Run the main asynchronous function
-    try:
-        asyncio.run(main(reset_neo4j=args.reset))
-        logger.info("Script finished successfully.")
-    except Exception as e:
-        # Catch errors happening during asyncio.run() itself if any
-        logger.critical(f"Script execution failed: {e}", exc_info=True)
-        sys.exit(1)
+    # 在Windows上需要特定的事件循环策略
+    if os.name == "nt":  # Windows
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    # 运行主函数
+    asyncio.run(main(args.reset))
+    logger.info("程序完成。")
