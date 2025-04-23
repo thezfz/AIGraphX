@@ -264,9 +264,7 @@ async def get_or_insert_paper(
                         if arxiv_meta.get("categories")
                         else None,
                         pwc_entry.get("title"),
-                        pwc_entry.get(
-                            "url_pdf"
-                        ),  # Assuming this is the intended PWC URL
+                        pwc_entry.get("pwc_url"),
                         area,
                     ),
                 )
@@ -296,8 +294,8 @@ async def insert_pwc_relation(
     if not items:
         return
     # Correctly generate table and column names
-    table_name = f"pwc_{relation_type}s" # e.g., pwc_tasks, pwc_datasets
-    column_name = f"{relation_type}_name" # e.g., task_name, dataset_name
+    table_name = f"pwc_{relation_type}s"  # e.g., pwc_tasks, pwc_datasets
+    column_name = f"{relation_type}_name"  # e.g., task_name, dataset_name
 
     # Prepare data tuples: (paper_id, item_name)
     data_tuples = [(paper_id, item) for item in items]
@@ -375,7 +373,7 @@ async def process_batch(
 ) -> int:
     """Processes a batch of records within a single transaction."""
     processed_in_batch = 0
-    successful_lines_in_batch = 0 # Track successful lines within the batch
+    successful_lines_in_batch = 0  # Track successful lines within the batch
     async with conn.transaction():
         logger.debug(f"Starting transaction for batch of {len(batch)} records.")
         for line_num, record in batch:
@@ -389,22 +387,28 @@ async def process_batch(
                     await insert_hf_model(conn, record)
                 else:
                     logger.warning(f"Record on line {line_num} missing hf_model_id.")
-                    record_processed_successfully = False # Mark as unsuccessful if critical ID missing
+                    record_processed_successfully = (
+                        False  # Mark as unsuccessful if critical ID missing
+                    )
                     # continue # Optionally skip further processing for this record
 
                 # --- Process Linked Papers (Iterate through the list) ---
                 linked_papers = record.get("linked_papers", [])
                 if not isinstance(linked_papers, list):
-                    logger.warning(f"Record on line {line_num}: 'linked_papers' is not a list. Skipping paper processing.")
-                    linked_papers = [] # Treat as empty list
+                    logger.warning(
+                        f"Record on line {line_num}: 'linked_papers' is not a list. Skipping paper processing."
+                    )
+                    linked_papers = []  # Treat as empty list
 
                 # Use a flag to track if *any* paper was successfully processed for this model record
                 at_least_one_paper_processed = False
 
                 for paper_data in linked_papers:
                     if not isinstance(paper_data, dict):
-                        logger.warning(f"Skipping invalid paper entry for model {hf_model_id} on line {line_num}: not a dictionary.")
-                        continue # Skip this invalid paper entry
+                        logger.warning(
+                            f"Skipping invalid paper entry for model {hf_model_id} on line {line_num}: not a dictionary."
+                        )
+                        continue  # Skip this invalid paper entry
 
                     # --- Process Single Paper (Get or Insert) ---
                     # Pass the individual paper_data dictionary here
@@ -413,7 +417,7 @@ async def process_batch(
                     # --- Link Model and Paper (only if both exist) ---
                     if hf_model_id and paper_id:
                         await insert_model_paper_link(conn, hf_model_id, paper_id)
-                        at_least_one_paper_processed = True # Mark success if linked
+                        at_least_one_paper_processed = True  # Mark success if linked
                     # Log cases where linking didn't happen (optional)
                     # elif paper_id and not hf_model_id:
                     #     logger.debug(f"Paper on line {line_num} processed but no HF model ID.")
@@ -434,39 +438,51 @@ async def process_batch(
                             conn,
                             paper_id,
                             "dataset",
-                            pwc_entry.get("datasets_used"), # Assuming field name
+                            pwc_entry.get("datasets_used"),  # Assuming field name
                         )
                         await insert_pwc_repositories(
                             conn, paper_id, pwc_entry.get("repositories")
                         )
-                        at_least_one_paper_processed = True # Also mark success here
+                        at_least_one_paper_processed = True  # Also mark success here
                     else:
                         # If get_or_insert_paper returned None, the paper processing failed for this entry
-                        logger.warning(f"Failed to get or insert paper for entry in linked_papers on line {line_num}. Paper data: {paper_data}")
+                        logger.warning(
+                            f"Failed to get or insert paper for entry in linked_papers on line {line_num}. Paper data: {paper_data}"
+                        )
                         # Consider if this failure should mark the whole model record as failed
                         # record_processed_successfully = False
 
                 # Increment the main counter only if the model record itself was deemed successful
                 # (e.g., hf_model_id was present, and potentially if at least one paper linked if required)
-                if record_processed_successfully: # Adjust this condition based on requirements
+                if (
+                    record_processed_successfully
+                ):  # Adjust this condition based on requirements
                     processed_in_batch += 1
-                    successful_lines_in_batch += 1 # Increment success counter
-                    logger.debug(f"Successfully processed record from line {line_num} (including linked papers if any).")
+                    successful_lines_in_batch += 1  # Increment success counter
+                    logger.debug(
+                        f"Successfully processed record from line {line_num} (including linked papers if any)."
+                    )
                 else:
-                    logger.warning(f"Marked record from line {line_num} as processed with errors/skips.")
+                    logger.warning(
+                        f"Marked record from line {line_num} as processed with errors/skips."
+                    )
                     # Even if marked as error, we might count it towards the total lines *attempted* in the batch
                     processed_in_batch += 1
 
             except Exception as e:
                 # Log detailed error including traceback and the problematic record line number
                 tb_str = traceback.format_exc()
-                logger.error(f"Error processing record from line {line_num}: {e}\\nRecord: {record}\\nTraceback:\\n{tb_str}")
+                logger.error(
+                    f"Error processing record from line {line_num}: {e}\\nRecord: {record}\\nTraceback:\\n{tb_str}"
+                )
                 # Re-raise the exception to trigger the automatic rollback of conn.transaction()
-                raise # This will rollback the *entire* batch
+                raise  # This will rollback the *entire* batch
 
     # If the 'with conn.transaction()' block completes without exceptions, commit is automatic.
     # If an exception occurs, rollback is automatic.
-    logger.debug(f"Transaction for batch completed (Commit or Rollback occurred). Successfully processed {successful_lines_in_batch} lines in this attempt.")
+    logger.debug(
+        f"Transaction for batch completed (Commit or Rollback occurred). Successfully processed {successful_lines_in_batch} lines in this attempt."
+    )
     # Return the count of lines successfully processed within the transaction
     # If an exception caused rollback, this will be 0 from the perspective of the DB, but we return the count *attempted* before failure.
     # Let's return successful_lines_in_batch to be more accurate about what potentially committed.
@@ -596,7 +612,7 @@ if __name__ == "__main__":
         help=f"Path to the input JSONL file (default: {DEFAULT_INPUT_JSONL_FILE})",
     )
     parser.add_argument(
-        "--reset-checkpoint",
+        "--reset",
         action="store_true",
         help="Ignore existing checkpoint and start loading from the beginning of the input file.",
     )
@@ -608,4 +624,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.input_file, args.reset_db, args.reset_checkpoint))
+    asyncio.run(main(args.input_file, args.reset_db, args.reset))

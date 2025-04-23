@@ -23,27 +23,32 @@
     -   **明确的搜索模式选择:** 提供 UI 控件（如 Tabs、Radio Buttons 或 Dropdown）允许用户选择搜索模式 (`search_type` 参数)：
         -   **关键词搜索 (`search_type='keyword'`)** (通过推断的 `GET /api/v1/search/keyword/{target}` 端点)
         -   **语义搜索 (`search_type='semantic'`)** (通过推断的 `GET /api/v1/search/semantic/{target}` 端点)
-        -   **混合搜索 (`search_type='hybrid'`)** (当前仅支持**论文搜索**，通过推断的 `POST /api/v1/search/hybrid/papers` 端点，利用 RRF 优化排序)
+        -   **混合搜索 (`search_type='hybrid'`)** (现已支持**论文**和**模型**搜索，通过推断的 `POST /api/v1/search/hybrid/{target}` 端点，利用 RRF - Reciprocal Rank Fusion 算法优化排序)
     -   包含触发搜索操作的按钮。
-    * **目标实体选择:** 提供方式让用户选择是搜索**论文 (`target='papers'`)** 还是**模型 (`target='models'`)**。注意混合搜索当前仅支持 `papers`。
+    * **目标实体选择:** 提供方式让用户选择是搜索**论文 (`target='papers'`)** 还是**模型 (`target='models'`)**。
     -   调用后端相应的搜索端点，并传递必要的参数 (`q`, `search_type`, `target`, 分页、过滤、排序参数)。
 -   **高级搜索参数化:**
     -   **过滤 (根据 `/docs` 和 `SearchFilterModel`):** 提供专门的过滤区域/面板（可折叠或侧边栏），包含以下控件：
         -   **论文过滤:**
             -   日期范围选择器: `published_after` (>=), `published_before` (<=) (ISO 8601 日期字符串 'YYYY-MM-DD')。
-            -   领域过滤: `filter_area` (字符串, e.g., 'CV', 'NLP')。
-        -   **模型过滤:** (注意: 当前代码分析显示，模型搜索的过滤参数似乎未在服务层显式暴露，主要在 PG Repo 处理，需进一步确认 `/docs`)
+            -   领域过滤: `filter_area` (字符串, e.g., 'CV', 'NLP' - 可考虑提供多选或模糊匹配，并提供可选领域列表)。
+            -   作者过滤: `filter_author` (字符串)。
+        -   **模型过滤:**
+            -   **核心:** `pipeline_tag` (字符串，Hugging Face 核心分类，建议使用下拉或多选实现)。
+            -   库过滤: `filter_library` (字符串，例如 'transformers', 'diffusers')。
+            -   标签过滤: `filter_tags` (字符串或字符串列表，支持模型标签过滤)。
+            -   作者过滤: `filter_author` (字符串)。
     -   **排序 (根据 `/docs` 和服务层逻辑):** 提供下拉菜单，允许用户选择排序字段 (`sort_by`) 和排序方向 (`sort_order: 'asc' | 'desc'`):
         -   **论文 (语义/混合):** `score` (默认 desc), `published_date`, `title`。
         -   **论文 (关键词):** `published_date` (默认 desc), `title` (**不支持 `score`**)。
-        -   **模型 (语义):** `score` (默认 desc), `likes`, `downloads`, `last_modified`。
+        -   **模型 (语义/混合):** `score` (默认 desc), `likes`, `downloads`, `last_modified`。
         -   **模型 (关键词):** `last_modified` (默认 desc), `likes`, `downloads` (**不支持 `score`**)。
     -   **分页:** 提供清晰的分页控件（如页码、上一页/下一页按钮），对应 API 参数 `page` (或 `skip`) 和 `page_size` (或 `limit`)。
     -   所有过滤、排序、分页状态需要反映在 API 请求的参数中。
 -   **结果展示:**
     -   以列表形式清晰展示搜索结果。
-    -   **论文列表项 (`SearchResultItem`):** 应包含 `pwc_id` (可用于链接详情), `title`, `summary`, `area`, `published_date`, `authors`, `pdf_url`，以及可选的 `score` (混合/语义搜索有值，关键词可能为 `null`)。
-    -   **模型列表项 (`HFSearchResultItem`):** 应包含 `model_id` (可用于链接详情), `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified`，以及 `score` (仅语义搜索有值)。
+    -   **论文列表项 (`SearchResultItem`):** 应包含 `pwc_id` (可用于链接详情), `title`, `summary`, `area`, `published_date`, `authors`, `pdf_url`，以及可选的 `score` (混合/语义搜索有值，关键词可能为 `null`)。**UI优化:** 卡片信息展示更清晰、丰富，并高亮匹配关键词。
+    -   **模型列表项 (`HFSearchResultItem`):** 应包含 `model_id` (可用于链接详情), `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified`，以及 `score` (混合/语义搜索有值)。**UI优化:** 卡片信息展示更清晰、丰富，并高亮匹配关键词。
     -   提供加载中 (Loading)、无结果 (No Results)、错误 (Error) 以及当前生效的搜索模式/过滤/排序条件的清晰反馈。
 -   **详情查看与关联探索:**
     -   点击搜索结果项能导航到对应的详情页面 (e.g., `/papers/{pwc_id}`, `/models/{model_id}`)。
@@ -135,7 +140,6 @@ aigraphx-frontend/
 │   ├── App.tsx
 │   ├── main.tsx
 │   ├── assets/
-│   ├── components/
 │   │   ├── common/       # Button, Input, Spinner, Pagination, DatePicker, MultiSelect...
 │   │   ├── layout/       # Header, Footer, FilterSidebar...
 │   │   ├── search/       # SearchBar, SearchModeToggle, FilterPanel(包含论文/模型过滤器), SortDropdown, ResultList, ResultItem(区分Paper/Model)...
@@ -194,9 +198,12 @@ aigraphx-frontend/
 
 * **搜索页面:**
     * **顶部/显眼位置:** 搜索输入框 (`q`), **搜索模式选择器 (Tabs/Radio - `search_type`)**, **目标实体选择器 (Dropdown/Tabs - `target`)**, 触发按钮。
-    * **侧边栏/可折叠面板:** **过滤器区域**，包含**论文过滤器** (日期范围 `published_after`/`published_before`, 领域 `filter_area`)。提供"清除筛选"按钮。(模型过滤器待后端 `/docs` 确认)。
+    * **侧边栏/可折叠面板:** **过滤器区域**，包含：
+        *   **论文过滤器** (日期范围 `published_after`/`published_before`, 领域 `filter_area` (支持多选/模糊), 作者 `filter_author`)。
+        *   **模型过滤器** (`pipeline_tag` (多选/下拉), 库 `filter_library`, 标签 `filter_tags`, 作者 `filter_author`)。
+        *   提供\"清除筛选\"按钮。
     * **结果列表上方:** 显示当前结果数量 (`total` from pagination), **排序方式下拉菜单 (`sort_by`, `sort_order` - 根据 target 和 search_type 显示可用选项)**, **分页控件 (`page`, `page_size`)**。
-    * **结果列表项:** 显示核心信息 (根据 `SearchResultItem` / `HFSearchResultItem` 字段)，突出显示**匹配关键词 (若可能)** 或 **相关性分数 (`score`)** (注意 score 可能为 null)。
+    * **结果列表项:** 显示核心信息 (根据 `SearchResultItem` / `HFSearchResultItem` 字段)，突出显示**匹配关键词 (若可能)** 或 **相关性分数 (`score`)** (注意 score 可能为 null)。**优化卡片设计，提升信息密度和可读性。**
 * **详情页面:**
     * **主区域 (论文 - `PaperDetailResponse`):** 清晰展示核心元数据（`title`, `abstract`, `authors`, `published_date`, `area`, `arxiv_id`, `url_abs`, `url_pdf`, `frameworks`, `number_of_stars` 等）。
     * **主区域 (模型 - `HFModelDetail`):** 清晰展示核心元数据 (`model_id`, `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified` 等)。
@@ -219,10 +226,10 @@ aigraphx-frontend/
 
 * **核心:** 继续使用 **RTL + Vitest + MSW**。
 * **扩展测试范围:**
-    * **组件测试:** 测试过滤器组件（日期选择、文本输入 `filter_area`）、排序下拉菜单、分页控件、搜索模式/目标切换器。
+    * **组件测试:** 测试过滤器组件（日期选择、文本输入 `filter_area`、多选/下拉 `pipeline_tag`, 作者输入 `filter_author`, 库输入 `filter_library`, 标签输入 `filter_tags`）、排序下拉菜单、分页控件、搜索模式/目标切换器。
     * **集成测试 (页面级):**
-        * 模拟用户选择不同**搜索模式**和**目标**，验证传递给 API 的 `search_type`, `target` 及正确的端点被调用。
-        * 模拟用户应用**多种过滤器** (`published_after`, `filter_area`) 和**排序** (`sort_by`, `sort_order`)，验证 API 请求参数的正确性及 UI 的相应更新。
+        * 模拟用户选择不同**搜索模式**（包括模型的混合搜索）和**目标**，验证传递给 API 的 `search_type`, `target` 及正确的端点被调用。
+        * 模拟用户应用**多种过滤器** (`published_after`, `filter_area`, `filter_author`, `pipeline_tag`, `filter_library`, `filter_tags`) 和**排序** (`sort_by`, `sort_order`)，验证 API 请求参数的正确性及 UI 的相应更新。
         * 模拟用户**分页**操作 (`page`, `page_size`)。
         * 测试详情页**元数据**、**关联实体列表**和**基础图信息列表**的正确渲染（基于 Mock 数据，使用 `PaperDetailResponse`, `HFModelDetail`, `GraphData` 结构）。
     * **Mocking:** 使用 MSW 模拟后端 API，覆盖不同的搜索结果 (`PaginatedPaperSearchResult`, `PaginatedHFModelSearchResult`)、详情数据 (`PaperDetailResponse`, `HFModelDetail`)、图数据 (`GraphData`) 以及错误情况。
@@ -240,10 +247,11 @@ aigraphx-frontend/
 * **用户账户与个性化:** 保存搜索历史、收藏夹、个性化推荐。
 * **性能优化:** 对大规模数据渲染和复杂图可视化进行性能分析和优化。
 * **端到端测试:** 使用 Playwright/Cypress 覆盖核心用户流程（多模式搜索+过滤+排序+查看详情+查看关联）。
+* **论文领域 (Area) 过滤器增强**: 实现领域的多选或模糊匹配，并提供可选的领域列表。
 
 **14. 结论**
 
-这份更新后的前端设计文档 (v1.1 - Expanded Scope) 旨在指导开发一个能充分利用 AIGraphX 后端强大功能的用户界面。通过实现**多模式搜索、高级参数化查询、详情关联探索**，并继续采用 **React + Vite + TypeScript + Tailwind CSS + TanStack Query** 的技术栈和**容器化开发环境**，我们可以构建一个功能强大、用户体验良好且可维护的前端应用。**严格遵守代码规范、测试策略，并始终以后端 `/docs` 作为 API 的最终事实依据**，是项目成功的关键。
+这份更新后的前端设计文档 (v1.1 - Expanded Scope - Iteration 2) 旨在指导开发一个能充分利用 AIGraphX 后端强大功能的用户界面。通过实现**支持模型和论文的混合搜索、增加核心过滤器（如 pipeline_tag、作者、库、标签）、优化 UI/UX**，并继续采用 **React + Vite + TypeScript + Tailwind CSS + TanStack Query** 的技术栈和**容器化开发环境**，我们可以构建一个功能更强大、用户体验良好且可维护的前端应用。**严格遵守代码规范、测试策略，并始终以后端 `/docs` 作为 API 的最终事实依据**，是项目成功的关键。
 
 ---
 
@@ -251,8 +259,17 @@ aigraphx-frontend/
 
 * (保持 v1.1 中的建议不变，重点是设置和启动容器化环境)
 
-* **优先实现:** 搜索框 (`q`), 搜索模式切换 (`search_type`), 目标选择 (`target`), 基础结果展示 (区分论文/模型), 分页 (`page`/`page_size`), 排序 (`sort_by`/`sort_order` - 根据 `/docs` 动态选项), 过滤 (论文日期 `published_after`/`published_before`, 领域 `filter_area`), 论文详情页元数据 (`PaperDetailResponse`), 模型详情页元数据 (`HFModelDetail`), 论文详情页关联实体列表 (`tasks`, `datasets`, `methods`)。基础图信息列表展示可稍后。
+* **当前进展:**
+    * 已完成模型混合搜索支持。
+    * 已添加 `pipeline_tag`, 作者, 库, 标签等过滤器。
+    * 已完成初步的 UI/UX 优化（结果卡片）。
+    * 论文 `area` 过滤器已支持基础功能，可进一步细化（多选/模糊）。
 
-使用 openapi-typescript 或类似工具，基于后端 /openapi.json 初始化 src/types/api.ts 文件。
+* **后续工作:**
+    * **完善论文领域 (Area) 过滤器**: 实现多选或模糊匹配，提供领域列表。
+    * **持续 UI/UX 优化**: 根据用户反馈进一步打磨界面。
+    * **未来增强功能**: 参考第 13 节。
+
+使用 openapi-typescript 或类似工具，基于后端 /openapi.json 初始化/更新 src/types/api.ts 文件。
 
 ---

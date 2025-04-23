@@ -38,77 +38,90 @@ class GraphService:
         logger.info(f"Fetching details for paper: {pwc_id}")
 
         # 1. Get base details from PostgreSQL using the CORRECT method name
-        paper_data = await self.pg_repo.get_paper_details_by_pwc_id(pwc_id)
+        paper_data_record = await self.pg_repo.get_paper_details_by_pwc_id(pwc_id)
 
-        if not paper_data:
+        if not paper_data_record:
             logger.warning(f"Paper with pwc_id '{pwc_id}' not found in PostgreSQL.")
             return None
 
         # Ensure paper_data is a mutable dict for updates
-        paper_data = dict(paper_data)
+        paper_data = dict(paper_data_record)
 
-        # 2. Get related entities from Neo4j if available
-        # Initialize relation lists to empty, they will be populated from Neo4j if available
-        paper_data["tasks"] = []
-        paper_data["datasets"] = []
-        paper_data["methods"] = []
-        # Add others if needed (e.g., 'repositories', though that might be complex)
+        # 2. Get related entities from Neo4j if available using get_related_nodes
+        tasks_list: List[str] = []
+        datasets_list: List[str] = []
+        methods_list: List[str] = []
 
         if self.neo4j_repo:
             try:
-                logger.debug(f"Fetching neighborhood from Neo4j for paper {pwc_id}...")
-                graph_dict = await self.neo4j_repo.get_paper_neighborhood(pwc_id)
+                logger.debug(
+                    f"Fetching related entities from Neo4j for paper {pwc_id}..."
+                )
 
-                if graph_dict and "nodes" in graph_dict:
-                    logger.debug(
-                        f"Parsing neighbors for paper {pwc_id} from Neo4j result."
-                    )
-                    related_tasks = []
-                    related_datasets = []
-                    related_methods = []
-                    # Assuming 'nodes' is a list of dicts with 'type' and 'label' or 'properties.name'
-                    for node in graph_dict["nodes"]:
-                        node_type = node.get("type")
-                        # Use node['label'] as primary, fallback to properties['name'] if label is generic like pwc_id
-                        node_name = node.get(
-                            "label", node.get("properties", {}).get("name")
-                        )
+                # Fetch Tasks
+                task_nodes = await self.neo4j_repo.get_related_nodes(
+                    start_node_label="Paper",
+                    start_node_prop="pwc_id",
+                    start_node_val=pwc_id,
+                    relationship_type="HAS_TASK",  # Assuming this relationship
+                    target_node_label="Task",
+                    direction="OUT",  # Assuming Paper->Task
+                    limit=50,  # Set a reasonable limit
+                )
+                tasks_list = [
+                    node.get("properties", {}).get("name")
+                    for node in task_nodes
+                    if node.get("properties", {}).get("name")
+                ]
 
-                        if (
-                            not node_name or node.get("id") == pwc_id
-                        ):  # Skip self or nodes without a usable name
-                            continue
+                # Fetch Datasets
+                dataset_nodes = await self.neo4j_repo.get_related_nodes(
+                    start_node_label="Paper",
+                    start_node_prop="pwc_id",
+                    start_node_val=pwc_id,
+                    relationship_type="USES_DATASET",  # Assuming this relationship
+                    target_node_label="Dataset",
+                    direction="OUT",  # Assuming Paper->Dataset
+                    limit=50,
+                )
+                datasets_list = [
+                    node.get("properties", {}).get("name")
+                    for node in dataset_nodes
+                    if node.get("properties", {}).get("name")
+                ]
 
-                        if node_type == "Task":
-                            related_tasks.append(node_name)
-                        elif node_type == "Dataset":
-                            related_datasets.append(node_name)
-                        elif (
-                            node_type == "Method"
-                        ):  # Add support for methods if they exist as nodes
-                            related_methods.append(node_name)
-                        # Add other types like 'Repository' if needed, might need 'url' instead of 'name'
+                # Fetch Methods
+                method_nodes = await self.neo4j_repo.get_related_nodes(
+                    start_node_label="Paper",
+                    start_node_prop="pwc_id",
+                    start_node_val=pwc_id,
+                    relationship_type="USES_METHOD",  # Assuming this relationship
+                    target_node_label="Method",
+                    direction="OUT",  # Assuming Paper->Method
+                    limit=50,
+                )
+                methods_list = [
+                    node.get("properties", {}).get("name")
+                    for node in method_nodes
+                    if node.get("properties", {}).get("name")
+                ]
 
-                    # Update paper_data with lists from Neo4j
-                    paper_data["tasks"] = related_tasks
-                    paper_data["datasets"] = related_datasets
-                    paper_data["methods"] = related_methods
-                    logger.debug(
-                        f"Extracted relations for {pwc_id} from Neo4j: "
-                        f"Tasks={len(related_tasks)}, Datasets={len(related_datasets)}, Methods={len(related_methods)}"
-                    )
-                else:
-                    logger.debug(
-                        f"No graph data or nodes found in Neo4j neighborhood for paper {pwc_id}."
-                    )
+                logger.debug(
+                    f"Retrieved relations for {pwc_id} from Neo4j: "
+                    f"Tasks={len(tasks_list)}, Datasets={len(datasets_list)}, Methods={len(methods_list)}"
+                )
 
             except Exception as e:
                 logger.error(
-                    f"Failed to fetch or parse relations from Neo4j for {pwc_id}: {e}",
+                    f"Failed to fetch related entities from Neo4j for {pwc_id}: {e}",
                     exc_info=True,
                 )
-                # Decide if we should proceed with potentially incomplete PG data or return error?
-                # For now, proceed with PG data, but log the error clearly.
+                # Continue with PG data, lists will remain empty
+
+        # Update paper_data with lists from Neo4j (or empty lists if failed/unavailable)
+        paper_data["tasks"] = tasks_list
+        paper_data["datasets"] = datasets_list
+        paper_data["methods"] = methods_list
 
         # Add check for pwc_id before creating response object
         pwc_id_val = paper_data.get("pwc_id")
@@ -153,7 +166,7 @@ class GraphService:
         response = PaperDetailResponse(
             pwc_id=pwc_id_val,  # Use the validated pwc_id_val
             title=paper_data.get("title"),
-            abstract=paper_data.get("abstract"),
+            abstract=paper_data.get("summary"),
             arxiv_id=paper_data.get("arxiv_id_base"),
             url_abs=paper_data.get("pwc_url"),
             url_pdf=paper_data.get("pdf_url"),
@@ -221,15 +234,45 @@ class GraphService:
         logger.info(f"Fetching details for model: {model_id}")
         try:
             # Use the existing method in PostgresRepository
-            # Note: get_hf_models_by_ids returns a list, we need one item
             model_list = await self.pg_repo.get_hf_models_by_ids([model_id])
             if not model_list:
                 logger.warning(f"No details found for model {model_id} in PostgreSQL.")
                 return None
 
-            model_data = model_list[0]
-            # Convert to HFModelDetail Pydantic model
-            return HFModelDetail(**model_data)
+            model_data = model_list[0]  # This is a dict from the database row
+
+            # --- Validate hf_model_id before mapping ---
+            retrieved_model_id = model_data.get("hf_model_id")
+            if not retrieved_model_id or not isinstance(retrieved_model_id, str):
+                logger.error(
+                    f"Invalid or missing 'hf_model_id' in data for requested model_id '{model_id}'. Found: {retrieved_model_id}"
+                )
+                return None  # Cannot create details without a valid ID
+            # --- End Validation ---
+
+            # Manually map ALL database column names (with hf_ prefix)
+            # to Pydantic model field names (without hf_ prefix).
+            mapped_data = {
+                "model_id": retrieved_model_id,  # Use validated ID
+                "author": model_data.get("hf_author"),
+                "sha": model_data.get("hf_sha"),
+                "last_modified": model_data.get("hf_last_modified"),
+                "tags": model_data.get("hf_tags"),
+                "pipeline_tag": model_data.get("hf_pipeline_tag"),
+                "downloads": model_data.get("hf_downloads"),
+                "likes": model_data.get("hf_likes"),
+                "library_name": model_data.get("hf_library_name"),
+                "created_at": model_data.get("created_at"),
+                "updated_at": model_data.get("updated_at"),
+            }
+
+            logger.debug(
+                f"Mapped data for model {retrieved_model_id}: {mapped_data}"
+            )  # Log with actual ID
+
+            # Convert to HFModelDetail Pydantic model using the explicitly mapped data
+            # Mypy should now be satisfied as model_id is confirmed to be str
+            return HFModelDetail(**mapped_data)
 
         except Exception as e:
             logger.exception(

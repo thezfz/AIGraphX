@@ -146,10 +146,27 @@ class SearchFilterModel(BaseModel):
         None, description="按研究领域筛选论文（例如 CV、NLP 等），支持多选。"
     )
     pipeline_tag: Optional[str] = Field(
-        None, description="按任务类型筛选模型（例如 text-generation、image-classification 等）。"
+        None,
+        description="按任务类型筛选模型（例如 text-generation、image-classification 等）。",
     )
+    # 新增模型和论文的过滤器
+    filter_authors: Optional[List[str]] = Field(
+        None, description="按作者名称筛选论文（模糊匹配，支持多选，任一匹配即可）。"
+    )
+    filter_library_name: Optional[str] = Field(
+        None,
+        description="按库名称筛选模型（例如 transformers、diffusers，精确匹配，忽略大小写）。",
+    )
+    filter_tags: Optional[List[str]] = Field(
+        None, description="按标签筛选模型（要求所有提供的标签都存在）。"
+    )
+    filter_author: Optional[str] = Field(
+        None, description="按作者/组织名称筛选模型（模糊匹配，忽略大小写）。"
+    )
+
     sort_by: Optional[str] = Field(
-        None, description="结果排序依据（score、published_date、title 等）。"
+        None,
+        description="结果排序依据（score、published_date、title、likes、downloads、last_modified 等）。",
     )
     sort_order: Optional[Literal["asc", "desc"]] = Field(
         "desc", description="排序顺序，asc（升序）或 desc（降序）。"

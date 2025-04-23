@@ -1154,7 +1154,9 @@ async def test_hybrid_search_keyword_search_error(
 
     assert len(result.items) == 1
     # Add isinstance check before accessing paper_id
-    assert isinstance(result.items[0], SearchResultItem) and result.items[0].paper_id == 1
+    assert (
+        isinstance(result.items[0], SearchResultItem) and result.items[0].paper_id == 1
+    )
     assert result.items[0].score is not None  # Should have RRF score from semantic
     assert result.items[0].score > 0
     mock_faiss_repo_papers.search_similar.assert_awaited_once()
@@ -1213,9 +1215,23 @@ async def test_hybrid_search_rrf_logic_semantic_only(
 
     assert len(result.items) == 2
     # Find items by ID
-    item1 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 1), None)
-    item2 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 2), None)
-    
+    item1 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 1
+        ),
+        None,
+    )
+    item2 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 2
+        ),
+        None,
+    )
+
     assert item1 is not None
     assert item2 is not None
     assert item1.score is not None
@@ -1259,8 +1275,22 @@ async def test_hybrid_search_rrf_logic_keyword_only(
 
     assert len(result.items) == 2
     # Add type check before accessing score
-    item1 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 1), None)
-    item2 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 2), None)
+    item1 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 1
+        ),
+        None,
+    )
+    item2 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 2
+        ),
+        None,
+    )
     assert item1 is not None and item1.score is None
     assert item2 is not None and item2.score is None
 
@@ -1384,8 +1414,10 @@ async def test_hybrid_search_sorting_default(
     assert isinstance(item0, SearchResultItem) and item0.paper_id == 2  # Highest score
     # Check the next two IDs, order might depend on secondary sort (paper_id if scores are identical)
     paper_ids_1_and_2 = set()
-    if isinstance(item1, SearchResultItem): paper_ids_1_and_2.add(item1.paper_id)
-    if isinstance(item2, SearchResultItem): paper_ids_1_and_2.add(item2.paper_id)
+    if isinstance(item1, SearchResultItem):
+        paper_ids_1_and_2.add(item1.paper_id)
+    if isinstance(item2, SearchResultItem):
+        paper_ids_1_and_2.add(item2.paper_id)
     assert paper_ids_1_and_2 == {1, 3}
 
 
@@ -1430,6 +1462,10 @@ async def test_hybrid_search_sorting_with_filter(
         published_before=None,
         filter_area=None,
         pipeline_tag=None,
+        filter_authors=None,
+        filter_library_name=None,
+        filter_tags=None,
+        filter_author=None,
     )
     result = await search_service.perform_hybrid_search("query", filters=filters)
 
@@ -1437,7 +1473,9 @@ async def test_hybrid_search_sorting_with_filter(
     # Add type checks before accessing paper_id
     item0 = result.items[0]
     item1 = result.items[1]
-    assert isinstance(item0, SearchResultItem) and item0.paper_id == 1  # Title "ABC" comes before "XYZ"
+    assert (
+        isinstance(item0, SearchResultItem) and item0.paper_id == 1
+    )  # Title "ABC" comes before "XYZ"
     assert isinstance(item1, SearchResultItem) and item1.paper_id == 2
 
 
@@ -1465,6 +1503,10 @@ async def test_hybrid_search_sorting_invalid_filter_key(
         filter_area=None,
         sort_order="desc",  # Provide a valid default sort_order
         pipeline_tag=None,
+        filter_authors=None,
+        filter_library_name=None,
+        filter_tags=None,
+        filter_author=None,
     )
     result = await search_service.perform_hybrid_search("query", filters=filters)
 

@@ -6,7 +6,7 @@ import traceback
 from typing import List, Dict, Any, Optional, Tuple, Set, TypedDict, Union
 from datetime import datetime, timezone, timedelta
 import sys  # For exiting early on critical errors
-import re  # For extracting ArXiv IDs and Dataset links
+import re  # For extracting ArXiv IDs
 import argparse  # 添加 argparse
 
 # --- Library Imports ---
@@ -15,7 +15,7 @@ import httpx  # Using httpx for async requests
 import tenacity
 from aiolimiter import AsyncLimiter
 import arxiv  # type: ignore[import-untyped]
-from huggingface_hub import HfApi, ModelInfo, hf_hub_download
+from huggingface_hub import HfApi, ModelInfo
 from huggingface_hub.utils import (
     RepositoryNotFoundError,
     GatedRepoError,
@@ -154,12 +154,10 @@ class PwcEntryData(TypedDict, total=False):
     pwc_id: str
     pwc_url: str
     title: Optional[str]
-    conference: Optional[str]  # Added conference
     tasks: List[str]
     datasets: List[str]
-    methods: List[str]  # Keep methods if added previously
-    repositories: List[Dict[str, Any]]  # Repo dict might need license/language
-    error: str
+    repositories: List[Dict[str, Any]]
+    error: str  # For error case
 
 
 class PaperData(TypedDict, total=False):
@@ -179,8 +177,6 @@ class ModelOutputData(TypedDict, total=False):
     hf_tags: Optional[List[str]]
     hf_pipeline_tag: Optional[str]
     hf_library_name: Optional[str]
-    hf_readme_content: Optional[str]  # Added readme
-    hf_dataset_links: List[str]  # Added dataset links
     processing_timestamp_utc: str
     linked_papers: List[PaperData]
 
@@ -589,24 +585,23 @@ async def fetch_pwc_relation_list(
     before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
-async def fetch_github_details(
+async def fetch_github_stars(
     repo_url: str, follow_redirects: bool = True, max_redirects: int = 3
-) -> Optional[Dict[str, Any]]:
+) -> Optional[int]:
     """
-    Fetches star count, license, and language from GitHub API for a given repo URL.
-    Optionally follows 301/302 redirects.
+    Fetches star count from GitHub API for a given repo URL via shared httpx client.
+    Optionally follows 301/302 redirects, handling both owner/repo and repositories/ID URLs.
     """
     if not GITHUB_TOKEN:
-        logger.warning("GitHub token not available, skipping detail fetch.")
         return None
-    if not repo_url:
+    if not repo_url:  # Simplified initial check
         return None
 
-    current_api_url_to_fetch = None
-    original_url = repo_url
+    current_api_url_to_fetch = None  # The API URL we will actually GET
+    original_url = repo_url  # Keep original for logging
     redirect_count = 0
 
-    # --- Initial URL Parsing ---
+    # --- Initial URL Parsing to get the *first* API URL ---
     try:
         if "github.com" in repo_url.lower():
             clean_url = (
@@ -630,8 +625,12 @@ async def fetch_github_details(
                 logger.debug(
                     f"Initial URL format not recognized as github.com/owner/repo: {repo_url}"
                 )
+                # It *might* already be an api.github.com/repositories/ID URL, handle below
+        # Allow direct api.github.com/repositories/ID URLs as input too
         elif "api.github.com/repositories/" in repo_url.lower():
-            current_api_url_to_fetch = repo_url
+            current_api_url_to_fetch = (
+                repo_url  # Assume it's already the correct API URL
+            )
         else:
             logger.debug(
                 f"URL does not appear to be a standard GitHub repo URL: {repo_url}"
@@ -645,38 +644,37 @@ async def fetch_github_details(
     while current_api_url_to_fetch and redirect_count <= max_redirects:
         async with github_limiter:
             logger.debug(
-                f"Fetching GitHub details from {current_api_url_to_fetch} (Attempt: {redirect_count + 1})"
+                f"Fetching GitHub data from {current_api_url_to_fetch} (Attempt: {redirect_count + 1})"
             )
             try:
                 response = await http_client.get(
                     current_api_url_to_fetch,
                     headers=github_headers,
                     follow_redirects=False,
-                )
+                )  # Disable auto redirects
 
                 if response.status_code == 200:
                     data = response.json()
                     stars = data.get("stargazers_count")
-                    language = data.get("language")
-                    license_info = data.get("license")
-                    # Safely access license name (SPDX ID)
-                    license_name = None
-                    if license_info and isinstance(license_info, dict):
-                        license_name = license_info.get("spdx_id")
-
-                    owner_repo_name = data.get("full_name", "[unknown repo]")
-                    log_prefix = f"Successfully fetched details for {owner_repo_name}: Stars={stars}, Lang={language}, License={license_name}"
-                    log_suffix = (
-                        f" (Original URL: {original_url})" if redirect_count > 0 else ""
-                    )
-                    logger.info(log_prefix + log_suffix)
-                    return {
-                        "stars": stars if isinstance(stars, int) else None,
-                        "language": language if isinstance(language, str) else None,
-                        "license": license_name
-                        if isinstance(license_name, str)
-                        else None,
-                    }
+                    owner_repo_name = data.get(
+                        "full_name", "[unknown repo]"
+                    )  # Get name from response
+                    if isinstance(stars, int):
+                        log_prefix = (
+                            f"Successfully fetched stars for {owner_repo_name}: {stars}"
+                        )
+                        log_suffix = (
+                            f" (Original URL: {original_url})"
+                            if redirect_count > 0
+                            else ""
+                        )
+                        logger.info(log_prefix + log_suffix)
+                        return stars
+                    else:
+                        logger.warning(
+                            f"Could not parse stars for {owner_repo_name}. Value: {stars}"
+                        )
+                        return None
 
                 # --- MANUAL REDIRECT HANDLING ---
                 elif (
@@ -689,36 +687,19 @@ async def fetch_github_details(
                     logger.info(
                         f"GitHub request to {current_api_url_to_fetch} redirected ({response.status_code}) to: {redirect_url}. Following redirect ({redirect_count}/{max_redirects})."
                     )
+                    # The redirect location IS the new API URL to fetch
                     current_api_url_to_fetch = redirect_url
-                    continue
+                    continue  # Go to the next iteration with the new URL
 
-                # --- Error Handling ---
                 elif response.status_code == 404:
                     logger.info(
                         f"GitHub API returned 404 for URL: {current_api_url_to_fetch}"
                     )
-                    return None
+                    return None  # Stop, resource not found
                 elif response.status_code == 403:
-                    # Check for rate limit specifically
-                    if (
-                        "X-RateLimit-Remaining" in response.headers
-                        and response.headers["X-RateLimit-Remaining"] == "0"
-                    ):
-                        reset_time_unix = int(
-                            response.headers.get("X-RateLimit-Reset", "0")
-                        )
-                        reset_time_dt = (
-                            datetime.fromtimestamp(reset_time_unix, tz=timezone.utc)
-                            if reset_time_unix
-                            else "unknown"
-                        )
-                        logger.error(
-                            f"GitHub API rate limit exceeded (403) for URL: {current_api_url_to_fetch}. Limit resets at {reset_time_dt}. Stopping retries for this repo."
-                        )
-                    else:
-                        logger.error(
-                            f"GitHub API forbidden (403) for URL: {current_api_url_to_fetch}. Check token permissions. Stopping retries for this repo."
-                        )
+                    logger.error(
+                        f"GitHub API forbidden (403) for URL: {current_api_url_to_fetch}. Check token/rate limits. Stopping retries for this repo."
+                    )
                     return None
                 elif response.status_code == 401:
                     logger.error(
@@ -729,28 +710,29 @@ async def fetch_github_details(
                     logger.warning(
                         f"HTTP error {response.status_code} fetching GitHub data from {current_api_url_to_fetch}."
                     )
-                    response.raise_for_status()
+                    response.raise_for_status()  # Raise exception for tenacity
 
             except (json.JSONDecodeError, Exception) as e:
                 logger.error(
-                    f"Error fetching/parsing GitHub details from {current_api_url_to_fetch}: {e}"
+                    f"Error fetching/parsing GitHub data from {current_api_url_to_fetch}: {e}"
                 )
                 logger.debug(traceback.format_exc())
-                raise e
+                raise e  # Reraise for tenacity
 
+    # If loop finishes due to max_redirects reached
     if redirect_count > max_redirects:
         logger.warning(
             f"Exceeded maximum redirects ({max_redirects}) for original URL: {original_url}"
         )
 
-    return None
+    return None  # Return None if stars couldn't be fetched
 
 
 async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
     """Orchestrates fetching and combining all data for a single HF model."""
     logger.info(f"--- Start processing model: {model_id} ---")
     processing_start_time = datetime.now(timezone.utc)
-    output_data: Optional[ModelOutputData] = None
+    output_data: Optional[ModelOutputData] = None  # Initialize
 
     try:
         # 1. Get HF Details
@@ -759,60 +741,9 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
             logger.error(
                 f"Failed to get required HF details for {model_id}. Skipping model."
             )
-            return None
+            return None  # Cannot proceed without basic HF info
 
-        # --- 1a. Get HF README Content ---
-        hf_readme_content: Optional[str] = None
-        try:
-            # Use hf_hub_download to get the README.md file content
-            # Import is now handled at the top level
-            readme_path = await asyncio.to_thread(
-                lambda: hf_hub_download(  # Use lambda to pass keyword args
-                    repo_id=model_id,
-                    filename="README.md",
-                    token=HF_API_TOKEN,
-                    repo_type="model",
-                    cache_dir=None,
-                    # ignore_patterns=None, # ignore_patterns is for listing files, not downloading single one
-                )
-            )
-            # Read the downloaded file content
-            with open(readme_path, "r", encoding="utf-8") as f:
-                hf_readme_content = f.read()
-            logger.info(f"Successfully fetched README for {model_id}")
-        except HfHubHTTPError as e:
-            # Handle cases where README.md doesn't exist (404) or other HTTP errors
-            status_code = e.response.status_code if hasattr(e, "response") else 0
-            if status_code == 404:
-                logger.info(f"README.md not found for model {model_id}.")
-            else:
-                logger.warning(
-                    f"HTTP error {status_code} fetching README for {model_id}: {e}"
-                )
-        except Exception as e:
-            logger.warning(f"Error fetching or reading README for {model_id}: {e}")
-            logger.debug(traceback.format_exc())
-        # --- End HF README ---
-
-        # --- 1b. Extract HF Dataset Links ---
-        hf_dataset_links: List[str] = []
-        if hf_model_info.tags:
-            # Pattern to match 'dataset:<dataset_id>'
-            dataset_pattern = re.compile(r"^dataset:([\w/-]+)$", re.IGNORECASE)
-            for tag in hf_model_info.tags:
-                match = dataset_pattern.match(tag)
-                if match:
-                    dataset_id = match.group(1)
-                    # Construct the standard Hugging Face dataset URL
-                    dataset_url = f"https://huggingface.co/datasets/{dataset_id}"
-                    hf_dataset_links.append(dataset_url)
-            if hf_dataset_links:
-                logger.info(
-                    f"Extracted dataset links for {model_id}: {hf_dataset_links}"
-                )
-        # --- End HF Dataset Links ---
-
-        # Initialize output structure with HF data (including new fields)
+        # Initialize output structure with HF data
         output_data = {
             "hf_model_id": hf_model_info.id,
             "hf_author": hf_model_info.author,
@@ -826,9 +757,7 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
             "hf_pipeline_tag": hf_model_info.pipeline_tag,
             "hf_library_name": hf_model_info.library_name,
             "processing_timestamp_utc": processing_start_time.isoformat(),
-            "hf_readme_content": hf_readme_content,
-            "hf_dataset_links": hf_dataset_links,
-            "linked_papers": [],
+            "linked_papers": [],  # Initialize list for linked papers
         }
 
         # 2. Extract ArXiv IDs from HF tags
@@ -852,35 +781,35 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                 arxiv_meta = await fetch_arxiv_metadata(arxiv_id)
                 if arxiv_meta:
                     paper_data["arxiv_metadata"] = arxiv_meta
+                    # Use the versioned ArXiv ID found by the API if available
                     paper_data["arxiv_id_versioned"] = arxiv_meta.get(
                         "arxiv_id_versioned", paper_data["arxiv_id_base"]
                     )
                 else:
-                    if output_data:  # Check if output_data exists
-                        output_data["linked_papers"].append(paper_data)
-                    continue  # Skip PWC if ArXiv fails
+                    # Logged in fetch function, still add paper entry with base ID
+                    output_data["linked_papers"].append(paper_data)
+                    continue  # Move to next ArXiv ID if metadata fails
 
                 # 3b. Find PWC Entry using the base ArXiv ID
                 pwc_entry_summary = await find_pwc_entry_by_arxiv_id(
                     paper_data["arxiv_id_base"]
                 )
                 if not pwc_entry_summary:
-                    if output_data:  # Check if output_data exists
-                        output_data["linked_papers"].append(paper_data)
-                    continue  # Add entry with ArXiv data only
+                    # Logged in find function
+                    output_data["linked_papers"].append(
+                        paper_data
+                    )  # Add entry with ArXiv data
+                    continue  # Move to next ArXiv ID if PWC entry not found
 
                 pwc_paper_id = pwc_entry_summary.get("id")
-                # --- Get conference info from PWC entry ---
-                pwc_conference = pwc_entry_summary.get("conference")
                 if not pwc_paper_id:
                     logger.warning(
                         f"PWC entry found for {paper_data['arxiv_id_base']} but missing 'id'."
                     )
-                    if output_data:  # Check if output_data exists
-                        output_data["linked_papers"].append(paper_data)
+                    output_data["linked_papers"].append(paper_data)
                     continue
 
-                # 3c. Get PWC Details (Repositories, Tasks, Datasets, Methods) concurrently
+                # 3c. Get PWC Details (Repositories, Tasks, Datasets) concurrently
                 pwc_details_tasks = {
                     "repositories": fetch_pwc_relation_list(
                         pwc_paper_id, "repositories"
@@ -924,49 +853,43 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                         f"Failed to fetch PWC methods for {pwc_paper_id}: {pwc_details['methods']}"
                     )
 
-                # --- 3d. Get GitHub Details for PWC Repositories concurrently ---
+                # 3d. Get GitHub Stars for PWC Repositories concurrently
                 processed_repos = []
                 if fetched_repos:
-                    detail_fetch_tasks = []
-                    valid_repo_data = []
+                    star_fetch_tasks = []
+                    valid_repo_data = []  # Keep track of repos we attempt to fetch stars for
                     for repo in fetched_repos:
                         repo_url = repo.get("url")
                         if repo_url and "github.com" in repo_url.lower():
-                            detail_fetch_tasks.append(fetch_github_details(repo_url))
+                            star_fetch_tasks.append(fetch_github_stars(repo_url))
                             valid_repo_data.append(repo)
                         else:
-                            # Keep existing structure but add None for new fields
+                            # If not a GitHub URL or no URL, add repo without stars
                             processed_repos.append(
                                 {
                                     "url": repo_url,
-                                    "stars": None,
+                                    "stars": None,  # Mark as not applicable or unknown
                                     "is_official": repo.get("is_official"),
                                     "framework": repo.get("framework"),
-                                    "license": None,
-                                    "language": None,
                                 }
                             )
 
-                    if detail_fetch_tasks:
-                        repo_details_results = await asyncio.gather(
-                            *detail_fetch_tasks, return_exceptions=True
+                    if star_fetch_tasks:
+                        repo_stars_results = await asyncio.gather(
+                            *star_fetch_tasks, return_exceptions=True
                         )
 
-                        for repo_meta, details_result in zip(
-                            valid_repo_data, repo_details_results
+                        for repo_meta, stars_result in zip(
+                            valid_repo_data, repo_stars_results
                         ):
                             stars = None
-                            license_name = None
-                            language = None
-                            if isinstance(details_result, dict):
-                                stars = details_result.get("stars")
-                                license_name = details_result.get("license")
-                                language = details_result.get("language")
-                            elif isinstance(details_result, Exception):
+                            if isinstance(stars_result, int):
+                                stars = stars_result
+                            elif isinstance(stars_result, Exception):
                                 logger.warning(
-                                    f"Failed to fetch GitHub details for {repo_meta.get('url')}: {details_result}"
+                                    f"Failed to fetch GitHub stars for {repo_meta.get('url')}: {stars_result}"
                                 )
-                            # Else: details_result is None
+                            # Else: stars_result is None (e.g., non-GitHub URL handled earlier or fetch returned None)
 
                             processed_repos.append(
                                 {
@@ -974,22 +897,20 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                                     "stars": stars,
                                     "is_official": repo_meta.get("is_official"),
                                     "framework": repo_meta.get("framework"),
-                                    "license": license_name,
-                                    "language": language,
                                 }
                             )
                 else:
                     logger.info(
                         f"No repositories listed in PWC entry for {pwc_paper_id}"
                     )
-                # --- End GitHub Details Fetch ---
 
-                # Assemble PWC entry data (including conference)
+                # Assemble PWC entry data
                 paper_data["pwc_entry"] = {
                     "pwc_id": pwc_paper_id,
                     "pwc_url": f"https://paperswithcode.com/paper/{pwc_paper_id}",
-                    "title": pwc_entry_summary.get("title"),
-                    "conference": pwc_conference,
+                    "title": pwc_entry_summary.get(
+                        "title"
+                    ),  # Title from PWC summary search
                     "tasks": [
                         str(task.get("name"))
                         for task in fetched_tasks
@@ -1000,26 +921,27 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                         for dataset in fetched_datasets
                         if dataset.get("name") is not None
                     ],
+                    "repositories": processed_repos,  # Includes stars where available
                     "methods": [
                         str(method.get("name"))
                         for method in fetched_methods
                         if method.get("name") is not None
                     ],
-                    "repositories": processed_repos,
                 }
 
                 # Add the fully populated paper data to the list
-                if output_data:  # Check if output_data exists
-                    output_data["linked_papers"].append(paper_data)
+                output_data["linked_papers"].append(paper_data)
 
             except Exception as e:
+                # Catch unexpected errors during the processing of a single ArXiv ID
                 logger.error(
                     f"Unexpected error processing ArXiv ID {arxiv_id} for model {model_id}: {e}"
                 )
                 logger.error(traceback.format_exc())
+                # Add partially filled paper_data to indicate an attempt was made
                 if "pwc_entry" not in paper_data:
                     paper_data["pwc_entry"] = {"error": str(e)}
-                if output_data:  # Check if output_data exists
+                if output_data:  # Ensure output_data was initialized
                     output_data["linked_papers"].append(paper_data)
                 # Continue to the next ArXiv ID
 
@@ -1027,9 +949,10 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
         return output_data
 
     except Exception as e:
+        # Catch unexpected errors at the top level of processing a model
         logger.critical(f"CRITICAL error during processing of model {model_id}: {e}")
         logger.critical(traceback.format_exc())
-        return output_data
+        return output_data  # Return potentially partial data collected before the critical error
 
 
 # --- New function to fetch target model IDs (Reusable) ---

@@ -1,21 +1,23 @@
-# 使用推荐的 Node.js LTS 版本 (撰写时为 20)
-FROM node:20-slim
+# 使用完整版 Node.js
+FROM node:20
 
 # 设置工作目录
 WORKDIR /app
 
-# (可选) 设置时区为亚洲/上海
-# RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+# 设置时区为亚洲/上海
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+# 设置环境变量
+ENV NODE_ENV=development
+ENV PATH /app/node_modules/.bin:$PATH
 
 # 全局安装 pnpm
 RUN npm install -g pnpm
 
 # 复制 package.json 和 pnpm-lock.yaml (如果存在)
-# 这一步是为了利用层缓存，只有当这些文件改变时才重新安装依赖
 COPY package.json pnpm-lock.yaml* ./
 
-# 安装依赖项 - 第一次构建时不使用 --frozen-lockfile 以生成 lock 文件
-# 后续构建如果需要严格锁定版本，可以再改回 --frozen-lockfile
+# 安装依赖
 RUN pnpm install
 
 # 复制剩余的应用代码
@@ -24,5 +26,5 @@ COPY . .
 # 暴露 Vite 开发服务器端口
 EXPOSE 5173
 
-# 默认启动命令 - 使用 npx 确保能找到 vite，并使用 --host 允许外部访问
-CMD ["npx", "vite", "--host"] 
+# 使用 pnpm 启动开发服务器
+CMD ["pnpm", "run", "dev", "--", "--host"] 

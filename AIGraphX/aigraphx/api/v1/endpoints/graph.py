@@ -97,7 +97,7 @@ async def get_paper_graph_data(
 
 
 @router.get(
-    "/models/{model_id}",
+    "/models/{model_id:path}",
     response_model=HFModelDetail,
     summary="Get details for a Hugging Face model",
     description="Retrieves detailed information for a specific Hugging Face model by its ID.",
@@ -105,7 +105,7 @@ async def get_paper_graph_data(
 )
 async def get_hf_model_details(
     model_id: str = Path(
-        ..., description="The Hugging Face model ID (e.g., 'bert-base-uncased')."
+        ..., description="The Hugging Face model ID (e.g., 'google/flan-t5-base')."
     ),
     # Ensure Depends uses the correct source
     graph_service: GraphService = Depends(deps.get_graph_service),

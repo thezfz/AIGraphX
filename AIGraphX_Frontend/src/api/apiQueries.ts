@@ -120,11 +120,28 @@ export const useModelDetail = (modelId: string | undefined, enabled: boolean = t
       if (!modelId) {
         throw new Error('Model ID is required');
       }
-      // Use the correct API path from types/api.ts
-      const response = await apiClient.get<ModelDetailResponse>(`/api/v1/graph/models/${modelId}`);
-      return response.data;
+      
+      // 使用 encodeURIComponent 确保特殊字符（如/）被正确编码
+      const encodedModelId = encodeURIComponent(modelId);
+      
+      // 日志输出，帮助调试
+      console.log(`Fetching model details for ID: ${modelId}`);
+      console.log(`Encoded URL: /api/v1/graph/models/${encodedModelId}`);
+      
+      try {
+        // Use the correct API path with encoded ID
+        const response = await apiClient.get<ModelDetailResponse>(`/api/v1/graph/models/${encodedModelId}`);
+        console.log('Model detail response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching model details:', error);
+        throw error;
+      }
     },
     enabled: enabled && !!modelId,
     staleTime: STALE_TIME,
+    // 添加重试策略
+    retry: 3,
+    retryDelay: attempt => Math.min(1000 * 2 ** attempt, 30000),
   });
 }; 

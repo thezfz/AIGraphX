@@ -100,6 +100,7 @@ class PostgresRepository:
         published_after: Optional[date] = None,
         published_before: Optional[date] = None,
         filter_area: Optional[List[str]] = None,
+        filter_authors: Optional[List[str]] = None,
         # Use Literal for specific valid column names
         sort_by: Optional[
             Literal["published_date", "title", "paper_id"]
@@ -118,9 +119,16 @@ class PostgresRepository:
             where_clauses.append(f"published_date <= %(published_before)s")
             params["published_before"] = published_before
         if filter_area and len(filter_area) > 0:
-            # 使用 ANY 操作符支持多选
             where_clauses.append(f"area = ANY(%(filter_area)s)")
             params["filter_area"] = filter_area
+        if filter_authors and len(filter_authors) > 0:
+            author_conditions = []
+            for i, author in enumerate(filter_authors):
+                param_key = f"author_filter_{i}"
+                author_conditions.append(f"authors::text ILIKE %({param_key})s")
+                params[param_key] = f"%{author}%"
+            if author_conditions:
+                where_clauses.append(f"({' OR '.join(author_conditions)})")
 
         where_sql = " AND ".join(where_clauses)
 
@@ -214,56 +222,81 @@ class PostgresRepository:
             return []
 
     async def search_models_by_keyword(
-        self, 
-        query: str, 
-        limit: int = 10, 
+        self,
+        query: str,
+        limit: int = 10,
         skip: int = 0,
-        sort_by: Optional[Literal["likes", "downloads", "last_modified"]] = "last_modified",
+        sort_by: Optional[
+            Literal["likes", "downloads", "last_modified"]
+        ] = "last_modified",
         sort_order: Optional[Literal["asc", "desc"]] = "desc",
         pipeline_tag: Optional[str] = None,
+        filter_library_name: Optional[str] = None,
+        filter_tags: Optional[List[str]] = None,
+        filter_author: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Searches hf_models table by keyword, with sorting and optional filtering."""
         search_term = f"%{query}%"
-        params: Dict[str, Any] = {"search_term": search_term, "limit": limit, "offset": skip}
-        
+        params: Dict[str, Any] = {
+            "search_term": search_term,
+            "limit": limit,
+            "offset": skip,
+        }
+
         # WHERE conditions list
         where_conditions = [
             "(hf_model_id ILIKE %(search_term)s OR hf_author ILIKE %(search_term)s OR COALESCE(hf_pipeline_tag, '') ILIKE %(search_term)s)"
         ]
         if pipeline_tag:
-            # Ensure pipeline_tag key is safe before adding to params
             safe_pipeline_tag_key = "pipeline_tag"
             where_conditions.append(f"hf_pipeline_tag = %({safe_pipeline_tag_key})s")
             params[safe_pipeline_tag_key] = pipeline_tag
-        
+
+        if filter_library_name:
+            safe_library_key = "filter_library"
+            where_conditions.append(f"hf_library_name ILIKE %({safe_library_key})s")
+            params[safe_library_key] = filter_library_name
+
+        if filter_author:
+            safe_author_key = "filter_author"
+            where_conditions.append(f"hf_author ILIKE %({safe_author_key})s")
+            params[safe_author_key] = f"%{filter_author}%"
+
+        if filter_tags and len(filter_tags) > 0:
+            safe_tags_key = "filter_tags"
+            where_conditions.append(f"hf_tags @> %({safe_tags_key})s::jsonb")
+            params[safe_tags_key] = json.dumps(filter_tags)
+
         final_where_clause = " AND ".join(where_conditions)
 
         # Fields to select
         select_fields = "hf_model_id, hf_author, hf_pipeline_tag, hf_last_modified, hf_tags, hf_likes, hf_downloads, hf_library_name, hf_sha"
 
-        # --- Safely construct ORDER BY clause --- 
+        # --- Safely construct ORDER BY clause ---
         valid_sort_columns = {
             "likes": "hf_likes",
             "downloads": "hf_downloads",
             "last_modified": "hf_last_modified",
         }
         # Validate sort_by against allowed keys
-        db_sort_column = valid_sort_columns.get(sort_by or "last_modified", "hf_last_modified") 
+        db_sort_column = valid_sort_columns.get(
+            sort_by or "last_modified", "hf_last_modified"
+        )
         # Validate sort_order
         db_sort_order = "DESC" if sort_order == "desc" else "ASC"
         # Construct the ORDER BY string safely (column name is validated)
         # Use double quotes for potential case sensitivity or reserved words
         order_by_sql_str = f'ORDER BY "{db_sort_column}" {db_sort_order} NULLS LAST, "hf_model_id" {db_sort_order}'
-        # --- End Safe ORDER BY --- 
+        # --- End Safe ORDER BY ---
 
-        # Construct final SQL strings using f-strings 
+        # Construct final SQL strings using f-strings
         # (Placeholders %(...)s are handled by psycopg execute)
         count_sql_str = f"""
             SELECT COUNT(*) 
             FROM hf_models 
             WHERE {final_where_clause}
         """
-        
+
         select_sql_str = f"""
             SELECT {select_fields} 
             FROM hf_models 
@@ -282,24 +315,34 @@ class PostgresRepository:
                     await cur.execute(count_sql_str, params)
                     count_result = await cur.fetchone()
                     total_count = count_result["count"] if count_result else 0
-                    logger.debug(f"[search_models_by_keyword] Total count: {total_count} for query '{query}' and filters {{\"pipeline_tag\": {pipeline_tag}}}")
+                    logger.debug(
+                        f"[search_models_by_keyword] Total count: {total_count} for query '{query}' and filters {{\"pipeline_tag\": {pipeline_tag}}}"
+                    )
 
                     # Execute main select query only if needed
                     if total_count > skip:
                         # Execute the built SQL string with the param dict
                         await cur.execute(select_sql_str, params)
                         results = await cur.fetchall()
-                        logger.debug(f"[search_models_by_keyword] Fetched {len(results)} rows for page.")
+                        logger.debug(
+                            f"[search_models_by_keyword] Fetched {len(results)} rows for page."
+                        )
                     else:
-                        logger.debug("[search_models_by_keyword] Skip is >= total_count, not fetching rows.")
-            
+                        logger.debug(
+                            "[search_models_by_keyword] Skip is >= total_count, not fetching rows."
+                        )
+
             return results, total_count
-        
+
         except psycopg.Error as db_err:
-            logger.error(f"Database error during keyword model search: {db_err}", exc_info=True)
+            logger.error(
+                f"Database error during keyword model search: {db_err}", exc_info=True
+            )
             return [], 0
         except Exception as e:
-            logger.error(f"Unexpected error during keyword model search: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error during keyword model search: {e}", exc_info=True
+            )
             return [], 0
 
     async def count_hf_models(self) -> int:
@@ -861,7 +904,7 @@ class PostgresRepository:
     async def get_unique_paper_areas(self) -> List[str]:
         """
         获取论文表中所有唯一的领域（area）值。
-        
+
         返回:
             List[str]: 所有唯一的论文领域列表
         """
@@ -879,10 +922,49 @@ class PostgresRepository:
                     results = await cur.fetchall()
                     # 结果是包含单个元素的元组列表，提取字符串值
                     areas = [row[0] for row in results if row[0]]
-            
+
             self.logger.info(f"从数据库获取到 {len(areas)} 个唯一论文领域")
             return areas
         except Exception as e:
             self.logger.error(f"获取唯一论文领域列表时出错: {e}")
             self.logger.debug(traceback.format_exc())
             return []
+
+    # --- START: Add get_methods_for_papers --- #
+    async def get_methods_for_papers(
+        self, paper_ids: List[int]
+    ) -> Dict[int, List[str]]:
+        """Fetches related method names for a list of paper IDs."""
+        if not paper_ids:
+            return {}
+
+        # Assuming a table paper_methods links papers to methods
+        # and a methods table exists with method_id and name
+        query = """
+            SELECT pm.paper_id, m.name
+            FROM paper_methods pm
+            JOIN methods m ON pm.method_id = m.method_id
+            WHERE pm.paper_id = ANY(%s);
+            """
+        result_map: Dict[int, List[str]] = {pid: [] for pid in paper_ids}
+        try:
+            async with self.pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(query, (paper_ids,))
+                    async for record in cur:
+                        if record["paper_id"] in result_map:
+                            method_name = record.get("name")
+                            if method_name:
+                                result_map[record["paper_id"]].append(method_name)
+        except asyncpg.exceptions.UndefinedTableError:
+            logger.warning(
+                "Table 'paper_methods' or 'methods' does not exist. Cannot fetch methods."
+            )
+            # Return empty map if tables don't exist
+            return {}
+        except Exception as e:
+            logger.error(f"Error fetching methods for papers: {e}")
+            # Return potentially partial map on other errors
+        return result_map
+
+    # --- END: Add get_methods_for_papers --- #

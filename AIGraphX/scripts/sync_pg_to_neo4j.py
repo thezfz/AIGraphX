@@ -289,17 +289,15 @@ async def sync_papers_and_relations(
 
 
 # --- START: CORRECTED enrich_papers_with_relations --- #
-# --- START: CORRECTED enrich_papers_with_relations --- #
 async def enrich_papers_with_relations(
     pg_repo: PostgresRepository, paper_batch: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
-    """Fetches related Tasks, Datasets, Repositories for a batch of papers
+    """Fetches related Tasks, Datasets, Methods, and Repositories for a batch of papers
     and adds them to the corresponding paper dictionaries.
     """
     if not paper_batch:
         return []
 
-    # Create a map of paper_id to the paper dictionary for easy lookup and modification
     paper_map = {
         int(p["paper_id"]): p for p in paper_batch if p.get("paper_id") is not None
     }
@@ -313,6 +311,7 @@ async def enrich_papers_with_relations(
     for paper_data in paper_map.values():
         paper_data.setdefault("tasks", [])
         paper_data.setdefault("datasets", [])
+        paper_data.setdefault("methods", [])  # Add default for methods
         paper_data.setdefault("repositories", [])
 
     # --- Fetch Tasks using the CORRECT repository method --- #
@@ -320,61 +319,64 @@ async def enrich_papers_with_relations(
         tasks_map = await pg_repo.get_tasks_for_papers(paper_ids)
         for paper_id, tasks_list in tasks_map.items():
             if paper_id in paper_map:
-                paper_map[paper_id]["tasks"] = tasks_list  # Assign fetched tasks
+                paper_map[paper_id]["tasks"] = tasks_list
     except Exception as e:
         logger.error(
             f"Error fetching tasks relations for paper IDs {paper_ids[:10]}...: {e}",
             exc_info=True,
         )
-        # Continue enrichment even if one type fails
 
     # --- Fetch Datasets using the CORRECT repository method --- #
     try:
         datasets_map = await pg_repo.get_datasets_for_papers(paper_ids)
         for paper_id, datasets_list in datasets_map.items():
             if paper_id in paper_map:
-                paper_map[paper_id]["datasets"] = (
-                    datasets_list  # Assign fetched datasets
-                )
+                paper_map[paper_id]["datasets"] = datasets_list
     except Exception as e:
         logger.error(
             f"Error fetching datasets relations for paper IDs {paper_ids[:10]}...: {e}",
             exc_info=True,
         )
-        # Continue enrichment
+
+    # --- Fetch Methods using the CORRECT repository method --- #
+    # Assuming a method pg_repo.get_methods_for_papers exists
+    try:
+        methods_map = await pg_repo.get_methods_for_papers(paper_ids)  # Call the method
+        for paper_id, methods_list in methods_map.items():
+            if paper_id in paper_map:
+                paper_map[paper_id]["methods"] = methods_list  # Assign fetched methods
+    except AttributeError:
+        logger.error(
+            f"PostgresRepository does not have a 'get_methods_for_papers' method. Methods cannot be enriched."
+        )
+    except Exception as e:
+        logger.error(
+            f"Error fetching methods relations for paper IDs {paper_ids[:10]}...: {e}",
+            exc_info=True,
+        )
 
     # --- Fetch Repositories using the CORRECT repository method --- #
     try:
-        # Ensure correct method is called: get_repositories_for_papers
-        repos_map = await pg_repo.get_repositories_for_papers(
-            paper_ids
-        )  # Returns Dict[int, List[str]]
+        repos_map = await pg_repo.get_repositories_for_papers(paper_ids)
         for paper_id, repo_urls in repos_map.items():
             if paper_id in paper_map:
-                # Convert list of URLs to list of dicts as expected by Neo4j Cypher query
                 paper_map[paper_id]["repositories"] = [
-                    {"url": url}
-                    for url in repo_urls
-                    if url  # Ensure URL is not empty
+                    {"url": url} for url in repo_urls if url
                 ]
     except Exception as e:
         logger.error(
             f"Error fetching repository relations for paper IDs {paper_ids[:10]}...: {e}",
             exc_info=True,
         )
-        # Continue enrichment
 
-    # --- Add logging before returning --- #
     if paper_map:
         first_paper_key = next(iter(paper_map))
         logger.debug(
-            f"[Enrich] Returning enriched batch. Example paper ID {first_paper_key} tasks: {paper_map[first_paper_key].get('tasks')}"
+            f"[Enrich] Returning enriched batch. Example paper ID {first_paper_key} tasks: {paper_map[first_paper_key].get('tasks')}, methods: {paper_map[first_paper_key].get('methods')}"  # Log methods too
         )
     else:
         logger.debug("[Enrich] Returning empty batch.")
-    # --- End logging --- #
 
-    # Return the list of paper dictionaries, which have been modified in-place via paper_map
     return list(paper_map.values())
 
 
@@ -547,8 +549,8 @@ async def main(reset_neo4j: bool) -> None:
     """Main function to run the synchronization process."""
     pg_pool = None
     neo4j_driver = None
-    pg_repo = None # Initialize repo variable
-    neo4j_repo = None # Initialize repo variable
+    pg_repo = None  # Initialize repo variable
+    neo4j_repo = None  # Initialize repo variable
     total_papers_synced = 0
 
     try:
@@ -564,7 +566,9 @@ async def main(reset_neo4j: bool) -> None:
         # Add assertions for Neo4j connection details
         assert NEO4J_URI is not None, "NEO4J_URI environment variable must be set"
         assert NEO4J_USER is not None, "NEO4J_USER environment variable must be set"
-        assert NEO4J_PASSWORD is not None, "NEO4J_PASSWORD environment variable must be set"
+        assert NEO4J_PASSWORD is not None, (
+            "NEO4J_PASSWORD environment variable must be set"
+        )
         # Explicitly create the driver instance
         neo4j_driver = AsyncGraphDatabase.driver(
             NEO4J_URI,
@@ -581,7 +585,7 @@ async def main(reset_neo4j: bool) -> None:
         # --- Optional: Reset Neo4j if requested ---
         if reset_neo4j:
             logger.warning("Resetting Neo4j database...")
-            await neo4j_repo.reset_database() # Assuming this method exists
+            await neo4j_repo.reset_database()  # Assuming this method exists
             logger.info("Neo4j database reset complete.")
         else:
             logger.info("Skipping Neo4j database reset.")
@@ -591,9 +595,13 @@ async def main(reset_neo4j: bool) -> None:
         total_papers_synced = await run_sync(pg_repo=pg_repo, neo4j_repo=neo4j_repo)
 
     except asyncpg.exceptions.CannotConnectNowError as pg_conn_err:
-        logger.critical(f"FATAL: Could not connect to PostgreSQL at {DATABASE_URL}. Check if DB is running and accessible. Error: {pg_conn_err}")
+        logger.critical(
+            f"FATAL: Could not connect to PostgreSQL at {DATABASE_URL}. Check if DB is running and accessible. Error: {pg_conn_err}"
+        )
     except ConnectionRefusedError as neo4j_conn_err:
-         logger.critical(f"FATAL: Could not connect to Neo4j at {NEO4J_URI}. Check if DB is running and accessible. Error: {neo4j_conn_err}")
+        logger.critical(
+            f"FATAL: Could not connect to Neo4j at {NEO4J_URI}. Check if DB is running and accessible. Error: {neo4j_conn_err}"
+        )
     except Exception as e:
         logger.critical(f"An unexpected error occurred during synchronization: {e}")
         # No need to import traceback here
@@ -609,7 +617,9 @@ async def main(reset_neo4j: bool) -> None:
         logger.info("Connections closed (or closing attempted).")
         # Log final paper count if sync was attempted
         if total_papers_synced > 0:
-            logger.info(f"Final count of papers synced in this run: {total_papers_synced}")
+            logger.info(
+                f"Final count of papers synced in this run: {total_papers_synced}"
+            )
 
 
 if __name__ == "__main__":
@@ -617,7 +627,7 @@ if __name__ == "__main__":
         description="Synchronize data from PostgreSQL to Neo4j for AIGraphX."
     )
     parser.add_argument(
-        "--reset-neo4j",
+        "--reset",
         action="store_true",
         help="Clear the entire Neo4j database before starting synchronization.",
     )
@@ -625,7 +635,7 @@ if __name__ == "__main__":
 
     # Run the main asynchronous function
     try:
-        asyncio.run(main(reset_neo4j=args.reset_neo4j))
+        asyncio.run(main(reset_neo4j=args.reset))
         logger.info("Script finished successfully.")
     except Exception as e:
         # Catch errors happening during asyncio.run() itself if any

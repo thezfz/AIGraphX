@@ -124,6 +124,24 @@ def upgrade() -> None:
         "CREATE INDEX IF NOT EXISTS idx_pwc_datasets_name ON pwc_datasets(dataset_name);"
     )
 
+    # Create pwc_methods table
+    op.execute("""
+    CREATE TABLE IF NOT EXISTS pwc_methods (
+        method_id SERIAL PRIMARY KEY,
+        paper_id INTEGER NOT NULL REFERENCES papers(paper_id) ON DELETE CASCADE,
+        method_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (paper_id, method_name)
+    );
+    """)
+    # Indexes for pwc_methods
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_methods_paper ON pwc_methods(paper_id);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_methods_name ON pwc_methods(method_name);"
+    )
+
     # Create pwc_repositories table
     op.execute("""
     CREATE TABLE IF NOT EXISTS pwc_repositories (
@@ -180,6 +198,7 @@ def downgrade() -> None:
     # Drop tables (in reverse order of creation or considering dependencies)
     op.execute("DROP TABLE IF EXISTS pwc_repositories CASCADE;")
     op.execute("DROP TABLE IF EXISTS pwc_datasets CASCADE;")
+    op.execute("DROP TABLE IF EXISTS pwc_methods CASCADE;")
     op.execute("DROP TABLE IF EXISTS pwc_tasks CASCADE;")
     op.execute("DROP TABLE IF EXISTS model_paper_links CASCADE;")
     op.execute("DROP TABLE IF EXISTS papers CASCADE;")

@@ -46,7 +46,9 @@ class Settings(BaseSettings):
     # General
     project_name: str = Field(default="AIGraphX", alias="PROJECT_NAME")
     api_v1_str: str = Field(default="/api/v1", alias="API_V1_STR")
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO", alias="LOG_LEVEL")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO", alias="LOG_LEVEL"
+    )
     environment: str = Field(default="development", alias="ENVIRONMENT")
 
     # Database URLs (Primary)
@@ -116,12 +118,16 @@ class Settings(BaseSettings):
     # --- REMOVED old class Config --- #
 
     # --- Validation ---
-    @field_validator("database_url", "neo4j_uri", mode='before')
+    @field_validator("database_url", "neo4j_uri", mode="before")
     @classmethod
-    def check_not_empty(cls, value: Optional[str], info: ValidationInfo) -> Optional[str]:
+    def check_not_empty(
+        cls, value: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
         """Ensure essential URLs are provided if set."""
         if value == "":
-            logger.warning(f"{info.field_name} is set to an empty string. Treating as None.")
+            logger.warning(
+                f"{info.field_name} is set to an empty string. Treating as None."
+            )
             return None
         return value
 

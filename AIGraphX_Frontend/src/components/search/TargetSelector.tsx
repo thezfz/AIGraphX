@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type SearchTarget = 'papers' | 'models' | 'both';
+export type SearchTarget = 'papers' | 'models';
 
 interface TargetSelectorProps {
   searchTarget: SearchTarget;
@@ -25,7 +25,7 @@ const TargetSelector: React.FC<TargetSelectorProps> = ({ searchTarget, onChange 
         </button>
         <button
           type="button"
-          className={`px-3 py-1 text-sm ${
+          className={`px-3 py-1 text-sm rounded-r-md ${
             searchTarget === 'models' 
               ? 'bg-blue-600 text-white' 
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -33,17 +33,6 @@ const TargetSelector: React.FC<TargetSelectorProps> = ({ searchTarget, onChange 
           onClick={() => onChange('models')}
         >
           模型
-        </button>
-        <button
-          type="button"
-          className={`px-3 py-1 text-sm rounded-r-md ${
-            searchTarget === 'both' 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-          onClick={() => onChange('both')}
-        >
-          全部
         </button>
       </div>
     </div>

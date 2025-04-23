@@ -115,7 +115,7 @@ async def lifespan(
 
     # Initialize Faiss Repository for Papers (Simplified Error Handling)
     logger.info("Initializing Faiss Repository for Papers...")
-    faiss_repo_papers_instance = None # Temporary variable
+    faiss_repo_papers_instance = None  # Temporary variable
     try:
         # Only try to instantiate the repository here
         faiss_repo_papers_instance = FaissRepository(
@@ -123,14 +123,22 @@ async def lifespan(
             id_map_path=settings.faiss_mapping_path,
             id_type="int",
         )
-        app.state.faiss_repo_papers = faiss_repo_papers_instance # Assign if instantiation succeeded
+        app.state.faiss_repo_papers = (
+            faiss_repo_papers_instance  # Assign if instantiation succeeded
+        )
         logger.info("FaissRepository for Papers instantiated.")
 
     except Exception as e:
         # Catch only instantiation errors
-        logger.exception(f"Failed to initialize Papers Faiss Repository (Instantiation Error): {e}")
-        app.state.faiss_repo_papers = None  # Ensure state is None on instantiation exception
-        logger.error("CRITICAL: Papers Faiss Repository instantiation failed. Raising RuntimeError.")
+        logger.exception(
+            f"Failed to initialize Papers Faiss Repository (Instantiation Error): {e}"
+        )
+        app.state.faiss_repo_papers = (
+            None  # Ensure state is None on instantiation exception
+        )
+        logger.error(
+            "CRITICAL: Papers Faiss Repository instantiation failed. Raising RuntimeError."
+        )
         raise RuntimeError("Papers Faiss Repository initialization failed") from e
 
     # Now, check readiness *outside* the instantiation try...except block
@@ -139,27 +147,36 @@ async def lifespan(
         logger.info("Checking readiness of Papers Faiss Repository...")
         if not faiss_repo_papers_instance.is_ready():
             index_exists = os.path.exists(settings.faiss_index_path)
-            ntotal = faiss_repo_papers_instance.index.ntotal if faiss_repo_papers_instance.index else None
+            ntotal = (
+                faiss_repo_papers_instance.index.ntotal
+                if faiss_repo_papers_instance.index
+                else None
+            )
             map_exists_and_not_empty = bool(faiss_repo_papers_instance.id_map)
             logger.error(
                 f"[Lifespan Check Failed] Papers Faiss State: index_exists={index_exists}, ntotal={ntotal}, map_not_empty={map_exists_and_not_empty}"
             )
             # Raise the specific error for not being ready
-            logger.error("CRITICAL: Papers Faiss Repository is not ready. Raising RuntimeError.")
+            logger.error(
+                "CRITICAL: Papers Faiss Repository is not ready. Raising RuntimeError."
+            )
             # Set state to None *before* raising, as the repo is unusable
             app.state.faiss_repo_papers = None
-            raise RuntimeError("Papers Faiss Repository is not ready after initialization.")
+            raise RuntimeError(
+                "Papers Faiss Repository is not ready after initialization."
+            )
         else:
             logger.info("Papers Faiss Repository initialized and ready.")
     else:
         # This case is technically handled by the raise in the except block,
         # but adding an info log might be useful for clarity.
-        logger.info("Skipping readiness check for Papers Faiss Repository due to instantiation failure.")
-
+        logger.info(
+            "Skipping readiness check for Papers Faiss Repository due to instantiation failure."
+        )
 
     # Initialize Faiss Repository for Models (Simplified Error Handling)
     logger.info("Initializing Faiss Repository for Models...")
-    faiss_repo_models_instance = None # Temporary variable
+    faiss_repo_models_instance = None  # Temporary variable
     try:
         # Only try to instantiate the repository here
         faiss_repo_models_instance = FaissRepository(
@@ -167,14 +184,22 @@ async def lifespan(
             id_map_path=settings.models_faiss_mapping_path,
             id_type="str",
         )
-        app.state.faiss_repo_models = faiss_repo_models_instance # Assign if instantiation succeeded
+        app.state.faiss_repo_models = (
+            faiss_repo_models_instance  # Assign if instantiation succeeded
+        )
         logger.info("FaissRepository for Models instantiated.")
 
     except Exception as e:
         # Catch only instantiation errors
-        logger.exception(f"Failed to initialize Models Faiss Repository (Instantiation Error): {e}")
-        app.state.faiss_repo_models = None  # Ensure state is None on instantiation exception
-        logger.error("CRITICAL: Models Faiss Repository instantiation failed. Raising RuntimeError.")
+        logger.exception(
+            f"Failed to initialize Models Faiss Repository (Instantiation Error): {e}"
+        )
+        app.state.faiss_repo_models = (
+            None  # Ensure state is None on instantiation exception
+        )
+        logger.error(
+            "CRITICAL: Models Faiss Repository instantiation failed. Raising RuntimeError."
+        )
         raise RuntimeError("Models Faiss Repository initialization failed") from e
 
     # Now, check readiness *outside* the instantiation try...except block
@@ -183,40 +208,57 @@ async def lifespan(
         logger.info("Checking readiness of Models Faiss Repository...")
         if not faiss_repo_models_instance.is_ready():
             index_exists_m = os.path.exists(settings.models_faiss_index_path)
-            ntotal_m = faiss_repo_models_instance.index.ntotal if faiss_repo_models_instance.index else None
+            ntotal_m = (
+                faiss_repo_models_instance.index.ntotal
+                if faiss_repo_models_instance.index
+                else None
+            )
             map_exists_and_not_empty_m = bool(faiss_repo_models_instance.id_map)
             logger.error(
                 f"[Lifespan Check Failed] Models Faiss State: index_exists={index_exists_m}, ntotal={ntotal_m}, map_not_empty={map_exists_and_not_empty_m}"
             )
             # Raise the specific error for not being ready
-            logger.error("CRITICAL: Models Faiss Repository is not ready. Raising RuntimeError.")
+            logger.error(
+                "CRITICAL: Models Faiss Repository is not ready. Raising RuntimeError."
+            )
             # Set state to None *before* raising
             app.state.faiss_repo_models = None
-            raise RuntimeError("Models Faiss Repository is not ready after initialization.")
+            raise RuntimeError(
+                "Models Faiss Repository is not ready after initialization."
+            )
         else:
             logger.info("Models Faiss Repository initialized and ready.")
     else:
-        logger.info("Skipping readiness check for Models Faiss Repository due to instantiation failure.")
-
+        logger.info(
+            "Skipping readiness check for Models Faiss Repository due to instantiation failure."
+        )
 
     # Initialize Text Embedder (New)
     logger.info("Initializing Text Embedder...")
     try:
         if settings.sentence_transformer_model:
-            logger.info(f"Loading sentence transformer model: {settings.sentence_transformer_model} on device: {settings.embedder_device}")
+            logger.info(
+                f"Loading sentence transformer model: {settings.sentence_transformer_model} on device: {settings.embedder_device}"
+            )
             app.state.embedder = TextEmbedder(
                 model_name=settings.sentence_transformer_model,
-                device=settings.embedder_device
+                device=settings.embedder_device,
             )
-            logger.info(f"Text Embedder initialized successfully with model. Model loaded: {app.state.embedder.model is not None}")
+            logger.info(
+                f"Text Embedder initialized successfully with model. Model loaded: {app.state.embedder.model is not None}"
+            )
         else:
-            logger.warning("SENTENCE_TRANSFORMER_MODEL not specified in settings. Embedder not initialized.")
+            logger.warning(
+                "SENTENCE_TRANSFORMER_MODEL not specified in settings. Embedder not initialized."
+            )
             app.state.embedder = None
     except Exception as e:
         logger.exception(f"Failed to initialize Text Embedder: {e}")
         # Depending on criticality, you might want to raise an error here
-        logger.error("CRITICAL: Text Embedder initialization failed. Semantic search will be unavailable.")
-        app.state.embedder = None # Ensure it's None if init fails
+        logger.error(
+            "CRITICAL: Text Embedder initialization failed. Semantic search will be unavailable."
+        )
+        app.state.embedder = None  # Ensure it's None if init fails
         # Optionally raise RuntimeError if embedder is absolutely required
         # raise RuntimeError("Text Embedder initialization failed") from e
 

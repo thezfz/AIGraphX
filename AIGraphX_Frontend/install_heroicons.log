@@ -1,0 +1,29 @@
+Progress: resolved 0, reused 1, downloaded 0, added 0
+Progress: resolved 697, reused 656, downloaded 0, added 0
+ WARN  6 deprecated subdependencies found: @babel/plugin-proposal-class-properties@7.18.6, @babel/plugin-proposal-nullish-coalescing-operator@7.18.6, @babel/plugin-proposal-numeric-separator@7.18.6, @babel/plugin-proposal-optional-chaining@7.21.0, @babel/plugin-proposal-private-methods@7.18.6, @babel/plugin-proposal-private-property-in-object@7.21.11
+Already up to date
+Progress: resolved 703, reused 662, downloaded 0, added 0
+Progress: resolved 703, reused 662, downloaded 0, added 0, done
+ WARN  Issues with peer dependencies found
+.
+└─┬ eslint-config-react-app 7.0.1
+  ├── ✕ unmet peer eslint@^8.0.0: found 9.25.0
+  ├─┬ @typescript-eslint/eslint-plugin 5.62.0
+  │ ├── ✕ unmet peer eslint@"^6.0.0 || ^7.0.0 || ^8.0.0": found 9.25.0
+  │ └─┬ @typescript-eslint/type-utils 5.62.0
+  │   └─┬ @typescript-eslint/utils 5.62.0
+  │     └── ✕ unmet peer eslint@"^6.0.0 || ^7.0.0 || ^8.0.0": found 9.25.0
+  ├─┬ @typescript-eslint/parser 5.62.0
+  │ └── ✕ unmet peer eslint@"^6.0.0 || ^7.0.0 || ^8.0.0": found 9.25.0
+  ├─┬ eslint-plugin-flowtype 8.0.3
+  │ └── ✕ unmet peer eslint@^8.1.0: found 9.25.0
+  ├─┬ eslint-plugin-jest 25.7.0
+  │ ├── ✕ unmet peer eslint@"^6.0.0 || ^7.0.0 || ^8.0.0": found 9.25.0
+  │ └─┬ @typescript-eslint/experimental-utils 5.62.0
+  │   └── ✕ unmet peer eslint@"^6.0.0 || ^7.0.0 || ^8.0.0": found 9.25.0
+  ├─┬ eslint-plugin-react-hooks 4.6.2
+  │ └── ✕ unmet peer eslint@"^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0": found 9.25.0
+  └─┬ eslint-plugin-testing-library 5.11.1
+    └── ✕ unmet peer eslint@"^7.5.0 || ^8.0.0": found 9.25.0
+
+Done in 2.7s using pnpm v10.9.0

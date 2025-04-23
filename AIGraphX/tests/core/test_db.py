@@ -259,12 +259,14 @@ async def test_lifespan_faiss_not_ready(
     mock_repo_instance_models.is_ready.return_value = True  # Models is ready
 
     ctx = lifespan(mock_app, mock_settings)
-    with pytest.raises(RuntimeError, match="Papers Faiss Repository is not ready after initialization."):
+    with pytest.raises(
+        RuntimeError, match="Papers Faiss Repository is not ready after initialization."
+    ):
         await ctx.__aenter__()
 
     # Check state after expected failure
-    assert mock_app.state.pg_pool == mock_pool_instance # Should still be set
-    assert mock_app.state.neo4j_driver == mock_driver_instance # Should still be set
+    assert mock_app.state.pg_pool == mock_pool_instance  # Should still be set
+    assert mock_app.state.neo4j_driver == mock_driver_instance  # Should still be set
     assert mock_app.state.faiss_repo_papers is None  # Should be None or not set
     assert (
         mock_app.state.faiss_repo_models is None
@@ -303,7 +305,9 @@ async def test_lifespan_faiss_papers_init_failure(  # Renamed slightly for clari
     mock_repo_class.side_effect = side_effect
 
     ctx = lifespan(mock_app, mock_settings)
-    with pytest.raises(RuntimeError, match="Papers Faiss Repository initialization failed"):
+    with pytest.raises(
+        RuntimeError, match="Papers Faiss Repository initialization failed"
+    ):
         await ctx.__aenter__()
 
     # Check state after expected failure
@@ -345,7 +349,9 @@ async def test_lifespan_faiss_models_init_failure(  # Renamed slightly for clari
     mock_repo_class.side_effect = side_effect
 
     ctx = lifespan(mock_app, mock_settings)
-    with pytest.raises(RuntimeError, match="Models Faiss Repository initialization failed"):
+    with pytest.raises(
+        RuntimeError, match="Models Faiss Repository initialization failed"
+    ):
         await ctx.__aenter__()
 
     # Check state after expected failure

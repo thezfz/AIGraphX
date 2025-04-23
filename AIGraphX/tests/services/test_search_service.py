@@ -358,7 +358,9 @@ async def test_perform_keyword_search_papers_filter_sort(
     assert result.total == 1
     assert len(result.items) == 1
     assert result.items[0].pwc_id == MOCK_PAPER_KEY_1["pwc_id"]
-    assert result.items[0].area == area[0]  # Check if filter applied (mock simulates it)
+    assert (
+        result.items[0].area == area[0]
+    )  # Check if filter applied (mock simulates it)
 
     # Check search_papers_by_keyword was called with filters/sort
     mock_pg_repo.search_papers_by_keyword.assert_awaited_once_with(

@@ -7,6 +7,10 @@ export interface Filters {
   year_to?: number | null;
   pipeline_tag?: string | null; // 添加 pipeline_tag 过滤器
   area?: string[]; // 更新为字符串数组，支持多选
+  library_name?: string | null; // 模型库
+  tags?: string[]; // 模型标签 (数组形式)
+  author?: string | null; // 模型作者
+  paper_author?: string[] | null; // 论文作者 (改为字符串数组)
 }
 
 interface FilterPanelProps {
@@ -40,6 +44,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
   const [yearTo, setYearTo] = useState<string>('');
   const [selectedPipelineTag, setSelectedPipelineTag] = useState<string>('');
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]); // 添加领域多选状态
+  const [libraryName, setLibraryName] = useState<string>('');
+  const [tagsInput, setTagsInput] = useState<string>('');
+  const [authorInput, setAuthorInput] = useState<string>('');
+  const [paperAuthorInput, setPaperAuthorInput] = useState<string>('');
   
   // 使用 React Query 获取可用的论文领域
   const { data: availableAreas = [], isLoading: isLoadingAreas } = usePaperAreas();
@@ -50,16 +58,28 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
     setYearTo(initialFilters.year_to?.toString() ?? '');
     setSelectedPipelineTag(initialFilters.pipeline_tag ?? '');
     setSelectedAreas(initialFilters.area || []);
+    setLibraryName(initialFilters.library_name ?? '');
+    setTagsInput(initialFilters.tags?.join(', ') ?? '');
+    setAuthorInput(initialFilters.author ?? '');
+    setPaperAuthorInput(initialFilters.paper_author?.join(', ') ?? ''); // 将数组转为逗号分隔字符串用于输入框
   }, [initialFilters]);
 
   const handleApplyFilters = () => {
+    const tagsArray = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+    // 将输入的单个论文作者转为单元素数组（如果非空）
+    const paperAuthorArray = paperAuthorInput.trim() ? [paperAuthorInput.trim()] : null;
+
     const newFilters: Filters = {
       year_from: yearFrom ? parseInt(yearFrom, 10) : null,
       year_to: yearTo ? parseInt(yearTo, 10) : null,
       pipeline_tag: selectedPipelineTag || null,
       area: selectedAreas.length > 0 ? selectedAreas : undefined, // 只在有选中值时添加
+      library_name: libraryName.trim() || null,
+      tags: tagsArray.length > 0 ? tagsArray : undefined,
+      author: authorInput.trim() || null,
+      paper_author: paperAuthorArray, // 使用处理后的数组
     };
-    // 移除值为 null 或 NaN 或空字符串的键
+    // 移除值为 null 或 NaN 或空字符串或空数组的键
     Object.keys(newFilters).forEach(key => {
       const filterKey = key as keyof Filters;
       const value = newFilters[filterKey];
@@ -70,6 +90,13 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
       }
     });
     onFilterChange(newFilters);
+    // 不再需要在应用后清除输入框，因为状态会从 SearchPage 的 filters 状态更新
+    // setSelectedPipelineTag('');
+    // setSelectedAreas([]);
+    // setLibraryName('');
+    // setTagsInput('');
+    // setAuthorInput('');
+    // setPaperAuthorInput('');
   };
 
   const handleClearFilters = () => {
@@ -77,6 +104,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
     setYearTo('');
     setSelectedPipelineTag('');
     setSelectedAreas([]);
+    setLibraryName('');
+    setTagsInput('');
+    setAuthorInput('');
+    setPaperAuthorInput('');
     onFilterChange({}); // 清空所有过滤器
   };
 
@@ -93,6 +124,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
   const showYearFilter = target === 'papers';
   const showPipelineTagFilter = target === 'models';
   const showAreaFilter = target === 'papers';
+  const showLibraryFilter = target === 'models';
+  const showTagsFilter = target === 'models';
+  const showAuthorFilter = target === 'models';
+  const showPaperAuthorFilter = target === 'papers';
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -121,6 +156,21 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
               />
             </div>
           </div>
+        )}
+
+        {/* 论文作者过滤器 (仅论文) */}
+        {showPaperAuthorFilter && (
+            <div className="space-y-2">
+                <label htmlFor="paperAuthorInput" className="block text-sm font-medium text-gray-600">论文作者</label>
+                <input
+                    id="paperAuthorInput"
+                    type="text"
+                    placeholder="输入作者姓名"
+                    value={paperAuthorInput}
+                    onChange={(e) => setPaperAuthorInput(e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
         )}
 
         {/* 论文领域多选过滤器 (仅论文) */}
@@ -172,6 +222,51 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ initialFilters, onFilterChang
                         </option>
                     ))}
                 </select>
+            </div>
+        )}
+
+        {/* 模型库过滤器 (仅模型) */}
+        {showLibraryFilter && (
+            <div className="space-y-2">
+                <label htmlFor="libraryNameInput" className="block text-sm font-medium text-gray-600">模型库 (例如 transformers)</label>
+                <input
+                    id="libraryNameInput"
+                    type="text"
+                    placeholder="输入库名称"
+                    value={libraryName}
+                    onChange={(e) => setLibraryName(e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
+        )}
+
+        {/* 模型标签过滤器 (仅模型, 逗号分隔) */}
+        {showTagsFilter && (
+            <div className="space-y-2">
+                <label htmlFor="tagsInput" className="block text-sm font-medium text-gray-600">模型标签 (逗号分隔)</label>
+                <input
+                    id="tagsInput"
+                    type="text"
+                    placeholder="例如 vision, text-classification"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
+        )}
+
+        {/* 模型作者过滤器 (仅模型) */}
+        {showAuthorFilter && (
+            <div className="space-y-2">
+                <label htmlFor="authorInput" className="block text-sm font-medium text-gray-600">模型作者/机构</label>
+                <input
+                    id="authorInput"
+                    type="text"
+                    placeholder="输入作者或机构名称"
+                    value={authorInput}
+                    onChange={(e) => setAuthorInput(e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                />
             </div>
         )}
 

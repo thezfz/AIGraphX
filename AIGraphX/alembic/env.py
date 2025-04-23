@@ -2,6 +2,7 @@ import os
 import sys
 from logging.config import fileConfig
 from typing import Optional, Union, cast
+from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -13,6 +14,14 @@ from alembic import context
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+# --- Explicitly load .env file first ---
+dotenv_path = os.path.join(project_root, ".env")
+if os.path.exists(dotenv_path):
+    print(f"Loading environment variables from: {dotenv_path}")
+    load_dotenv(dotenv_path=dotenv_path, override=False)
+else:
+    print(f"Warning: .env file not found at {dotenv_path}")
 
 # --- Prioritize DATABASE_URL environment variable ---
 DB_URL: Optional[str] = os.getenv("DATABASE_URL")

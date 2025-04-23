@@ -286,6 +286,15 @@ class Neo4jRepository:
             ON CREATE SET r_data.created_at = timestamp()
         )
 
+        // --- START: Add Merge Method relationships --- 
+        FOREACH (method_name IN paper_props.methods | // Assumes methods is a list
+            MERGE (m:Method {name: method_name})
+            ON CREATE SET m.created_at = timestamp()
+            MERGE (p)-[r_meth:USES_METHOD]->(m)
+            ON CREATE SET r_meth.created_at = timestamp()
+        )
+        // --- END: Add Merge Method relationships --- 
+
         // Merge Repository and Framework relationships
         FOREACH (repo_data IN paper_props.repositories | // Assumes repositories is a list of maps
             // Ensure repo_data and url are valid before merging Repo

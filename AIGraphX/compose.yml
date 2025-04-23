@@ -78,9 +78,9 @@ services:
       # Ensure curl is available in the final image if using this
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 30s # Increased from 10s
       retries: 3
-      start_period: 90s # Increased start period for GPU init and model loading
+      start_period: 180s # Increased from 90s
 
   # PostgreSQL Database Service
   postgres:
@@ -154,9 +154,14 @@ services:
       context: ../AIGraphX_Frontend  # 相对于 AIGraphX/ 指向 AIGraphX_Frontend/
       dockerfile: Containerfile
     volumes:
-      - ../AIGraphX_Frontend:/app:z   # 挂载前端代码, :z 用于 SELinux (常见于 Fedora)
-      # 使用命名卷持久化 node_modules，而不是匿名卷
-      - frontend_node_modules:/app/node_modules:z
+      # 只挂载源代码文件，避免覆盖容器内构建的文件
+      - ../AIGraphX_Frontend/src:/app/src:z
+      - ../AIGraphX_Frontend/public:/app/public:z
+      - ../AIGraphX_Frontend/index.html:/app/index.html:z
+      - ../AIGraphX_Frontend/vite.config.ts:/app/vite.config.ts:z
+      - ../AIGraphX_Frontend/tsconfig.json:/app/tsconfig.json:z
+      - ../AIGraphX_Frontend/tailwind.config.js:/app/tailwind.config.js:z
+      - ../AIGraphX_Frontend/postcss.config.js:/app/postcss.config.js:z
     ports:
       - "5173:5173" # 映射 Vite 端口
     environment:
@@ -183,7 +188,7 @@ volumes:
   # neo4j_plugins:
   aigraphx_data:
   aigraphx_logs:
-  # 添加命名卷用于持久化前端 node_modules
+  # 添加前端 node_modules 命名卷
   frontend_node_modules:
 
 # Define the custom network
