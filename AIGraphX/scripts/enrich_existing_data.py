@@ -33,7 +33,7 @@ load_dotenv(dotenv_path=dotenv_path)
 HF_API_TOKEN = os.getenv("HUGGINGFACE_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_API_KEY")
 
-DEFAULT_INPUT_JSONL = "data/aigraphx_knowledge_data.jsonl"
+DEFAULT_INPUT_JSONL = "data/aigraphx_knowledge_data_v1.jsonl"
 DEFAULT_OUTPUT_JSONL = "data/aigraphx_knowledge_data_enriched.jsonl"
 CHECKPOINT_FILE_ENRICH = "data/enrich_checkpoint.txt"  # Use a separate checkpoint file
 CHECKPOINT_INTERVAL_ENRICH = 100
