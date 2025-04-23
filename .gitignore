@@ -168,3 +168,4 @@ AIGraphX_Frontend/coverage/ # Frontend specific coverage
 # *.pyd # Replaced by specific rules
 # .specstory/ # Replaced by specific rules
 AGX.code-workspace
+AIGraphX/.cursorindexingignore
