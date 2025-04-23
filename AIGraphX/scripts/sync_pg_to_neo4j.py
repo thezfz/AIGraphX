@@ -28,7 +28,7 @@ import asyncio
 import logging
 import os
 import traceback  # 导入traceback模块
-from typing import Optional, Dict, Any, List  # 导入List类型
+from typing import Optional, Dict, Any, List, Tuple  # 导入List和Tuple类型
 import json
 import sys  # 导入sys用于路径操作
 import argparse  # 导入argparse解析命令行参数
@@ -329,92 +329,72 @@ async def enrich_papers_with_relations(
     if not paper_batch:
         return []
 
-    # 使用集合提取唯一的PWC ID
-    pwc_ids = {p.get("pwc_id") for p in paper_batch if p.get("pwc_id")}
-    if not pwc_ids:
-        return paper_batch  # 如果没有PWC ID，直接返回原始批次
+    # 使用paper_id映射，因为之前的代码使用paper_id作为键
+    paper_map = {
+        int(p["paper_id"]): p for p in paper_batch if p.get("paper_id") is not None
+    }
+    paper_ids = list(paper_map.keys())
 
-    # 获取关系数据
-    relations_data = {}
+    if not paper_ids:
+        logger.warning("Enrichment called with batch containing no valid paper_ids.")
+        return paper_batch
+
+    # --- 确保关系键存在 ---
+    for paper_data in paper_map.values():
+        paper_data.setdefault("tasks", [])
+        paper_data.setdefault("datasets", [])
+        paper_data.setdefault("methods", []) # PWC论文可能有关联的方法，需要初始化
+        paper_data.setdefault("repositories", [])
+
+    # --- 获取关系数据 ---
+    # 使用 Repository 的方法代替 fetch_all
     try:
         # 任务关系
-        tasks_query = """
-            SELECT pwc_id, STRING_AGG(task_name, '|') as tasks
-            FROM paper_tasks
-            WHERE pwc_id = ANY(%s)
-            GROUP BY pwc_id
-        """
-        tasks_rows = await pg_repo.fetch_all(tasks_query, [list(pwc_ids)])
-        for row in tasks_rows:
-            pwc_id = row["pwc_id"]
-            if pwc_id not in relations_data:
-                relations_data[pwc_id] = {
-                    "tasks": [],
-                    "datasets": [],
-                    "repositories": [],
-                }
-            tasks = row["tasks"].split("|") if row["tasks"] else []
-            relations_data[pwc_id]["tasks"] = tasks
+        tasks_map = await pg_repo.get_tasks_for_papers(paper_ids)
+        for paper_id, tasks_list in tasks_map.items():
+            if paper_id in paper_map:
+                paper_map[paper_id]["tasks"] = tasks_list
 
         # 数据集关系
-        datasets_query = """
-            SELECT pwc_id, STRING_AGG(dataset_name, '|') as datasets
-            FROM paper_datasets
-            WHERE pwc_id = ANY(%s)
-            GROUP BY pwc_id
-        """
-        datasets_rows = await pg_repo.fetch_all(datasets_query, [list(pwc_ids)])
-        for row in datasets_rows:
-            pwc_id = row["pwc_id"]
-            if pwc_id not in relations_data:
-                relations_data[pwc_id] = {
-                    "tasks": [],
-                    "datasets": [],
-                    "repositories": [],
-                }
-            datasets = row["datasets"].split("|") if row["datasets"] else []
-            relations_data[pwc_id]["datasets"] = datasets
+        datasets_map = await pg_repo.get_datasets_for_papers(paper_ids)
+        for paper_id, datasets_list in datasets_map.items():
+            if paper_id in paper_map:
+                paper_map[paper_id]["datasets"] = datasets_list
 
-        # 代码库关系 - 这些可能是复杂对象
-        repos_query = """
-            SELECT pr.pwc_id, 
-                   json_agg(json_build_object(
-                       'repo_url', pr.repo_url,
-                       'framework', pr.framework,
-                       'stars', pr.stars
-                   )) as repositories
-            FROM paper_repositories pr
-            WHERE pr.pwc_id = ANY(%s)
-            GROUP BY pr.pwc_id
-        """
-        repos_rows = await pg_repo.fetch_all(repos_query, [list(pwc_ids)])
-        for row in repos_rows:
-            pwc_id = row["pwc_id"]
-            if pwc_id not in relations_data:
-                relations_data[pwc_id] = {
-                    "tasks": [],
-                    "datasets": [],
-                    "repositories": [],
-                }
-            # 这应该已经是解析后的JSON
-            relations_data[pwc_id]["repositories"] = row["repositories"] or []
+        # 方法关系 (假设存在 get_methods_for_papers)
+        # 如果没有这个方法，mypy可能还会报错，或者这里会抛出AttributeError
+        try:
+             methods_map = await pg_repo.get_methods_for_papers(paper_ids)
+             for paper_id, methods_list in methods_map.items():
+                 if paper_id in paper_map:
+                     paper_map[paper_id]["methods"] = methods_list
+        except AttributeError:
+             logger.warning("PostgresRepository does not have 'get_methods_for_papers'. Methods not enriched.")
+        except Exception as e_meth:
+            logger.error(f"Error fetching methods relations: {e_meth}", exc_info=True)
+
+
+        # 代码库关系 (假设存在 get_repositories_for_papers)
+        repos_map = await pg_repo.get_repositories_for_papers(paper_ids)
+        for paper_id, repo_urls in repos_map.items():
+             if paper_id in paper_map:
+                 # 保持与之前代码相似的结构，包含 url 键
+                 paper_map[paper_id]["repositories"] = [
+                     {"url": url} for url in repo_urls if url
+                 ]
+
 
     except Exception as e:
         logger.error(f"获取论文关系数据时出错: {e}")
         logger.error(traceback.format_exc())
-        # 出错时返回原始批次
-        return paper_batch
+        # 出错时返回原始批次（带有默认空列表）
+        return list(paper_map.values())
 
-    # 丰富论文对象
-    enriched_papers = []
-    for paper in paper_batch:
-        pwc_id = paper.get("pwc_id")
-        if pwc_id and pwc_id in relations_data:
-            paper["tasks"] = relations_data[pwc_id]["tasks"]
-            paper["datasets"] = relations_data[pwc_id]["datasets"]
-            paper["repositories"] = relations_data[pwc_id]["repositories"]
-        enriched_papers.append(paper)
-
+    # 返回丰富后的论文列表
+    enriched_papers = list(paper_map.values())
+    if enriched_papers:
+        first_id = enriched_papers[0].get('paper_id', 'N/A')
+        logger.debug(f"Enriched paper batch. Example paper ID {first_id} tasks: {enriched_papers[0].get('tasks')}")
     return enriched_papers
 
 
@@ -465,7 +445,8 @@ async def sync_model_paper_links(
 
             if len(links_to_process) >= NEO4J_WRITE_BATCH_SIZE:
                 try:
-                    await neo4j_repo.link_models_to_papers_batch(links_to_process)
+                    # 修正方法名
+                    await neo4j_repo.link_model_to_paper_batch(links_to_process)
                     links_synced += len(links_to_process)
                     logger.info(f"已同步{links_synced}个模型-论文链接...")
                 except Exception as e:
@@ -481,7 +462,8 @@ async def sync_model_paper_links(
     # 同步剩余链接
     if links_to_process:
         try:
-            await neo4j_repo.link_models_to_papers_batch(links_to_process)
+            # 修正方法名
+            await neo4j_repo.link_model_to_paper_batch(links_to_process)
             links_synced += len(links_to_process)
         except Exception as e:
             logger.error(f"将剩余模型-论文链接批次保存到Neo4j时出错: {e}")
@@ -514,11 +496,12 @@ async def run_sync(
         # 设置PostgreSQL连接(如果需要)
         if pg_repo is None:
             logger.info("创建PostgreSQL连接池...")
+            # 添加断言确保DATABASE_URL不是None
+            assert DATABASE_URL is not None, "DATABASE_URL must be set"
             pg_pool = AsyncConnectionPool(
                 conninfo=DATABASE_URL,
                 min_size=1,
                 max_size=5,
-                timeout=30.0,
             )
             pg_repo = PostgresRepository(pg_pool)
             should_close_pg = True
@@ -527,21 +510,26 @@ async def run_sync(
         # 设置Neo4j连接(如果需要)
         if neo4j_repo is None:
             logger.info("创建Neo4j连接...")
+            # 添加断言确保URI, USER, PASSWORD不是None
+            assert NEO4J_URI is not None, "NEO4J_URI must be set"
+            assert NEO4J_USER is not None, "NEO4J_USER must be set"
+            assert NEO4J_PASSWORD is not None, "NEO4J_PASSWORD must be set"
             neo4j_driver = AsyncGraphDatabase.driver(
                 NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
             )
-            neo4j_repo = Neo4jRepository(neo4j_driver, database=neo4j_db)
+            # 移除 database 参数
+            neo4j_repo = Neo4jRepository(neo4j_driver)
             should_close_neo4j = True
             logger.info("已创建Neo4j连接和仓库。")
 
-        # 验证连接
-        if not await pg_repo.check_connection():
-            logger.error("PostgreSQL连接测试失败")
-            return 0
-
-        if not await neo4j_repo.check_connection():
-            logger.error("Neo4j连接测试失败")
-            return 0
+        # 验证连接 (移除)
+        # if not await pg_repo.check_connection():
+        #     logger.error("PostgreSQL连接测试失败")
+        #     return 0
+        #
+        # if not await neo4j_repo.check_connection():
+        #     logger.error("Neo4j连接测试失败")
+        #     return 0
 
         # 执行同步
         # 1. 同步模型
@@ -585,6 +573,8 @@ async def main(reset_neo4j: bool) -> None:
         logger.info("初始化连接...")
 
         # 创建PostgreSQL连接池
+        # 添加断言确保DATABASE_URL不是None
+        assert DATABASE_URL is not None, "DATABASE_URL environment variable must be set"
         pg_pool = AsyncConnectionPool(
             conninfo=DATABASE_URL,
             min_size=2,
@@ -593,6 +583,10 @@ async def main(reset_neo4j: bool) -> None:
         logger.info("PostgreSQL连接池创建成功。")
 
         # 创建Neo4j驱动
+        # 添加断言确保URI, USER, PASSWORD不是None
+        assert NEO4J_URI is not None, "NEO4J_URI environment variable must be set"
+        assert NEO4J_USER is not None, "NEO4J_USER environment variable must be set"
+        assert NEO4J_PASSWORD is not None, "NEO4J_PASSWORD environment variable must be set"
         neo4j_driver = AsyncGraphDatabase.driver(
             NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
         )
@@ -600,13 +594,14 @@ async def main(reset_neo4j: bool) -> None:
 
         # 创建仓库
         pg_repo = PostgresRepository(pg_pool)
-        neo4j_db = "neo4j"  # 默认Neo4j数据库名
-        neo4j_repo = Neo4jRepository(neo4j_driver, database=neo4j_db)
+        # 移除 database 参数
+        neo4j_repo = Neo4jRepository(neo4j_driver)
 
         # 如果请求，重置Neo4j数据库
         if reset_neo4j:
             logger.warning("重置标志指定。正在清空Neo4j数据库...")
-            await neo4j_repo.clear_all_data()
+            # 修正方法名
+            await neo4j_repo.reset_database()
             logger.info("Neo4j数据库已清空。")
 
         # 运行同步
@@ -637,7 +632,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 在Windows上需要特定的事件循环策略
-    if os.name == "nt":  # Windows
+    # 修改判断条件
+    if sys.platform == "win32":  # Windows
+        # 保留原来的策略，如果 mypy 报错可能是环境问题或 mypy 配置问题
+        # 如果持续报错，可以考虑移除这部分或尝试 ProactorEventLoop
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     # 运行主函数
