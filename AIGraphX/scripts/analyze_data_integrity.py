@@ -37,7 +37,7 @@ import argparse   # 用于解析命令行参数，使脚本更灵活
 
 # --- 配置常量 ---
 # 默认的输入 JSONL 文件路径（假设是 enrich 脚本处理后的文件）
-DEFAULT_INPUT_JSONL = "data/aigraphx_knowledge_data_enriched.jsonl"
+DEFAULT_INPUT_JSONL = "data/aigraphx_knowledge_data.jsonl"
 # 默认的输出报告文件路径
 DEFAULT_REPORT_FILE = "logs/data_validation_report.txt"
 # 默认的日志文件路径
