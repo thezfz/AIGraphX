@@ -1,204 +1,234 @@
-# Podman Compose file for AIGraphX development environment (v1.0)
-# Defines the FastAPI app, PostgreSQL, and Neo4j services.
+# Podman Compose 文件 for AIGraphX 开发环境 (v1.0)
+# 该文件定义了运行 AIGraphX 开发环境所需的服务及其配置，包括：
+# - app: FastAPI 后端应用服务。
+# - postgres: PostgreSQL 数据库服务。
+# - neo4j: Neo4j 图数据库服务。
+# - frontend: (可选) 前端开发服务器。
+# 它简化了多容器应用的启动、管理和网络连接。
 services:
-  # FastAPI Application Service
+  # --- FastAPI 应用服务 ('app') ---
   app:
-    # Build the image using the Containerfile in the current directory
+    # 构建配置：指定如何构建该服务的镜像。
     build:
-      context: .
-      dockerfile: Containerfile
-    env_file: 
-      - .env # Load variables from .env file
+      context: . # 构建上下文目录为当前目录 (包含 Containerfile 的目录)。
+      dockerfile: Containerfile # 指定使用的 Dockerfile (或 Containerfile)。
+    # 环境文件：指定从哪个文件加载环境变量。
+    env_file:
+      - .env # 从项目根目录下的 .env 文件加载。
+    # 环境变量：直接在 compose 文件中定义或覆盖环境变量。
     environment:
       # --- 系统时区设置 ---
-      - TZ=Asia/Shanghai
-      # --- Proxy Settings (Using reliable host DNS name) ---
-      # Use values from .env if defined, otherwise use these defaults
+      - TZ=Asia/Shanghai # 设置容器时区为上海。
+      # --- 代理设置 (重要：用于容器内访问外部网络，如 HF Hub) ---
+      # 使用宿主机的 DNS 名称 (如 172.23.176.1，根据实际情况修改) 作为代理地址。
+      # 优先使用 .env 文件中定义的值，否则使用这里的默认值。
       - http_proxy=${HTTP_PROXY:-http://172.23.176.1:7890}
       - https_proxy=${HTTPS_PROXY:-http://172.23.176.1:7890}
-      - HTTP_PROXY=${HTTP_PROXY:-http://172.23.176.1:7890}
+      - HTTP_PROXY=${HTTP_PROXY:-http://172.23.176.1:7890} # 部分应用可能需要大写形式
       - HTTPS_PROXY=${HTTPS_PROXY:-http://172.23.176.1:7890}
-      # --- Hosts that should NOT use the proxy ---
+      # --- 不需要走代理的主机/域名 ---
+      # localhost, 127.0.0.1: 容器自身。
+      # .internal: Podman/Docker 内部网络域名后缀。
+      # postgres, neo4j: 服务名称，用于服务间通信。
+      # host.containers.internal: 特殊 DNS 名称，指向宿主机。
       - no_proxy=${NO_PROXY:-localhost,127.0.0.1,.internal,postgres,neo4j,host.containers.internal}
       - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,.internal,postgres,neo4j,host.containers.internal}
-      # --- Application Specific Environment Variables (Loaded via env_file) ---
-      # Values like API keys, DB passwords will be loaded from .env
-      # Non-sensitive defaults can remain here or be defined in .env
+      # --- 应用特定环境变量 (大部分敏感信息通过 env_file 从 .env 加载) ---
+      # EMBEDDER_DEVICE: 指定文本嵌入器使用的设备 (cpu 或 cuda)。
       - EMBEDDER_DEVICE=${EMBEDDER_DEVICE:-cuda}
+      # API_HOST/PORT: FastAPI 应用监听的主机和端口 (应与 Containerfile 中的 CMD 匹配)。
       - API_HOST=${API_HOST:-0.0.0.0}
       - API_PORT=${API_PORT:-8000}
-      - POSTGRES_USER=${POSTGRES_USER:-aigraphx_user} # Referenced by DATABASE_URL
-      # POSTGRES_PASSWORD is loaded from .env via env_file
-      - POSTGRES_DB=${POSTGRES_DB:-aigraphx}         # Referenced by DATABASE_URL
-      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}     # Referenced by DATABASE_URL
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}         # Referenced by DATABASE_URL
-      # Construct DATABASE_URL using variables loaded from .env or defaults above
+      # PostgreSQL 连接参数 (部分值由 env_file 加载)。
+      - POSTGRES_USER=${POSTGRES_USER:-aigraphx_user} # 数据库用户名
+      # POSTGRES_PASSWORD 从 .env 加载。
+      - POSTGRES_DB=${POSTGRES_DB:-aigraphx}         # 数据库名称
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}     # 数据库服务名 (用于容器间通信)
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}         # 数据库端口
+      # 数据库连接 URL (使用其他变量构建)。
       - DATABASE_URL=postgresql://${POSTGRES_USER:-aigraphx_user}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-aigraphx}
-      - NEO4J_URI=neo4j://neo4j:7687 # Service name for internal connection
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-test_password} # Use placeholder with default fallback
-      - PWC_API_KEY=${PWC_API_KEY} # Use placeholder
-      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY} # Use placeholder
-      - GITHUB_API_KEY=${GITHUB_API_KEY} # Use placeholder
-      - RELOAD=true # For uvicorn --reload flag in CMD
-      # 添加详细的Uvicorn日志配置
-      - UVICORN_LOG_LEVEL=debug # 设置Uvicorn日志级别为debug
-      - UVICORN_ACCESS_LOG=true # 启用访问日志记录
-      # Add other necessary variables from .env or config if needed
-    # Name the container for easier identification
+      # Neo4j 连接参数。
+      - NEO4J_URI=neo4j://neo4j:7687 # 使用服务名 'neo4j' 连接。
+      - NEO4J_USER=neo4j            # Neo4j 用户名。
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-test_password} # Neo4j 密码 (优先从 .env 读取)。
+      # API 密钥 (值应在 .env 文件中定义)。
+      - PWC_API_KEY=${PWC_API_KEY}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+      - GITHUB_API_KEY=${GITHUB_API_KEY}
+      # 其他配置。
+      - RELOAD=true # 传递给 Containerfile 中的 uvicorn 命令 (未使用)。
+      # Uvicorn 日志配置。
+      - UVICORN_LOG_LEVEL=debug # 设置日志级别。
+      - UVICORN_ACCESS_LOG=true # 启用访问日志。
+    # 容器名称：为容器指定一个易于识别的名称。
     container_name: aigraphx_app
-    # Map the host port 8000 to the container port 8000 (defined by API_PORT in .env)
+    # 端口映射：将宿主机的端口映射到容器的端口 (<宿主机端口>:<容器端口>)。
     ports:
-      - "8000:8000" # Expose app port
-    # Mount the current directory into the container's /app directory
-    # This allows code changes on the host to be reflected inside the container (for reload)
+      - "8000:8000" # 将宿主机的 8000 端口映射到容器的 8000 端口。
+    # 卷挂载：将宿主机目录或命名卷挂载到容器内部。
     volumes:
-      - .:/app:z # ':z' is important for SELinux systems like Fedora
-      # Mount data and logs directories as named volumes
+      # 绑定挂载当前目录 (.) 到容器的 /app 目录。
+      # 这使得在宿主机上修改代码可以实时反映到容器内部，配合 uvicorn 的 --reload 实现热重载。
+      # ':z' 标记是 SELinux 所需，用于正确设置挂载点的安全上下文。
+      - .:/app:z
+      # 将宿主机的 ./data 目录挂载到容器的 /app/data。
       - ./data:/app/data
+      # 将命名卷 `aigraphx_logs` 挂载到容器的 /app/logs 目录，用于持久化日志。
       - aigraphx_logs:/app/logs
-    # Define dependencies: The app service depends on the database services
+    # 依赖关系：定义服务启动顺序。
     depends_on:
-      - postgres
-      - neo4j
-    # Connect this service to the defined network
+      - postgres # app 服务会在 postgres 服务启动后启动。
+      - neo4j    # app 服务会在 neo4j 服务启动后启动。
+    # 网络：将服务连接到指定的网络。
     networks:
-      - aigraphx_network
-    # Set restart policy
+      - aigraphx_network # 连接到下面定义的 aigraphx_network 网络。
+    # 部署资源配置 (可选，主要用于 Swarm 或 K8s，但 Podman 也可能利用部分信息)。
     deploy:
       resources:
         reservations:
           devices:
+            # GPU 相关配置，允许容器访问宿主机的 NVIDIA GPU。
             - driver: nvidia
-              count: all  # Request access to all available GPUs
-              capabilities: [gpu]
-    restart: unless-stopped
-    # Add healthcheck for the app service
+              count: all # 请求访问所有可用的 GPU。
+              capabilities: [gpu] # 请求 GPU 能力。
+    # 重启策略：定义容器退出时的行为。
+    restart: unless-stopped # 除非手动停止，否则容器退出后总是自动重启。
+    # 健康检查：定义如何检查容器是否正常运行。
     healthcheck:
-      # Ensure curl is available in the final image if using this
+      # 使用 curl 命令检查 FastAPI 应用的 /health 端点是否返回成功状态码。
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 30s # Increased from 10s
-      retries: 3
-      start_period: 180s # Increased from 90s
+      interval: 30s   # 每 30 秒检查一次。
+      timeout: 30s    # 每次检查的超时时间增加到 30 秒。
+      retries: 3      # 重试 3 次失败后标记为不健康。
+      start_period: 180s # 启动后等待 180 秒才开始健康检查，给应用足够的时间初始化。
 
-  # PostgreSQL Database Service
+  # --- PostgreSQL 数据库服务 ('postgres') ---
   postgres:
-    # Use the official PostgreSQL 16 image
+    # 镜像：使用官方 PostgreSQL 16 镜像。
     image: docker.io/library/postgres:16
-    # Use the .env file for PostgreSQL configuration (user, password, db)
+    # 环境文件：同样从 .env 加载数据库配置 (用户、密码、数据库名)。
     env_file:
       - .env
-    # Name the container
+    # 容器名称。
     container_name: aigraphx_postgres
-    # Map the host port 5432 to the container port 5432
+    # 端口映射：将宿主机的 5432 端口映射到容器的 5432 端口。
     ports:
       - "5432:5432"
-    # Mount a named volume for data persistence
+    # 卷挂载：使用命名卷 `postgres_data` 持久化 PostgreSQL 数据。
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Connect this service to the defined network
+    # 网络：连接到同一网络。
     networks:
       - aigraphx_network
-    # Set restart policy
+    # 重启策略。
     restart: unless-stopped
-    # Add healthcheck for PostgreSQL
+    # 健康检查：使用 pg_isready 命令检查数据库是否准备好接受连接。
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aigraphx_user} -d ${POSTGRES_DB:-aigraphx}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Neo4j Database Service
+  # --- Neo4j 图数据库服务 ('neo4j') ---
   neo4j:
-    # Use the official Neo4j 5 image
+    # 镜像：使用官方 Neo4j 5 镜像。
     image: docker.io/library/neo4j:5
-    # Use the .env file for Neo4j configuration (password)
-    # Note: NEO4J_AUTH=neo4j/<password> format is required for Neo4j 5+
+    # 环境变量：设置 Neo4j 认证信息。
     environment:
-      # Reference the password directly from .env (avoids hardcoded default)
-      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD}" 
-      # Other Neo4j config via environment variables if needed
+      # NEO4J_AUTH 格式为 "用户名/密码"。密码优先从 .env 文件读取。
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD}"
+      # 可以根据需要添加其他 Neo4j 配置，如内存限制。
       # NEO4J_server_memory_pagecache_size: 1g
       # NEO4J_server_memory_heap_initial__size: 1g
       # NEO4J_server_memory_heap_max__size: 1g
-    # Name the container
+    # 容器名称。
     container_name: aigraphx_neo4j
-    # Map the Neo4j ports (Bolt and HTTP)
+    # 端口映射：映射 Bolt 协议端口 (7687) 和 HTTP 浏览器端口 (7474)。
     ports:
-      - "7687:7687" # Bolt protocol (used by driver)
-      - "7474:7474" # HTTP browser interface
-      - "7473:7473" # HTTPS browser interface (if enabled)
-    # Mount named volumes for data and logs persistence
+      - "7687:7687" # Bolt 协议端口，供驱动程序连接。
+      - "7474:7474" # HTTP 端口，用于访问 Neo4j Browser。
+      - "7473:7473" # HTTPS 端口 (如果启用)。
+    # 卷挂载：使用命名卷持久化 Neo4j 数据和日志。
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
-      # You might need to mount plugins or conf directories if needed
+      # 根据需要可以挂载配置或插件目录。
       # - neo4j_conf:/conf
       # - neo4j_plugins:/plugins
-    # Connect this service to the defined network
+    # 网络：连接到同一网络。
     networks:
       - aigraphx_network
-    # Set restart policy
+    # 重启策略。
     restart: unless-stopped
-    # Add healthcheck for Neo4j
+    # 健康检查：使用 wget 检查 Neo4j HTTP 浏览器端口是否可访问。
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --spider --tries=1 --timeout=5 http://localhost:7474 || exit 1"]
       interval: 30s
       timeout: 30s
       retries: 5
 
+  # --- 前端开发服务器服务 ('frontend') ---
+  # 注意: 这个服务是可选的，并且假设前端代码位于 ../AIGraphX_Frontend 目录。
   frontend:
-    container_name: aigraphx_frontend_dev
+    container_name: aigraphx_frontend_dev # 容器名称
     build:
-      context: ../AIGraphX_Frontend  # 相对于 AIGraphX/ 指向 AIGraphX_Frontend/
-      dockerfile: Containerfile
+      # 构建上下文指向前端项目的根目录。
+      context: ../AIGraphX_Frontend
+      dockerfile: Containerfile # 使用前端项目中的 Containerfile。
+    # 卷挂载：只挂载需要实时更新的源代码和配置文件。
+    # 避免挂载 node_modules 或构建产物目录，以使用容器内构建的版本。
     volumes:
-      # 只挂载源代码文件，避免覆盖容器内构建的文件
-      - ../AIGraphX_Frontend/src:/app/src:z
-      - ../AIGraphX_Frontend/public:/app/public:z
-      - ../AIGraphX_Frontend/index.html:/app/index.html:z
-      - ../AIGraphX_Frontend/vite.config.ts:/app/vite.config.ts:z
-      - ../AIGraphX_Frontend/tsconfig.json:/app/tsconfig.json:z
-      - ../AIGraphX_Frontend/tailwind.config.js:/app/tailwind.config.js:z
-      - ../AIGraphX_Frontend/postcss.config.js:/app/postcss.config.js:z
+      - ../AIGraphX_Frontend/src:/app/src:z # 挂载 src 目录
+      - ../AIGraphX_Frontend/public:/app/public:z # 挂载 public 目录
+      - ../AIGraphX_Frontend/index.html:/app/index.html:z # 挂载入口 HTML
+      - ../AIGraphX_Frontend/vite.config.ts:/app/vite.config.ts:z # 挂载 Vite 配置
+      - ../AIGraphX_Frontend/tsconfig.json:/app/tsconfig.json:z # 挂载 TS 配置
+      - ../AIGraphX_Frontend/tailwind.config.js:/app/tailwind.config.js:z # 挂载 Tailwind 配置
+      - ../AIGraphX_Frontend/postcss.config.js:/app/postcss.config.js:z # 挂载 PostCSS 配置
+      # 可以考虑使用命名卷挂载 node_modules 以加速重复构建 (见 volumes 定义部分)
+      # - frontend_node_modules:/app/node_modules
+    # 端口映射：将宿主机的 5173 端口映射到容器的 5173 端口 (Vite 默认端口)。
     ports:
-      - "5173:5173" # 映射 Vite 端口
+      - "5173:5173"
+    # 环境变量：设置 Node.js 环境为开发模式。
     environment:
       - NODE_ENV=development
-      # WDS_SOCKET_PORT=5173 # 有时需要明确指定 Websocket 端口给 Vite HMR
-    # 确保前端和后端在同一个网络
+      # WDS_SOCKET_PORT: 有时需要为 Vite 的热模块替换 (HMR) 指定 WebSocket 端口。
+      # - WDS_SOCKET_PORT=5173
+    # 网络：确保前端服务与后端服务在同一个网络中，以便 API 请求可以被代理。
     networks:
-      - aigraphx_network # 必须与 backend 服务使用的网络一致
-    # 确保后端服务已准备好接受连接（如果前端启动时需要立即代理 API）
+      - aigraphx_network
+    # 依赖关系 (可选): 如果前端启动时需要后端健康，可以添加 depends_on。
     # depends_on:
-    #   backend:
-    #     condition: service_healthy # 假设 backend 有健康检查
-    # 移除 stdin_open 和 tty 以便在后台 (-d) 模式下正确查看日志
-    # stdin_open: true # 保持 stdin 打开
-    # tty: true        # 分配 TTY
-    # command: pnpm run dev --host # 也可以在 Containerfile 中设置 CMD
+    #   app: # 依赖于名为 'app' 的服务
+    #     condition: service_healthy # 条件是 app 服务健康检查通过
+    # 移除 stdin_open 和 tty，以便在后台模式 (-d) 下运行和查看日志。
+    # stdin_open: true
+    # tty: true
+    # 启动命令 (可选): 可以在 Containerfile 中设置 CMD，或者在这里用 command 覆盖。
+    # command: pnpm run dev --host
 
-# Define named volumes for data persistence
+# --- 顶层卷定义 ---
+# 定义命名卷，用于持久化数据。卷的数据由 Podman (或 Docker) 管理。
 volumes:
-  postgres_data:
-  neo4j_data:
-  neo4j_logs:
-  # neo4j_conf:
-  # neo4j_plugins:
-  aigraphx_data:
-  aigraphx_logs:
-  # 添加前端 node_modules 命名卷
+  postgres_data: # PostgreSQL 数据卷
+  neo4j_data:    # Neo4j 数据卷
+  neo4j_logs:    # Neo4j 日志卷
+  # neo4j_conf:  # Neo4j 配置卷 (如果需要挂载)
+  # neo4j_plugins: # Neo4j 插件卷 (如果需要挂载)
+  aigraphx_data: # 后端应用数据卷 (如果应用需要在 /app/data 存储持久数据)
+  aigraphx_logs: # 后端应用日志卷
+  # 前端 node_modules 卷 (可选，用于缓存依赖，加速构建)
   frontend_node_modules:
 
-# Define the custom network
+# --- 顶层网络定义 ---
+# 定义一个自定义的桥接网络，供所有服务连接。
 networks:
   aigraphx_network:
-    driver: bridge
-    name: aigraphx_dev_network # 建议为网络指定一个明确的名字
+    driver: bridge # 使用默认的桥接驱动。
+    name: aigraphx_dev_network # 为网络指定一个明确的名称，方便管理。
 
-# 可以定义顶层 volumes (如果需要命名卷)
-# volumes:
-#   frontend_node_modules:
-
-# 注意：确保 backend 服务也配置为使用 aigraphx_network
+# --- 最终注意事项 ---
+# - 确保 .env 文件存在并包含所有必需的敏感信息 (数据库密码, API 密钥)。
+# - 如果前端服务需要代理 API 请求到后端，确保前端的配置 (如 Vite 的 proxy 设置)
+#   指向后端服务名 (例如 `target: 'http://app:8000'`)。

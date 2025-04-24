@@ -1,65 +1,107 @@
 # Containerfile for AIGraphX FastAPI application
+# 该文件定义了如何构建 AIGraphX 后端 FastAPI 应用的容器镜像。
+# 它从基础 Python 镜像开始，安装系统依赖、Miniconda，然后创建包含所有项目依赖的 Conda 环境，
+# 最后复制应用代码并设置启动命令。
+
+# 基础镜像：选择 Python 3.11 的 slim 版本，体积较小。
 FROM python:3.11-slim
 
-# 设置中国时区
+# 设置中国时区 (上海)
 ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
+    # PYTHONUNBUFFERED=1: 防止 Python 缓冲 stdout/stderr，确保日志能实时输出。
     PIP_NO_CACHE_DIR=off \
+    # PIP_NO_CACHE_DIR=off: 禁用 pip 缓存，可能会稍微减小镜像体积，但在多阶段构建中可能增加构建时间。
     PIP_DISABLE_PIP_VERSION_CHECK=on \
+    # PIP_DISABLE_PIP_VERSION_CHECK=on: 禁用 pip 版本检查，加快 pip 命令执行速度。
     DEBIAN_FRONTEND=noninteractive \
+    # DEBIAN_FRONTEND=noninteractive: 防止 apt-get 在安装过程中弹出交互式提示。
     CONDA_AUTO_UPDATE_CONDA=false \
+    # CONDA_AUTO_UPDATE_CONDA=false: 禁止 Conda 自动更新自身。
     PATH="/opt/conda/bin:$PATH"
+    # 将 Conda 的可执行文件路径添加到系统 PATH 中。
 
-# Install system dependencies (less frequent changes)
+# 安装系统级依赖 (这些依赖不经常变动，放在前面可以利用 Docker/Podman 的层缓存)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # --no-install-recommends: 不安装推荐的附加包，保持镜像精简。
     wget \
+    # wget: 用于下载 Miniconda 安装脚本。
     build-essential \
+    # build-essential: 包含编译 Python C 扩展所需的工具 (如 gcc)。
     curl \
+    # curl: 另一个常用的下载工具，可能在某些依赖安装脚本中需要。
     tzdata \
+    # tzdata: 提供时区信息数据，供上面的时区设置使用。
     && apt-get clean \
+    # 清理 apt 缓存，减小镜像体积。
     && rm -rf /var/lib/apt/lists/*
+    # 删除 apt 列表文件，进一步减小镜像体积。
 
-# Install Miniconda (less frequent changes)
+# 安装 Miniconda (不经常变动，利用层缓存)
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
+    # 下载 Miniconda 最新版本的 Linux x86_64 安装脚本。
     /bin/bash ~/miniconda.sh -b -p /opt/conda && \
+    # 以批处理模式 (-b) 静默安装 Miniconda 到 /opt/conda 目录。
     rm ~/miniconda.sh && \
+    # 删除下载的安装脚本。
     ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+    # 创建软链接，方便系统识别 Conda 初始化脚本。
     echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    # 将 Conda 初始化命令添加到 bash 配置文件中 (主要影响交互式 shell)。
     conda init bash && \
+    # 初始化 Conda，使其能在 bash 中使用 `conda activate` 等命令。
     conda --version
+    # 打印 Conda 版本以供验证。
 
-# Set the working directory
+# 设置工作目录，后续的 COPY, RUN, CMD 等指令都在此目录下执行。
 WORKDIR /app
 
-# --- Environment Setup (depends only on environment.yml) ---
-# Copy environment definition file first
+# --- 环境设置 (依赖于 environment.yml 文件) ---
+# 首先只复制环境定义文件，以便在环境文件不变时，后续步骤可以利用缓存。
 COPY environment.yml environment.yml
 
-# Create Conda environment from environment.yml (Handles both Conda and Pip deps)
+# 使用 environment.yml 文件创建名为 AIGraphX 的 Conda 环境。
+# 这个文件同时定义了 Conda 依赖和 Pip 依赖。
 RUN echo "Creating Conda environment AIGraphX from environment.yml..." && \
     conda env create -f environment.yml --name AIGraphX && \
-    # Clean up conda caches after creating environment
+    # 使用 conda env create 命令创建环境。
     conda clean -afy
+    # 清理 Conda 缓存（下载的包、索引等），减小镜像体积。
 
-# --- Verification Step (depends on environment install) ---
+# --- 验证步骤 (依赖于环境安装完成) ---
+# 确保关键的可执行文件 (如 uvicorn) 已正确安装在 Conda 环境中并且可以被调用。
 RUN echo "Verifying uvicorn installation in AIGraphX environment..." && \
-    # Try using conda run directly (should work if installed correctly)
+    # 使用 conda run 在指定环境中执行命令。
     conda run -n AIGraphX which uvicorn && \
+    # 查找 uvicorn 的路径。
     conda run -n AIGraphX uvicorn --version && \
+    # 打印 uvicorn 版本。
     echo "Uvicorn found and executable via conda run." || \
+    # 如果上述任何命令失败 (||)，则打印错误信息并退出构建 (exit 1)。
     (echo "ERROR: Uvicorn not found or not executable via conda run! Check environment.yml and installation steps." && exit 1)
 
-# --- Application Code Copy (more frequent changes) ---
-# Copy the rest of the application code *after* environment setup
+# --- 应用程序代码复制 (这部分变动较频繁，放在后面) ---
+# 在环境设置完成后，复制项目中的所有其他文件到容器的 /app 目录。
 COPY . .
 
-# --- Final Configuration ---
+# --- 最终配置 ---
+# 声明容器运行时需要监听的端口 (对应 FastAPI 应用运行的端口)。
 EXPOSE 8000
 
-# Ensure ENTRYPOINT is removed or commented out
+# 确保移除或注释掉 ENTRYPOINT，因为我们将使用 CMD 配合 conda run。
 # ENTRYPOINT ["/opt/conda/envs/AIGraphX/bin/python", "-m"]
 
-# Use shell form CMD to allow shell variable substitution before conda run
+# 使用 CMD 指令定义容器启动时要执行的默认命令。
+# 使用 shell 形式 (不带方括号) 允许在命令执行前进行 shell 变量替换 (如 ${API_HOST})。
+# --no-capture-output: 确保 uvicorn 的输出能直接显示在容器日志中。
 CMD conda run -n AIGraphX --no-capture-output uvicorn aigraphx.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000} --reload --log-level ${UVICORN_LOG_LEVEL:-debug} --access-log
+# conda run -n AIGraphX: 在 AIGraphX 环境中执行后续命令。
+# uvicorn aigraphx.main:app: 启动 uvicorn，运行 aigraphx/main.py 文件中的 app 对象。
+# --host ${API_HOST:-0.0.0.0}: 监听的主机地址。使用环境变量 API_HOST，如果未设置则默认为 0.0.0.0 (监听所有网络接口)。
+# --port ${API_PORT:-8000}: 监听的端口。使用环境变量 API_PORT，如果未设置则默认为 8000。
+# --reload: 启用热重载，当代码文件发生变化时自动重启服务 (适合开发环境)。
+# --log-level ${UVICORN_LOG_LEVEL:-debug}: 设置日志级别。使用环境变量 UVICORN_LOG_LEVEL，默认为 debug。
+# --access-log: 启用访问日志记录。

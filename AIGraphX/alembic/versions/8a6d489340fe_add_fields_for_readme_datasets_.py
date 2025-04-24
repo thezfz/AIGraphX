@@ -1,92 +1,111 @@
-"""Add fields for readme, datasets, conference, repo details, abstracts
+# -*- coding: utf-8 -*-
+"""
+Alembic 迁移文件：为多个表添加新字段。
+
+此迁移在初始表结构的基础上，为 hf_models, papers, pwc_repositories, pwc_tasks, pwc_datasets 表
+添加了新的列，以存储更多的信息，如 README 内容、数据集链接、会议信息、代码仓库详情、任务/数据集摘要等。
 
 Revision ID: 8a6d489340fe
-Revises: 23d0b64741be
-Create Date: 2025-04-23 01:22:27.675560
-
+Revises: 23d0b64741be (此迁移基于上一个创建初始表的迁移)
+Create Date: 2025-04-23 01:22:27.675560 (注意：这个日期看起来是未来的，可能是笔误)
 """
 
-from typing import Sequence, Union
+from typing import Sequence, Union # 导入类型提示
 
-from alembic import op
-import sqlalchemy as sa
+from alembic import op # 导入 Alembic 操作对象
+import sqlalchemy as sa # 导入 SQLAlchemy，用于定义列类型 (例如 sa.TEXT(), sa.VARCHAR(), sa.ARRAY())
 
 
 # revision identifiers, used by Alembic.
-revision: str = "8a6d489340fe"
-down_revision: Union[str, None] = "23d0b64741be"
+revision: str = "8a6d489340fe" # 当前迁移的 ID
+down_revision: Union[str, None] = "23d0b64741be" # 指向它所基于的前一个迁移 ID
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    # ### commands manually written ###
-    print(
-        "Applying upgrade: Add fields for readme, datasets, conference, repo details, abstracts"
+    """
+    定义将数据库模式升级到此版本的操作。
+    执行 `alembic upgrade head` 或 `alembic upgrade 8a6d489340fe` 时调用。
+    主要是添加新的列。
+    """
+    # ### 手动编写的 Alembic 命令 ###
+    print( # 在 Alembic 运行时输出信息，告知正在进行的操作
+        "正在应用升级：为 readme, datasets, conference, repo details, abstracts 添加字段"
     )
 
-    # Add column to hf_models
+    # --- 为 hf_models 表添加列 ---
+    # 添加 hf_readme_content 列，类型为 TEXT，允许为空
     op.add_column("hf_models", sa.Column("hf_readme_content", sa.TEXT(), nullable=True))
-    # PostgreSQL uses TEXT[] for string arrays. Adjust if using a different DB.
+    # 添加 hf_dataset_links 列，类型为 TEXT 数组 (PostgreSQL 支持)，允许为空
     op.add_column(
         "hf_models", sa.Column("hf_dataset_links", sa.ARRAY(sa.TEXT()), nullable=True)
     )
-    print("Added columns to hf_models.")
+    print("已向 hf_models 表添加列。")
 
-    # Add column to papers
+    # --- 为 papers 表添加列 ---
+    # 添加 conference 列，类型为 VARCHAR(255)，允许为空
     op.add_column(
         "papers", sa.Column("conference", sa.VARCHAR(length=255), nullable=True)
     )
-    print("Added column to papers.")
+    print("已向 papers 表添加列。")
 
-    # Add columns to pwc_repositories
+    # --- 为 pwc_repositories 表添加列 ---
+    # 添加 license 列，类型为 VARCHAR(100)，允许为空
     op.add_column(
         "pwc_repositories", sa.Column("license", sa.VARCHAR(length=100), nullable=True)
     )
+    # 添加 language 列，类型为 VARCHAR(100)，允许为空
     op.add_column(
         "pwc_repositories", sa.Column("language", sa.VARCHAR(length=100), nullable=True)
     )
-    print("Added columns to pwc_repositories.")
+    print("已向 pwc_repositories 表添加列。")
 
-    # Add column to pwc_tasks
+    # --- 为 pwc_tasks 表添加列 ---
+    # 添加 task_abstract 列，类型为 TEXT，允许为空
     op.add_column("pwc_tasks", sa.Column("task_abstract", sa.TEXT(), nullable=True))
-    print("Added column to pwc_tasks.")
+    print("已向 pwc_tasks 表添加列。")
 
-    # Add column to pwc_datasets
+    # --- 为 pwc_datasets 表添加列 ---
+    # 添加 dataset_abstract 列，类型为 TEXT，允许为空
     op.add_column(
         "pwc_datasets", sa.Column("dataset_abstract", sa.TEXT(), nullable=True)
     )
-    print("Added column to pwc_datasets.")
+    print("已向 pwc_datasets 表添加列。")
 
-    print("Upgrade completed.")
-    # ### end Alembic commands ###
+    print("升级完成。")
+    # ### Alembic 命令结束 ###
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
-    # ### commands manually written ###
-    print(
-        "Applying downgrade: Remove fields for readme, datasets, conference, repo details, abstracts"
+    """
+    定义将数据库模式从此版本降级（回滚）的操作。
+    执行 `alembic downgrade 8a6d489340fe` 时调用。
+    主要是删除在 `upgrade` 中添加的列。
+    """
+    # ### 手动编写的 Alembic 命令 ###
+    print( # 输出降级信息
+        "正在应用降级：移除 readme, datasets, conference, repo details, abstracts 的字段"
     )
 
-    # Drop columns (in reverse order of table modification if needed, but generally order doesn't matter for columns)
+    # --- 删除列 ---
+    # 删除操作通常与添加操作的顺序无关，但按表的反向顺序删除也无妨。
     op.drop_column("pwc_datasets", "dataset_abstract")
-    print("Dropped column from pwc_datasets.")
+    print("已从 pwc_datasets 表删除列。")
 
     op.drop_column("pwc_tasks", "task_abstract")
-    print("Dropped column from pwc_tasks.")
+    print("已从 pwc_tasks 表删除列。")
 
     op.drop_column("pwc_repositories", "language")
     op.drop_column("pwc_repositories", "license")
-    print("Dropped columns from pwc_repositories.")
+    print("已从 pwc_repositories 表删除列。")
 
     op.drop_column("papers", "conference")
-    print("Dropped column from papers.")
+    print("已从 papers 表删除列。")
 
     op.drop_column("hf_models", "hf_dataset_links")
     op.drop_column("hf_models", "hf_readme_content")
-    print("Dropped columns from hf_models.")
+    print("已从 hf_models 表删除列。")
 
-    print("Downgrade completed.")
-    # ### end Alembic commands ###
+    print("降级完成。")
+    # ### Alembic 命令结束 ###
