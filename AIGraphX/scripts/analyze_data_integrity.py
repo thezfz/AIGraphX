@@ -10,7 +10,7 @@ import argparse  # Use argparse for flexibility
 
 # --- Configuration ---
 DEFAULT_INPUT_JSONL = (
-    "data/aigraphx_knowledge_data_enriched.jsonl"  # Assume enriched file is input
+    "data/aigraphx_knowledge_data.jsonl"  # Assume enriched file is input
 )
 DEFAULT_REPORT_FILE = "logs/data_validation_report.txt"
 DEFAULT_LOG_FILE = "logs/data_validation.log"
