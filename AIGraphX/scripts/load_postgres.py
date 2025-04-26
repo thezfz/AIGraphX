@@ -47,7 +47,9 @@ from typing import Dict, Any, Optional, Tuple, List  # 用于类型提示
 
 # 导入第三方库
 import psycopg  # 导入 psycopg (v3) 库，用于与 PostgreSQL 交互 (注意不是 psycopg2)
-from psycopg_pool import AsyncConnectionPool  # 从 psycopg 导入异步连接池，提高数据库连接效率
+from psycopg_pool import (
+    AsyncConnectionPool,
+)  # 从 psycopg 导入异步连接池，提高数据库连接效率
 from dotenv import load_dotenv  # 用于从 .env 文件加载环境变量
 
 # --- 配置加载 ---
@@ -57,7 +59,7 @@ from dotenv import load_dotenv  # 用于从 .env 文件加载环境变量
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 # 加载 .env 文件中的环境变量，如果 .env 文件不存在或变量已在系统环境中设置，则不会覆盖
 load_dotenv(dotenv_path=dotenv_path)
-logger = logging.getLogger(__name__) # 在加载dotenv之后初始化，确保日志格式正确
+logger = logging.getLogger(__name__)  # 在加载dotenv之后初始化，确保日志格式正确
 logger.info(f"从 {dotenv_path} 加载环境变量 (如果存在)。")
 
 
@@ -70,11 +72,11 @@ if not DATABASE_URL:
         "严重错误: 环境变量 DATABASE_URL 未设置或为空。",
         file=sys.stderr,
     )
-    sys.exit(1) # 非正常退出
+    sys.exit(1)  # 非正常退出
 
 # 从环境变量获取连接池配置，如果未设置则使用默认值
-PG_POOL_MIN_SIZE = int(os.getenv("PG_POOL_MIN_SIZE", "1")) # 最小连接数
-PG_POOL_MAX_SIZE = int(os.getenv("PG_POOL_MAX_SIZE", "10")) # 最大连接数
+PG_POOL_MIN_SIZE = int(os.getenv("PG_POOL_MIN_SIZE", "1"))  # 最小连接数
+PG_POOL_MAX_SIZE = int(os.getenv("PG_POOL_MAX_SIZE", "10"))  # 最大连接数
 
 # 默认的输入 JSONL 文件路径
 DEFAULT_INPUT_JSONL_FILE = "data/aigraphx_knowledge_data.jsonl"
@@ -89,9 +91,9 @@ BATCH_SIZE = 50
 # 配置基本的日志记录
 logging.basicConfig(
     level=logging.INFO,  # 设置日志级别为 INFO (忽略 DEBUG 级别的日志)
-    format="%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s", # 设置日志格式
-    handlers=[ # 设置日志处理器
-        logging.StreamHandler() # 输出到控制台
+    format="%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s",  # 设置日志格式
+    handlers=[  # 设置日志处理器
+        logging.StreamHandler()  # 输出到控制台
         # 可以取消注释下面这行来同时输出到文件
         # logging.FileHandler('load_postgres.log')
     ],
@@ -102,13 +104,13 @@ logging.basicConfig(
 # --- 领域映射 ---
 # 将 ArXiv 的主分类映射到更通用的领域名称
 AREA_MAP = {
-    "cs.CV": "CV",        # 计算机视觉
-    "cs.CL": "NLP",       # 计算语言学 (自然语言处理)
-    "cs.LG": "ML",        # 机器学习
-    "cs.AI": "AI",        # 人工智能
-    "cs.IR": "IR",        # 信息检索
+    "cs.CV": "CV",  # 计算机视觉
+    "cs.CL": "NLP",  # 计算语言学 (自然语言处理)
+    "cs.LG": "ML",  # 机器学习
+    "cs.AI": "AI",  # 人工智能
+    "cs.IR": "IR",  # 信息检索
     "cs.RO": "Robotics",  # 机器人学
-    "stat.ML": "ML",      # 统计机器学习 (也归为 ML)
+    "stat.ML": "ML",  # 统计机器学习 (也归为 ML)
     # 可以根据需要添加更多映射
 }
 
@@ -132,11 +134,11 @@ def get_area_from_category(primary_category: Optional[str]) -> Optional[str]:
         parts = primary_category.split(".")
         # 确保至少有两部分
         if len(parts) >= 2:
-             main_category = parts[0] + "." + parts[1]
+            main_category = parts[0] + "." + parts[1]
         else:
-             main_category = primary_category # 如果格式不符合预期，使用原始分类
+            main_category = primary_category  # 如果格式不符合预期，使用原始分类
     else:
-        main_category = primary_category # 没有点号，直接使用
+        main_category = primary_category  # 没有点号，直接使用
 
     # 从 AREA_MAP 中查找映射，如果找不到，则默认为 "Other"
     return AREA_MAP.get(main_category, "Other")
@@ -258,7 +260,9 @@ def _load_checkpoint(reset_checkpoint: bool = False) -> int:
             return processed_count
     except (IOError, ValueError) as e:
         # 如果读取文件或转换整数时出错
-        logger.error(f"加载或解析检查点 {CHECKPOINT_FILE} 失败: {e}。将从头开始处理 (返回 0)。")
+        logger.error(
+            f"加载或解析检查点 {CHECKPOINT_FILE} 失败: {e}。将从头开始处理 (返回 0)。"
+        )
         return 0
 
 
@@ -266,6 +270,7 @@ def _load_checkpoint(reset_checkpoint: bool = False) -> int:
 
 # 注意：以下所有数据库操作函数都接收一个 `psycopg.AsyncConnection` 对象作为参数，
 # 这个连接对象应该由调用者（通常是 `process_batch` 函数）从连接池中获取并管理。
+
 
 async def insert_hf_model(
     conn: psycopg.AsyncConnection, model_data: Dict[str, Any]
@@ -299,7 +304,7 @@ async def insert_hf_model(
                 hf_library_name = EXCLUDED.hf_library_name,
                 updated_at = NOW()                   -- 更新 updated_at 时间戳
         """,
-            ( # 提供与占位符顺序对应的参数元组
+            (  # 提供与占位符顺序对应的参数元组
                 model_data.get("hf_model_id"),
                 model_data.get("hf_author"),
                 model_data.get("hf_sha"),
@@ -308,7 +313,9 @@ async def insert_hf_model(
                 model_data.get("hf_downloads"),
                 model_data.get("hf_likes"),
                 # 将 Python 列表/字典转换为 JSON 字符串存储，如果值为 None 则存 NULL
-                json.dumps(model_data.get("hf_tags")) if model_data.get("hf_tags") else None,
+                json.dumps(model_data.get("hf_tags"))
+                if model_data.get("hf_tags")
+                else None,
                 model_data.get("hf_pipeline_tag"),
                 model_data.get("hf_library_name"),
             ),
@@ -337,9 +344,9 @@ async def get_or_insert_paper(
 
     # 提取用于查找或插入的关键 ID
     pwc_id = pwc_entry.get("pwc_id")
-    arxiv_id_base = paper_data.get("arxiv_id_base") # 通常是无版本号的 ArXiv ID
-    arxiv_id_versioned = arxiv_meta.get("arxiv_id_versioned") # 带版本号的 ArXiv ID
-    primary_category = arxiv_meta.get("primary_category") # ArXiv 主分类
+    arxiv_id_base = paper_data.get("arxiv_id_base")  # 通常是无版本号的 ArXiv ID
+    arxiv_id_versioned = arxiv_meta.get("arxiv_id_versioned")  # 带版本号的 ArXiv ID
+    primary_category = arxiv_meta.get("primary_category")  # ArXiv 主分类
     # 推导领域
     area = get_area_from_category(primary_category)
 
@@ -356,14 +363,18 @@ async def get_or_insert_paper(
 
         # 1. 尝试根据 PWC ID 查找
         if pwc_id:
-            await cur.execute("SELECT paper_id FROM papers WHERE pwc_id = %s", (pwc_id,))
-            row = await cur.fetchone() # 获取一行结果
+            await cur.execute(
+                "SELECT paper_id FROM papers WHERE pwc_id = %s", (pwc_id,)
+            )
+            row = await cur.fetchone()  # 获取一行结果
             if row:
-                existing_id = row[0] # 第一列是 paper_id
+                existing_id = row[0]  # 第一列是 paper_id
 
         # 2. 如果 PWC ID 未找到，且存在 ArXiv Base ID，则根据 ArXiv Base ID 查找
         if not existing_id and arxiv_id_base:
-            await cur.execute("SELECT paper_id FROM papers WHERE arxiv_id_base = %s", (arxiv_id_base,))
+            await cur.execute(
+                "SELECT paper_id FROM papers WHERE arxiv_id_base = %s", (arxiv_id_base,)
+            )
             row = await cur.fetchone()
             if row:
                 existing_id = row[0]
@@ -371,7 +382,9 @@ async def get_or_insert_paper(
         # 3. 处理查找结果
         if existing_id:
             # 如果找到了现有论文
-            logger.debug(f"找到现有论文 ID {existing_id} (pwc_id={pwc_id}, arxiv_id={arxiv_id_base})")
+            logger.debug(
+                f"找到现有论文 ID {existing_id} (pwc_id={pwc_id}, arxiv_id={arxiv_id_base})"
+            )
             # 可以考虑在这里更新现有记录，例如如果 area 之前是 NULL，现在可以更新
             await cur.execute(
                 """
@@ -382,7 +395,14 @@ async def get_or_insert_paper(
                     updated_at = NOW()
                 WHERE paper_id = %s
                 """,
-                (area, primary_category, json.dumps(arxiv_meta.get("categories")) if arxiv_meta.get("categories") else None, existing_id),
+                (
+                    area,
+                    primary_category,
+                    json.dumps(arxiv_meta.get("categories"))
+                    if arxiv_meta.get("categories")
+                    else None,
+                    existing_id,
+                ),
             )
             return existing_id
         else:
@@ -398,23 +418,27 @@ async def get_or_insert_paper(
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING paper_id -- 返回新插入行的 paper_id
                 """,
-                    ( # 提供参数元组
+                    (  # 提供参数元组
                         pwc_id,
                         arxiv_id_base,
                         arxiv_id_versioned,
                         arxiv_meta.get("title"),
                         # 作者和分类列表需要转换为 JSON 字符串存储
-                        json.dumps(arxiv_meta.get("authors")) if arxiv_meta.get("authors") else None,
+                        json.dumps(arxiv_meta.get("authors"))
+                        if arxiv_meta.get("authors")
+                        else None,
                         arxiv_meta.get("summary"),
-                        parse_date(arxiv_meta.get("published_date")), # 解析日期
-                        parse_date(arxiv_meta.get("updated_date")), # 解析日期
+                        parse_date(arxiv_meta.get("published_date")),  # 解析日期
+                        parse_date(arxiv_meta.get("updated_date")),  # 解析日期
                         arxiv_meta.get("pdf_url"),
                         arxiv_meta.get("doi"),
                         primary_category,
-                        json.dumps(arxiv_meta.get("categories")) if arxiv_meta.get("categories") else None,
-                        pwc_entry.get("title"), # PWC 的标题可能与 ArXiv 不同
-                        pwc_entry.get("pwc_url"), # PWC 页面的 URL
-                        area, # 推导出的领域
+                        json.dumps(arxiv_meta.get("categories"))
+                        if arxiv_meta.get("categories")
+                        else None,
+                        pwc_entry.get("title"),  # PWC 的标题可能与 ArXiv 不同
+                        pwc_entry.get("pwc_url"),  # PWC 页面的 URL
+                        area,  # 推导出的领域
                     ),
                 )
                 # 获取 RETURNING 子句返回的结果
@@ -433,15 +457,15 @@ async def get_or_insert_paper(
                 logger.error(
                     f"插入论文 (pwc_id={pwc_id}, arxiv={arxiv_id_base}) 时出错: {e}"
                 )
-                logger.error(traceback.format_exc()) # 记录完整堆栈跟踪
+                logger.error(traceback.format_exc())  # 记录完整堆栈跟踪
                 return None
 
 
 async def insert_pwc_relation(
     conn: psycopg.AsyncConnection,
     paper_id: int,
-    relation_type: str, # 关系类型，例如 "task", "method", "dataset"
-    items: Optional[List[str]], # 相关项目的名称列表
+    relation_type: str,  # 关系类型，例如 "task", "method", "dataset"
+    items: Optional[List[str]],  # 相关项目的名称列表
 ) -> None:
     """
     向 PWC 相关表中插入论文与任务/方法/数据集的关系记录。
@@ -474,7 +498,9 @@ async def insert_pwc_relation(
         # 使用 executemany 批量执行插入操作，效率更高
         await cur.executemany(sql, data_tuples)
 
-    logger.debug(f"为 paper_id {paper_id} 插入了 {len(data_tuples)} 条 {relation_type} 关系。")
+    logger.debug(
+        f"为 paper_id {paper_id} 插入了 {len(data_tuples)} 条 {relation_type} 关系。"
+    )
 
 
 async def insert_pwc_repositories(
@@ -499,12 +525,12 @@ async def insert_pwc_repositories(
         (
             paper_id,
             repo.get("url"),
-            repo.get("stars"), # 星标数
-            repo.get("is_official"), # 是否官方实现
-            repo.get("framework"), # 使用的框架 (如 PyTorch, TensorFlow)
+            repo.get("stars"),  # 星标数
+            repo.get("is_official"),  # 是否官方实现
+            repo.get("framework"),  # 使用的框架 (如 PyTorch, TensorFlow)
         )
         for repo in repos
-        if repo.get("url") # 仅当 URL 存在时才处理该代码库
+        if repo.get("url")  # 仅当 URL 存在时才处理该代码库
     ]
 
     # 如果没有有效的代码库数据，则返回
@@ -527,7 +553,9 @@ async def insert_pwc_repositories(
         # 使用 executemany 批量执行插入/更新操作
         await cur.executemany(sql, data_tuples)
 
-    logger.debug(f"为 paper_id {paper_id} 插入/更新了 {len(data_tuples)} 条代码库记录。")
+    logger.debug(
+        f"为 paper_id {paper_id} 插入/更新了 {len(data_tuples)} 条代码库记录。"
+    )
 
 
 async def insert_model_paper_link(
@@ -543,7 +571,7 @@ async def insert_model_paper_link(
         paper_id: 论文的主键 ID。
     """
     # 如果 paper_id 无效 (例如论文插入失败)，则无法创建链接
-    if paper_id is None: # 显式检查 None
+    if paper_id is None:  # 显式检查 None
         logger.warning(f"无法链接模型 {hf_model_id}: paper_id 为 None 或无效。")
         return
 
@@ -560,10 +588,13 @@ async def insert_model_paper_link(
         # 执行插入操作
         await cur.execute(sql, (hf_model_id, paper_id))
 
-    logger.debug(f"已链接模型 {hf_model_id} 与 paper_id {paper_id} (如果链接尚不存在)。")
+    logger.debug(
+        f"已链接模型 {hf_model_id} 与 paper_id {paper_id} (如果链接尚不存在)。"
+    )
 
 
 # --- 主要处理逻辑 ---
+
 
 async def process_batch(
     conn: psycopg.AsyncConnection, batch: List[Tuple[int, Dict[str, Any]]]
@@ -578,8 +609,8 @@ async def process_batch(
     Returns:
         成功处理（可能已提交到数据库）的记录数量。如果在处理过程中发生异常导致事务回滚，则返回 0。
     """
-    processed_in_batch = 0 # 尝试处理的记录数
-    successful_lines_in_batch = 0 # 成功处理且理论上已提交的记录数
+    processed_in_batch = 0  # 尝试处理的记录数
+    successful_lines_in_batch = 0  # 成功处理且理论上已提交的记录数
     # 使用异步事务上下文管理器。如果内部代码块成功完成，事务将自动提交；
     # 如果发生任何异常，事务将自动回滚。
     async with conn.transaction():
@@ -611,7 +642,7 @@ async def process_batch(
                     logger.warning(
                         f"记录在第 {line_num} 行: 'linked_papers' 不是列表。将跳过论文处理。"
                     )
-                    linked_papers = [] # 将其视为空列表，避免后续错误
+                    linked_papers = []  # 将其视为空列表，避免后续错误
 
                 # 遍历模型关联的每篇论文数据
                 for paper_data in linked_papers:
@@ -620,7 +651,7 @@ async def process_batch(
                         logger.warning(
                             f"跳过模型 {hf_model_id} 在第 {line_num} 行的无效论文条目: 不是字典类型。"
                         )
-                        continue # 处理下一篇论文
+                        continue  # 处理下一篇论文
 
                     # --- 处理单篇论文 (获取或插入) ---
                     # 调用函数查找或插入论文，并获取其数据库 ID
@@ -628,7 +659,9 @@ async def process_batch(
 
                     # --- 关联模型和论文 ---
                     # 只有当模型 ID 和论文 ID 都有效时才能创建链接
-                    if hf_model_id and paper_id is not None: # 显式检查 paper_id is not None
+                    if (
+                        hf_model_id and paper_id is not None
+                    ):  # 显式检查 paper_id is not None
                         await insert_model_paper_link(conn, hf_model_id, paper_id)
                     # 可以添加日志记录链接未发生的情况（可选）
                     # elif paper_id is not None and not hf_model_id:
@@ -641,11 +674,19 @@ async def process_batch(
                         # 注意：pwc_entry 应从当前的 paper_data 中获取，而不是顶层 record
                         pwc_entry = paper_data.get("pwc_entry") or {}
                         # 插入任务、方法、数据集等关系
-                        await insert_pwc_relation(conn, paper_id, "task", pwc_entry.get("tasks"))
-                        await insert_pwc_relation(conn, paper_id, "method", pwc_entry.get("methods"))
-                        await insert_pwc_relation(conn, paper_id, "dataset", pwc_entry.get("datasets_used"))
+                        await insert_pwc_relation(
+                            conn, paper_id, "task", pwc_entry.get("tasks")
+                        )
+                        await insert_pwc_relation(
+                            conn, paper_id, "method", pwc_entry.get("methods")
+                        )
+                        await insert_pwc_relation(
+                            conn, paper_id, "dataset", pwc_entry.get("datasets_used")
+                        )
                         # 插入代码库信息
-                        await insert_pwc_repositories(conn, paper_id, pwc_entry.get("repositories"))
+                        await insert_pwc_repositories(
+                            conn, paper_id, pwc_entry.get("repositories")
+                        )
                     else:
                         # 如果 get_or_insert_paper 返回 None，表示处理这篇论文失败
                         logger.warning(
@@ -658,12 +699,12 @@ async def process_batch(
                 # 可以根据需求调整成功的定义（例如，是否必须成功处理所有关联论文）
                 if record_processed_successfully:
                     # processed_in_batch += 1 # 这个计数器似乎不再需要，用 successful_lines_in_batch 替代
-                    successful_lines_in_batch += 1 # 增加成功处理的行数
+                    successful_lines_in_batch += 1  # 增加成功处理的行数
                     logger.debug(f"成功处理了第 {line_num} 行的记录 (及其关联论文)。")
                 else:
-                     logger.warning(f"标记第 {line_num} 行的记录为处理时有错误/跳过。")
-                     # 可以选择是否将有错误的行也计入尝试处理的总数
-                     # processed_in_batch += 1
+                    logger.warning(f"标记第 {line_num} 行的记录为处理时有错误/跳过。")
+                    # 可以选择是否将有错误的行也计入尝试处理的总数
+                    # processed_in_batch += 1
 
             except Exception as e:
                 # 如果在处理单条记录时发生任何未预料的异常
@@ -701,11 +742,11 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
     logger.info(f"重置检查点: {reset_checkpoint}")
     logger.info(f"重置数据库 (此脚本忽略，由外部处理): {reset_db}")
 
-    pool: Optional[AsyncConnectionPool] = None # 初始化连接池变量
-    processed_count = 0 # 成功处理的总行数
-    batch_count = 0 # 处理的批次数
-    error_count = 0 # 解析或处理时跳过的行数
-    current_batch: List[Tuple[int, Dict[str, Any]]] = [] # 当前正在构建的批次
+    pool: Optional[AsyncConnectionPool] = None  # 初始化连接池变量
+    processed_count = 0  # 成功处理的总行数
+    batch_count = 0  # 处理的批次数
+    error_count = 0  # 解析或处理时跳过的行数
+    current_batch: List[Tuple[int, Dict[str, Any]]] = []  # 当前正在构建的批次
     # 加载检查点，确定从哪一行开始处理
     start_line = _load_checkpoint(reset_checkpoint)
 
@@ -717,27 +758,27 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
         logger.info(f"正在为数据库 {DATABASE_URL} 初始化连接池...")
         if not DATABASE_URL:
             logger.critical("DATABASE_URL 未配置。脚本退出。")
-            return # 提前退出
+            return  # 提前退出
 
         # 创建异步连接池实例
         pool = AsyncConnectionPool(
-            conninfo=DATABASE_URL, # 数据库连接字符串
-            min_size=PG_POOL_MIN_SIZE, # 最小连接数
-            max_size=PG_POOL_MAX_SIZE, # 最大连接数
-            open=True, # 在创建时就尝试建立初始连接
+            conninfo=DATABASE_URL,  # 数据库连接字符串
+            min_size=PG_POOL_MIN_SIZE,  # 最小连接数
+            max_size=PG_POOL_MAX_SIZE,  # 最大连接数
+            open=True,  # 在创建时就尝试建立初始连接
             # 可以根据需要调整连接或命令超时时间
             # timeout=60.0,
         )
-        await pool.check() # 检查连接池状态，确保至少一个连接可用
+        await pool.check()  # 检查连接池状态，确保至少一个连接可用
         logger.info("数据库连接池初始化并检查成功。")
 
         # --- 处理输入文件 ---
         # 以只读模式打开 JSONL 文件
-        with open(input_file_path, "r", encoding='utf-8') as infile: # 指定utf-8编码
+        with open(input_file_path, "r", encoding="utf-8") as infile:  # 指定utf-8编码
             # 逐行读取文件，使用 enumerate 获取行号 (从 0 开始)
-            last_processed_line = start_line # 记录实际处理到的最后一行行号
+            last_processed_line = start_line  # 记录实际处理到的最后一行行号
             for i, line in enumerate(infile):
-                line_num = i + 1 # 将行号转换为从 1 开始
+                line_num = i + 1  # 将行号转换为从 1 开始
                 # 如果当前行号小于或等于检查点记录的行号，则跳过
                 if line_num <= start_line:
                     continue
@@ -752,7 +793,7 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
                             f"跳过第 {line_num} 行: 格式无效或缺少 'hf_model_id'。内容: {line.strip()}"
                         )
                         error_count += 1
-                        continue # 处理下一行
+                        continue  # 处理下一行
 
                     # 将有效的记录 (行号, 数据字典) 添加到当前批次
                     current_batch.append((line_num, data))
@@ -766,27 +807,31 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
                         # 从连接池获取一个连接来处理这个批次
                         async with pool.connection() as conn:
                             # 调用 process_batch 函数处理批次，该函数会在一个事务中完成
-                            lines_processed_in_batch = await process_batch(conn, current_batch)
+                            lines_processed_in_batch = await process_batch(
+                                conn, current_batch
+                            )
                         # 累加成功处理的行数
                         processed_count += lines_processed_in_batch
-                        batch_count += 1 # 增加批次数
-                        current_batch = [] # 清空当前批次，准备下一个
-                        last_processed_line = line_num # 更新最后处理的行号
+                        batch_count += 1  # 增加批次数
+                        current_batch = []  # 清空当前批次，准备下一个
+                        last_processed_line = line_num  # 更新最后处理的行号
 
                         # 检查是否达到了保存检查点的间隔
                         # (根据批次数判断，避免过于频繁地写文件)
                         if batch_count % (CHECKPOINT_INTERVAL // BATCH_SIZE or 1) == 0:
-                            _save_checkpoint(last_processed_line) # 保存检查点
+                            _save_checkpoint(last_processed_line)  # 保存检查点
 
                 except json.JSONDecodeError:
                     # 如果行内容不是有效的 JSON
-                    logger.error(f"跳过第 {line_num} 行: 无效的 JSON。内容: {line.strip()}")
+                    logger.error(
+                        f"跳过第 {line_num} 行: 无效的 JSON。内容: {line.strip()}"
+                    )
                     error_count += 1
                 except Exception as e:
                     # 捕获处理单行时可能出现的其他意外错误
                     logger.error(
                         f"处理第 {line_num} 行时出错: {e}。内容: {line.strip()}",
-                        exc_info=True, # 记录堆栈跟踪
+                        exc_info=True,  # 记录堆栈跟踪
                     )
                     error_count += 1
                     # 在这里可以根据需要决定是继续处理下一行，还是中断整个脚本
@@ -806,13 +851,13 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
 
             # --- 最终保存检查点 ---
             # 确保即使没有达到检查点间隔，在脚本成功结束后也保存最终进度
-            if last_processed_line > start_line: # 只有当我们确实处理了新的行时才保存
+            if last_processed_line > start_line:  # 只有当我们确实处理了新的行时才保存
                 _save_checkpoint(last_processed_line)
 
     except FileNotFoundError:
         logger.critical(f"错误：输入文件未找到: {input_file_path}")
     except psycopg.Error as db_err:
-         logger.critical(f"数据库连接或操作错误: {db_err}", exc_info=True)
+        logger.critical(f"数据库连接或操作错误: {db_err}", exc_info=True)
     except Exception as e:
         # 捕获其他在主流程中可能发生的意外错误 (例如连接池初始化失败)
         logger.critical(f"发生未预料的严重错误: {e}", exc_info=True)
@@ -838,13 +883,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input-file",
         type=str,
-        default=DEFAULT_INPUT_JSONL_FILE, # 使用之前定义的常量作为默认值
+        default=DEFAULT_INPUT_JSONL_FILE,  # 使用之前定义的常量作为默认值
         help=f"指定输入的 JSONL 文件路径 (默认: {DEFAULT_INPUT_JSONL_FILE})",
     )
     # 添加 --reset 参数 (用于重置检查点)
     parser.add_argument(
         "--reset",
-        action="store_true", # 当出现此参数时，其值为 True，否则为 False
+        action="store_true",  # 当出现此参数时，其值为 True，否则为 False
         help="忽略现有的检查点文件，从输入文件的第一行开始加载。",
     )
     # 添加 --reset-db 参数 (已弃用，仅作说明)

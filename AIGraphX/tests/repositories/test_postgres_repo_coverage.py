@@ -26,20 +26,31 @@
 - 导入 `psycopg` 库及其异常类型，用于数据库交互和错误模拟。
 - **关键依赖:** `tests/conftest.py` 提供的 `db_pool` 和 `repository` fixtures。
 """
+
 import pytest
 import pytest_asyncio
 import json  # 用于处理 HF 模型数据中的 JSON 字段（如 hf_tags）
-from datetime import date as date_type, datetime # 导入 date 和 datetime
-from typing import AsyncGenerator, Dict, Any, Optional, List, cast, Set, Tuple # 导入类型提示
-from psycopg_pool import AsyncConnectionPool # 导入异步连接池
-from psycopg.rows import dict_row # 导入字典行工厂
-import logging # 导入日志
-from unittest.mock import AsyncMock, MagicMock, patch, create_autospec # 导入模拟工具
-import psycopg # 导入 psycopg 库，用于数据库异常类型
-from pydantic import HttpUrl # 导入 HttpUrl
+from datetime import date as date_type, datetime  # 导入 date 和 datetime
+from typing import (
+    AsyncGenerator,
+    Dict,
+    Any,
+    Optional,
+    List,
+    cast,
+    Set,
+    Tuple,
+)  # 导入类型提示
+from psycopg_pool import AsyncConnectionPool  # 导入异步连接池
+from psycopg.rows import dict_row  # 导入字典行工厂
+import logging  # 导入日志
+from unittest.mock import AsyncMock, MagicMock, patch, create_autospec  # 导入模拟工具
+import psycopg  # 导入 psycopg 库，用于数据库异常类型
+from pydantic import HttpUrl  # 导入 HttpUrl
 
 # 导入被测试的类
 from aigraphx.repositories.postgres_repo import PostgresRepository
+
 # 导入 Paper 模型，可能在辅助函数或某些测试中需要
 from aigraphx.models.paper import Paper
 
@@ -66,8 +77,8 @@ async def insert_hf_model(
         pool (AsyncConnectionPool): 用于连接测试数据库的连接池。
         model_data (Dict[str, Any]): 包含模型数据的字典，键应与 `hf_models` 表的列名匹配。
     """
-    cols = list(model_data.keys()) # 获取所有列名
-    vals = [model_data.get(col) for col in cols] # 获取对应的值
+    cols = list(model_data.keys())  # 获取所有列名
+    vals = [model_data.get(col) for col in cols]  # 获取对应的值
 
     # --- 数据类型处理 ---
     # 如果 hf_tags 是 Python 列表，则序列化为 JSON 字符串以便存入数据库
@@ -111,17 +122,17 @@ async def insert_hf_model(
 # --- Hugging Face 模型测试数据 ---
 # 字典键名使用 `hf_` 前缀，与数据库列名保持一致
 test_hf_model_data_1 = {
-    "hf_model_id": "org1/model-a", # 模型唯一 ID
-    "hf_author": "org1", # 作者/组织
-    "hf_sha": "sha1", # Commit SHA
-    "hf_last_modified": "2023-10-01T10:00:00", # 最后修改时间 (字符串，辅助函数会解析)
-    "hf_tags": ["tag1", "tagA"], # 标签列表 (辅助函数会转为 JSON)
-    "hf_pipeline_tag": "text-generation", # 任务类型
-    "hf_downloads": 100, # 下载量
-    "hf_likes": 10, # 点赞数
-    "hf_library_name": "transformers", # 主要库
-    "created_at": datetime.now(), # 创建时间 (通常由数据库默认或触发器设置)
-    "updated_at": datetime.now(), # 更新时间 (通常由数据库默认或触发器设置)
+    "hf_model_id": "org1/model-a",  # 模型唯一 ID
+    "hf_author": "org1",  # 作者/组织
+    "hf_sha": "sha1",  # Commit SHA
+    "hf_last_modified": "2023-10-01T10:00:00",  # 最后修改时间 (字符串，辅助函数会解析)
+    "hf_tags": ["tag1", "tagA"],  # 标签列表 (辅助函数会转为 JSON)
+    "hf_pipeline_tag": "text-generation",  # 任务类型
+    "hf_downloads": 100,  # 下载量
+    "hf_likes": 10,  # 点赞数
+    "hf_library_name": "transformers",  # 主要库
+    "created_at": datetime.now(),  # 创建时间 (通常由数据库默认或触发器设置)
+    "updated_at": datetime.now(),  # 更新时间 (通常由数据库默认或触发器设置)
 }
 
 test_hf_model_data_2 = {
@@ -144,7 +155,7 @@ test_hf_model_data_3 = {
     "hf_sha": "sha3",
     "hf_last_modified": "2022-05-20T08:00:00",
     "hf_tags": ["tag1", "tagC", "legacy"],
-    "hf_pipeline_tag": None, # 任务类型可以为 None
+    "hf_pipeline_tag": None,  # 任务类型可以为 None
     "hf_downloads": 5,
     "hf_likes": 1,
     "hf_library_name": "transformers",
@@ -155,8 +166,10 @@ test_hf_model_data_3 = {
 
 # --- 测试 HF 模型相关方法 ---
 
+
 async def test_save_hf_models_batch_insert(
-    repository: PostgresRepository, db_pool: AsyncConnectionPool # 依赖仓库实例和连接池 (用于清空表)
+    repository: PostgresRepository,
+    db_pool: AsyncConnectionPool,  # 依赖仓库实例和连接池 (用于清空表)
 ) -> None:
     """
     测试场景：使用 `save_hf_models_batch` 批量插入全新的 HF 模型记录。
@@ -179,14 +192,16 @@ async def test_save_hf_models_batch_insert(
 
     # 获取插入的记录并验证内容
     details1 = await repository.get_hf_models_by_ids(
-        [cast(str, test_hf_model_data_1["hf_model_id"])] # 使用 hf_model_id 获取
+        [cast(str, test_hf_model_data_1["hf_model_id"])]  # 使用 hf_model_id 获取
     )
     assert len(details1) == 1
     assert details1[0]["hf_author"] == test_hf_model_data_1["hf_author"]
     # 验证标签列表 (从数据库取出时应为 list)
     fetched_tags1 = details1[0].get("hf_tags")
     assert isinstance(fetched_tags1, list)
-    assert set(fetched_tags1) == set(cast(List[str], test_hf_model_data_1["hf_tags"])) # 使用集合比较忽略顺序
+    assert set(fetched_tags1) == set(
+        cast(List[str], test_hf_model_data_1["hf_tags"])
+    )  # 使用集合比较忽略顺序
 
     details2 = await repository.get_hf_models_by_ids(
         [cast(str, test_hf_model_data_2["hf_model_id"])]
@@ -208,14 +223,16 @@ async def test_save_hf_models_batch_update(
     async with db_pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE hf_models RESTART IDENTITY CASCADE;")
-    await insert_hf_model(db_pool, test_hf_model_data_1) # 插入 model 1
-    await insert_hf_model(db_pool, test_hf_model_data_2) # 插入 model 2
+    await insert_hf_model(db_pool, test_hf_model_data_1)  # 插入 model 1
+    await insert_hf_model(db_pool, test_hf_model_data_2)  # 插入 model 2
 
     # --- 2. 准备包含更新和插入的批量数据 ---
     # 更新 model 1 的 likes 和 tags
     model1_updated = test_hf_model_data_1.copy()
     model1_updated["hf_likes"] = 150
-    model1_updated["hf_tags"] = cast(List[str], ["tag1", "tagA", "updated"]) # 添加新 tag
+    model1_updated["hf_tags"] = cast(
+        List[str], ["tag1", "tagA", "updated"]
+    )  # 添加新 tag
 
     # 添加一条新记录 model 3
     model2_new = test_hf_model_data_3
@@ -235,8 +252,8 @@ async def test_save_hf_models_batch_update(
         [cast(str, test_hf_model_data_1["hf_model_id"])]
     )
     assert len(details1) == 1
-    assert details1[0]["hf_likes"] == 150 # 验证 likes 已更新
-    fetched_tags1_updated = details1[0].get("hf_tags") # 验证 tags 已更新
+    assert details1[0]["hf_likes"] == 150  # 验证 likes 已更新
+    fetched_tags1_updated = details1[0].get("hf_tags")  # 验证 tags 已更新
     assert isinstance(fetched_tags1_updated, list)
     assert set(fetched_tags1_updated) == {"tag1", "tagA", "updated"}
 
@@ -255,7 +272,7 @@ async def test_save_hf_models_batch_empty(repository: PostgresRepository) -> Non
     策略：记录调用前的记录数，传入空列表调用方法，再记录调用后的记录数，断言两者相等。
     """
     count_before = await repository.count_hf_models()
-    await repository.save_hf_models_batch([]) # 传入空列表
+    await repository.save_hf_models_batch([])  # 传入空列表
     count_after = await repository.count_hf_models()
     assert count_before == count_after
 
@@ -281,8 +298,8 @@ async def test_search_models_by_keyword_found(
     results_list, total = await repository.search_models_by_keyword("org1")
     assert total == 2
     assert len(results_list) == 2
-    model_ids = {r["hf_model_id"] for r in results_list} # 提取返回的 hf_model_id
-    assert model_ids == { # 验证 ID 集合
+    model_ids = {r["hf_model_id"] for r in results_list}  # 提取返回的 hf_model_id
+    assert model_ids == {  # 验证 ID 集合
         test_hf_model_data_1["hf_model_id"],
         test_hf_model_data_3["hf_model_id"],
     }
@@ -308,7 +325,7 @@ async def test_search_models_by_keyword_found(
     # results_list, total = await repository.search_models_by_keyword("tag1")
     # assert total == 2 # 假设 model 1 和 model 3 都包含 tag1
     # ... 验证 ID ...
-    pass # 暂时跳过标签搜索验证，直到确认实现
+    pass  # 暂时跳过标签搜索验证，直到确认实现
 
 
 async def test_search_models_by_keyword_pagination(
@@ -323,27 +340,31 @@ async def test_search_models_by_keyword_pagination(
     async with db_pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE hf_models RESTART IDENTITY CASCADE;")
-    await insert_hf_model(db_pool, test_hf_model_data_1) # 2023-10-01
-    await insert_hf_model(db_pool, test_hf_model_data_2) # 2024-01-15
-    await insert_hf_model(db_pool, test_hf_model_data_3) # 2022-05-20
+    await insert_hf_model(db_pool, test_hf_model_data_1)  # 2023-10-01
+    await insert_hf_model(db_pool, test_hf_model_data_2)  # 2024-01-15
+    await insert_hf_model(db_pool, test_hf_model_data_3)  # 2022-05-20
     # 默认排序 hf_last_modified DESC，预期顺序: model-2, model-1, model-3
 
     # --- 2. 测试分页：第 1 页，limit=2 ---
     results_list, total = await repository.search_models_by_keyword(
-        "model", limit=2, skip=0 # 获取前两条
+        "model",
+        limit=2,
+        skip=0,  # 获取前两条
     )
-    assert total == 3 # 总数是 3
-    assert len(results_list) == 2 # 返回两条
+    assert total == 3  # 总数是 3
+    assert len(results_list) == 2  # 返回两条
     # 验证返回的是 model-2 和 model-1
     assert results_list[0]["hf_model_id"] == test_hf_model_data_2["hf_model_id"]
     assert results_list[1]["hf_model_id"] == test_hf_model_data_1["hf_model_id"]
 
     # --- 3. 测试分页：第 2 页，limit=2 ---
     results_list, total = await repository.search_models_by_keyword(
-        "model", limit=2, skip=2 # 跳过前两条，获取接下来的（最多）两条
+        "model",
+        limit=2,
+        skip=2,  # 跳过前两条，获取接下来的（最多）两条
     )
-    assert total == 3 # 总数是 3
-    assert len(results_list) == 1 # 只剩下 model-3
+    assert total == 3  # 总数是 3
+    assert len(results_list) == 1  # 只剩下 model-3
     # 验证返回的是 model-3
     assert results_list[0]["hf_model_id"] == test_hf_model_data_3["hf_model_id"]
 
@@ -389,21 +410,23 @@ async def test_get_all_hf_models_for_sync(
     await insert_hf_model(db_pool, test_hf_model_data_3)
 
     # --- 2. 迭代生成器并收集结果 ---
-    fetched_models: Dict[str, Dict[str, Any]] = {} # 存储获取的模型，以 hf_model_id 为键
+    fetched_models: Dict[
+        str, Dict[str, Any]
+    ] = {}  # 存储获取的模型，以 hf_model_id 为键
     batch_count = 0
     # 调用生成器，设置 batch_size=2
     async for batch in repository.get_all_hf_models_for_sync(batch_size=2):
         batch_count += 1
         logger.debug(f"Fetched batch {batch_count} with {len(batch)} models")
-        assert len(batch) <= 2 # 验证每批数量
+        assert len(batch) <= 2  # 验证每批数量
         for model_dict in batch:
-            assert isinstance(model_dict, dict) # 每项应为字典
-            model_id = model_dict.get("hf_model_id") # 获取模型 ID
-            assert isinstance(model_id, str) # ID 应为字符串
-            fetched_models[model_id] = model_dict # 存入结果字典
+            assert isinstance(model_dict, dict)  # 每项应为字典
+            model_id = model_dict.get("hf_model_id")  # 获取模型 ID
+            assert isinstance(model_id, str)  # ID 应为字符串
+            fetched_models[model_id] = model_dict  # 存入结果字典
 
     # --- 3. 验证结果 ---
-    assert len(fetched_models) == 3 # 总共应获取 3 个模型
+    assert len(fetched_models) == 3  # 总共应获取 3 个模型
     # 验证所有插入的模型 ID 都已获取
     assert cast(str, test_hf_model_data_1["hf_model_id"]) in fetched_models
     assert cast(str, test_hf_model_data_2["hf_model_id"]) in fetched_models
@@ -413,7 +436,7 @@ async def test_get_all_hf_models_for_sync(
     assert model_1_fetched["hf_author"] == test_hf_model_data_1["hf_author"]
     model_2_fetched = fetched_models[cast(str, test_hf_model_data_2["hf_model_id"])]
     fetched_tags2 = model_2_fetched.get("hf_tags")
-    assert isinstance(fetched_tags2, list) # 验证 tag 是列表
+    assert isinstance(fetched_tags2, list)  # 验证 tag 是列表
     assert set(fetched_tags2) == set(cast(List[str], test_hf_model_data_2["hf_tags"]))
 
 
@@ -439,29 +462,33 @@ async def test_get_all_models_for_indexing(
     # --- 2. 计算预期的文本表示 ---
     # 假设文本表示是 tags (json string) + pipeline_tag
     expected_text = {
-        cast(str, data1["hf_model_id"]): json.dumps(data1["hf_tags"]) # tags 转 json 字符串
-        + cast(str, data1["hf_pipeline_tag"]), # 拼接 pipeline tag
+        cast(str, data1["hf_model_id"]): json.dumps(
+            data1["hf_tags"]
+        )  # tags 转 json 字符串
+        + cast(str, data1["hf_pipeline_tag"]),  # 拼接 pipeline tag
         cast(str, data2["hf_model_id"]): json.dumps(data2["hf_tags"])
         + cast(str, data2["hf_pipeline_tag"]),
-        cast(str, data3["hf_model_id"]): json.dumps(data3["hf_tags"]) + "", # pipeline tag 为 None，拼接空字符串
+        cast(str, data3["hf_model_id"]): json.dumps(data3["hf_tags"])
+        + "",  # pipeline tag 为 None，拼接空字符串
     }
 
     # --- 3. 迭代生成器并收集结果 ---
-    results: Dict[str, str] = {} # 存储 ID -> 文本
+    results: Dict[str, str] = {}  # 存储 ID -> 文本
     # 注意：仓库方法 get_all_models_for_indexing 应该只选择 hf_model_id 和相关文本字段
     async for model_id, text_repr in repository.get_all_models_for_indexing():
         results[model_id] = text_repr
         logger.debug(f"Indexing data: ID={model_id}, Text='{text_repr[:50]}...'")
 
     # --- 4. 验证结果 ---
-    assert len(results) == 3 # 应获取 3 个模型
-    assert results.keys() == expected_text.keys() # 验证 ID 集合是否一致
+    assert len(results) == 3  # 应获取 3 个模型
+    assert results.keys() == expected_text.keys()  # 验证 ID 集合是否一致
     # 逐一验证每个模型的文本表示是否符合预期
     for model_id in results:
         assert results[model_id] == expected_text[model_id]
 
 
 # --- 测试关系获取的边缘情况（论文存在但无关联数据） ---
+
 
 async def test_get_tasks_for_papers_not_found(
     repository: PostgresRepository, db_pool: AsyncConnectionPool
@@ -475,19 +502,21 @@ async def test_get_tasks_for_papers_not_found(
     async with db_pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE;")
-            await cur.execute("TRUNCATE pwc_tasks RESTART IDENTITY CASCADE;") # 清空任务表
+            await cur.execute(
+                "TRUNCATE pwc_tasks RESTART IDENTITY CASCADE;"
+            )  # 清空任务表
     paper = Paper(pwc_id="no-tasks-paper", title="Paper Without Tasks")
     paper_id = await repository.upsert_paper(paper)
     assert paper_id is not None
 
     # --- 2. 调用方法 ---
-    results = await repository.get_tasks_for_papers([paper_id]) # 请求这篇论文的任务
+    results = await repository.get_tasks_for_papers([paper_id])  # 请求这篇论文的任务
 
     # --- 3. 验证结果 ---
     assert isinstance(results, dict)
-    assert len(results) == 1 # 字典应包含请求的 ID
+    assert len(results) == 1  # 字典应包含请求的 ID
     assert paper_id in results
-    assert results[paper_id] == [] # 对应的任务列表应为空
+    assert results[paper_id] == []  # 对应的任务列表应为空
 
 
 async def test_get_datasets_for_papers_not_found(
@@ -502,19 +531,23 @@ async def test_get_datasets_for_papers_not_found(
     async with db_pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE;")
-            await cur.execute("TRUNCATE pwc_datasets RESTART IDENTITY CASCADE;") # 清空数据集表
+            await cur.execute(
+                "TRUNCATE pwc_datasets RESTART IDENTITY CASCADE;"
+            )  # 清空数据集表
     paper = Paper(pwc_id="no-datasets-paper", title="Paper Without Datasets")
     paper_id = await repository.upsert_paper(paper)
     assert paper_id is not None
 
     # --- 2. 调用方法 ---
-    results = await repository.get_datasets_for_papers([paper_id]) # 请求这篇论文的数据集
+    results = await repository.get_datasets_for_papers(
+        [paper_id]
+    )  # 请求这篇论文的数据集
 
     # --- 3. 验证结果 ---
     assert isinstance(results, dict)
     assert len(results) == 1
     assert paper_id in results
-    assert results[paper_id] == [] # 对应的数据集列表应为空
+    assert results[paper_id] == []  # 对应的数据集列表应为空
 
 
 async def test_get_repositories_for_papers_not_found(
@@ -529,25 +562,30 @@ async def test_get_repositories_for_papers_not_found(
     async with db_pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE;")
-            await cur.execute("TRUNCATE pwc_repositories RESTART IDENTITY CASCADE;") # 清空代码库表
+            await cur.execute(
+                "TRUNCATE pwc_repositories RESTART IDENTITY CASCADE;"
+            )  # 清空代码库表
     paper = Paper(pwc_id="no-repos-paper", title="Paper Without Repos")
     paper_id = await repository.upsert_paper(paper)
     assert paper_id is not None
 
     # --- 2. 调用方法 ---
-    results = await repository.get_repositories_for_papers([paper_id]) # 请求这篇论文的代码库
+    results = await repository.get_repositories_for_papers(
+        [paper_id]
+    )  # 请求这篇论文的代码库
 
     # --- 3. 验证结果 ---
     assert isinstance(results, dict)
     assert len(results) == 1
     assert paper_id in results
-    assert results[paper_id] == [] # 对应的代码库列表应为空
+    assert results[paper_id] == []  # 对应的代码库列表应为空
 
 
 # --- 错误处理和边缘情况测试 ---
 
 # 模拟数据库连接或执行错误的集成测试比较复杂，通常更适合单元测试。
 # 但可以测试一些基于输入的边缘情况。
+
 
 async def test_get_hf_models_by_ids_empty(repository: PostgresRepository) -> None:
     """
@@ -582,7 +620,7 @@ async def test_upsert_paper_minimal_data(
 
     # --- 3. 调用 upsert ---
     paper_id = await repository.upsert_paper(minimal_paper)
-    assert paper_id is not None # 确保插入成功
+    assert paper_id is not None  # 确保插入成功
 
     # --- 4. 获取详情并验证 ---
     details = await repository.get_paper_details_by_id(paper_id)
@@ -595,9 +633,11 @@ async def test_upsert_paper_minimal_data(
 
 # === 使用 Mock 进行错误处理测试 ===
 
+
 # 定义一个辅助类来模拟异步上下文管理器 (如 connection 和 cursor)
 class AsyncContextManagerMock:
     """辅助类，用于模拟异步上下文管理器 (async with)。"""
+
     def __init__(
         self, return_value: Any = None, side_effect: Optional[Exception] = None
     ) -> None:
@@ -637,7 +677,9 @@ async def test_fetch_data_cursor_error_handling(repository: PostgresRepository) 
     # --- 1. 创建模拟对象 ---
     # 模拟 cursor，使其 execute 方法抛出异常
     mock_cursor = MagicMock()
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.DatabaseError("Simulated DB error on execute"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.DatabaseError("Simulated DB error on execute")
+    )
     # 模拟异步游标上下文管理器
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
 
@@ -658,10 +700,12 @@ async def test_fetch_data_cursor_error_handling(repository: PostgresRepository) 
 
     try:
         # --- 3. 调用生成器并尝试迭代 ---
-        results: List[Any] = [] # 添加类型注解
+        results: List[Any] = []  # 添加类型注解
         generator = repository.fetch_data_cursor("SELECT * FROM papers")
         # 使用 pytest.raises 捕获预期的异常
-        with pytest.raises(psycopg.DatabaseError, match="Simulated DB error on execute"):
+        with pytest.raises(
+            psycopg.DatabaseError, match="Simulated DB error on execute"
+        ):
             # 尝试从生成器获取第一个元素，这应该会触发 execute 并抛出异常
             await anext(generator)
             # 如果没有抛出异常，或者抛出了其他异常，测试会失败
@@ -679,11 +723,16 @@ async def test_fetch_data_cursor_error_handling(repository: PostgresRepository) 
 # 为其他方法添加类似的基于 Mock 的错误处理测试
 # (get_tasks_for_papers, get_datasets_for_papers, get_repositories_for_papers, ...)
 
-async def test_get_tasks_for_papers_error_handling(repository: PostgresRepository) -> None:
+
+async def test_get_tasks_for_papers_error_handling(
+    repository: PostgresRepository,
+) -> None:
     """模拟 get_tasks_for_papers 中的数据库错误。"""
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.DatabaseError("Simulated tasks error"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.DatabaseError("Simulated tasks error")
+    )
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -700,11 +749,15 @@ async def test_get_tasks_for_papers_error_handling(repository: PostgresRepositor
         repository.pool = original_pool
 
 
-async def test_get_datasets_for_papers_error_handling(repository: PostgresRepository) -> None:
+async def test_get_datasets_for_papers_error_handling(
+    repository: PostgresRepository,
+) -> None:
     """模拟 get_datasets_for_papers 中的数据库错误。"""
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.DatabaseError("Simulated datasets error"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.DatabaseError("Simulated datasets error")
+    )
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -721,11 +774,15 @@ async def test_get_datasets_for_papers_error_handling(repository: PostgresReposi
         repository.pool = original_pool
 
 
-async def test_get_repositories_for_papers_error_handling(repository: PostgresRepository) -> None:
+async def test_get_repositories_for_papers_error_handling(
+    repository: PostgresRepository,
+) -> None:
     """模拟 get_repositories_for_papers 中的数据库错误。"""
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.DatabaseError("Simulated repos error"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.DatabaseError("Simulated repos error")
+    )
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -744,6 +801,7 @@ async def test_get_repositories_for_papers_error_handling(repository: PostgresRe
 
 # === 测试之前文件中未覆盖的错误模拟场景 ===
 
+
 async def test_get_paper_details_by_id_error_handling(
     repository: PostgresRepository,
 ) -> None:
@@ -751,8 +809,12 @@ async def test_get_paper_details_by_id_error_handling(
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 模拟 execute 抛出异常
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.DatabaseError("Simulated DB error"))
-    mock_cursor.fetchone = AsyncMock(return_value=None) # 即使 execute 失败，也模拟 fetchone
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.DatabaseError("Simulated DB error")
+    )
+    mock_cursor.fetchone = AsyncMock(
+        return_value=None
+    )  # 即使 execute 失败，也模拟 fetchone
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -776,8 +838,12 @@ async def test_get_papers_details_by_ids_error_handling(
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 模拟 execute 抛出异常
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.DatabaseError("Simulated DB error"))
-    mock_cursor.fetchall = AsyncMock(return_value=[]) # 即使 execute 失败，也模拟 fetchall
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.DatabaseError("Simulated DB error")
+    )
+    mock_cursor.fetchall = AsyncMock(
+        return_value=[]
+    )  # 即使 execute 失败，也模拟 fetchall
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -799,7 +865,9 @@ async def test_fetch_one_error_simulation(repository: PostgresRepository) -> Non
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 模拟 execute 抛出异常
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.OperationalError("Simulated DB connection error"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.OperationalError("Simulated DB connection error")
+    )
     mock_cursor.fetchone = AsyncMock(return_value=None)
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
@@ -825,7 +893,9 @@ async def test_get_all_papers_for_sync_error_simulation(
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 模拟 execute 抛出异常
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.ProgrammingError("Simulated syntax error"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.ProgrammingError("Simulated syntax error")
+    )
     mock_cursor.fetchall = AsyncMock(return_value=[])
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
@@ -848,7 +918,9 @@ async def test_count_papers_error_simulation(repository: PostgresRepository) -> 
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 模拟 execute 抛出异常
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.OperationalError("Simulated DB error"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.OperationalError("Simulated DB error")
+    )
     # 模拟 fetchone 返回 None 或者一个包含非数字的结果
     mock_cursor.fetchone = AsyncMock(return_value=None)
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
@@ -866,6 +938,7 @@ async def test_count_papers_error_simulation(repository: PostgresRepository) -> 
     finally:
         repository.pool = original_pool
 
+
 async def test_search_papers_by_keyword_db_error_simulation(
     repository: PostgresRepository,
 ) -> None:
@@ -873,12 +946,20 @@ async def test_search_papers_by_keyword_db_error_simulation(
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 让 execute 在第二次调用（获取总数）时失败
-    mock_cursor.execute = AsyncMock(side_effect=[
-        None, # 第一次 execute (获取结果) 成功
-        psycopg.DatabaseError("Simulated count error") # 第二次 execute (获取总数) 失败
-    ])
-    mock_cursor.fetchall = AsyncMock(return_value=[{'paper_id': 1, 'title': 'Mock Paper'}]) # 第一次调用返回一些数据
-    mock_cursor.fetchone = AsyncMock(return_value=None) # 第二次调用失败，fetchone 不会被调用或返回 None
+    mock_cursor.execute = AsyncMock(
+        side_effect=[
+            None,  # 第一次 execute (获取结果) 成功
+            psycopg.DatabaseError(
+                "Simulated count error"
+            ),  # 第二次 execute (获取总数) 失败
+        ]
+    )
+    mock_cursor.fetchall = AsyncMock(
+        return_value=[{"paper_id": 1, "title": "Mock Paper"}]
+    )  # 第一次调用返回一些数据
+    mock_cursor.fetchone = AsyncMock(
+        return_value=None
+    )  # 第二次调用失败，fetchone 不会被调用或返回 None
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -896,6 +977,7 @@ async def test_search_papers_by_keyword_db_error_simulation(
     finally:
         repository.pool = original_pool
 
+
 async def test_search_models_by_keyword_db_error_simulation(
     repository: PostgresRepository,
 ) -> None:
@@ -903,12 +985,18 @@ async def test_search_models_by_keyword_db_error_simulation(
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 让 execute 在第二次调用（获取总数）时失败
-    mock_cursor.execute = AsyncMock(side_effect=[
-        None, # 第一次 execute (获取结果) 成功
-        psycopg.DatabaseError("Simulated count error") # 第二次 execute (获取总数) 失败
-    ])
-    mock_cursor.fetchall = AsyncMock(return_value=[{'hf_model_id': 'org/mock-model', 'hf_author': 'mock'}]) # 第一次调用返回一些数据
-    mock_cursor.fetchone = AsyncMock(return_value=None) # 第二次调用失败
+    mock_cursor.execute = AsyncMock(
+        side_effect=[
+            None,  # 第一次 execute (获取结果) 成功
+            psycopg.DatabaseError(
+                "Simulated count error"
+            ),  # 第二次 execute (获取总数) 失败
+        ]
+    )
+    mock_cursor.fetchall = AsyncMock(
+        return_value=[{"hf_model_id": "org/mock-model", "hf_author": "mock"}]
+    )  # 第一次调用返回一些数据
+    mock_cursor.fetchone = AsyncMock(return_value=None)  # 第二次调用失败
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)
@@ -926,12 +1014,17 @@ async def test_search_models_by_keyword_db_error_simulation(
     finally:
         repository.pool = original_pool
 
-async def test_save_hf_models_batch_error_simulation(repository: PostgresRepository) -> None:
+
+async def test_save_hf_models_batch_error_simulation(
+    repository: PostgresRepository,
+) -> None:
     """测试 save_hf_models_batch 在数据库层面发生错误时的行为 (使用 Mock)。"""
     mock_pool = MagicMock(spec=AsyncConnectionPool)
     mock_cursor = MagicMock()
     # 让 execute 在执行批量插入时失败
-    mock_cursor.execute = AsyncMock(side_effect=psycopg.IntegrityError("Simulated constraint violation"))
+    mock_cursor.execute = AsyncMock(
+        side_effect=psycopg.IntegrityError("Simulated constraint violation")
+    )
     mock_cursor_ctx = AsyncContextManagerMock(return_value=mock_cursor)
     mock_conn = MagicMock()
     mock_conn.cursor = MagicMock(return_value=mock_cursor_ctx)

@@ -30,16 +30,29 @@
 测试还特别关注了敏感信息（如密码、API 密钥）的处理，确保它们不被硬编码，并通过配置加载。
 """
 
-import os # 导入 Python 内置的 os 模块，用于与操作系统交互，特别是访问环境变量。
-import pytest # 导入 pytest 测试框架。
-from typing import Dict, Any, Callable, Optional, Generator # 从 typing 模块导入类型提示工具，用于提高代码可读性和进行静态类型检查。
-from unittest import mock # 导入 unittest.mock 模块，如果需要进行更复杂的模拟操作时使用。
-from pydantic import PostgresDsn, HttpUrl # 从 Pydantic 库导入特定的数据类型，用于验证配置项（如数据库连接字符串和 URL）。
-from pydantic_settings import SettingsConfigDict # 从 pydantic-settings 导入用于配置 Settings 类的字典类型（Pydantic V2 方式）。
+import os  # 导入 Python 内置的 os 模块，用于与操作系统交互，特别是访问环境变量。
+import pytest  # 导入 pytest 测试框架。
+from typing import (
+    Dict,
+    Any,
+    Callable,
+    Optional,
+    Generator,
+)  # 从 typing 模块导入类型提示工具，用于提高代码可读性和进行静态类型检查。
+from unittest import (
+    mock,
+)  # 导入 unittest.mock 模块，如果需要进行更复杂的模拟操作时使用。
+from pydantic import (
+    PostgresDsn,
+    HttpUrl,
+)  # 从 Pydantic 库导入特定的数据类型，用于验证配置项（如数据库连接字符串和 URL）。
+from pydantic_settings import (
+    SettingsConfigDict,
+)  # 从 pydantic-settings 导入用于配置 Settings 类的字典类型（Pydantic V2 方式）。
 
 # 导入被测试的配置模块本身，以及模块中定义的 Settings 类
-import aigraphx.core.config # 导入整个配置模块
-from aigraphx.core.config import Settings # 直接导入 Settings 类，方便实例化和测试
+import aigraphx.core.config  # 导入整个配置模块
+from aigraphx.core.config import Settings  # 直接导入 Settings 类，方便实例化和测试
 
 # 定义一些常量，代表如果在环境变量或 .env 文件中找不到对应项时，config.py 中应使用的默认值
 # 这些常量主要用于在测试中设置期望值，确保与 config.py 中的定义一致。
@@ -50,8 +63,8 @@ DEFAULT_PG_HOST = "localhost"
 DEFAULT_PG_PORT = "5432"
 DEFAULT_NEO4J_URI = "neo4j://localhost:7687"
 DEFAULT_NEO4J_USER = "neo4j"
-DEFAULT_NEO4J_DB = "neo4j" # Neo4j 默认数据库名
-DEFAULT_MODEL = "all-MiniLM-L6-v2" # 默认使用的句子转换器模型
+DEFAULT_NEO4J_DB = "neo4j"  # Neo4j 默认数据库名
+DEFAULT_MODEL = "all-MiniLM-L6-v2"  # 默认使用的句子转换器模型
 
 # 使用字典来存储预期的默认配置值，方便在测试中断言
 # 注意：这里的 DATABASE_URL 是根据上面的 POSTGRES_* 默认值手动构建的，用于对比。
@@ -62,16 +75,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "POSTGRES_DB": "aigraphx",
     "POSTGRES_HOST": "localhost",
     "POSTGRES_PORT": "5432",
-    "DATABASE_URL": "postgresql://aigraphx_user:aigraphx_password@localhost:5432/aigraphx", # 预期从 PG_* 构建的 URL
+    "DATABASE_URL": "postgresql://aigraphx_user:aigraphx_password@localhost:5432/aigraphx",  # 预期从 PG_* 构建的 URL
     "NEO4J_URI": "neo4j://localhost:7687",
-    "NEO4J_USERNAME": "neo4j", # 注意 config.py 使用 NEO4J_USERNAME
+    "NEO4J_USERNAME": "neo4j",  # 注意 config.py 使用 NEO4J_USERNAME
     "NEO4J_PASSWORD": None,  # 测试中不验证实际密码的值，设为 None
-    "NEO4J_DATABASE": "neo4j", # Neo4j 数据库名
+    "NEO4J_DATABASE": "neo4j",  # Neo4j 数据库名
     "PWC_API_KEY": None,  # 不验证实际 API 密钥
     "HUGGINGFACE_API_KEY": None,  # 不验证实际 API 密钥
     "SENTENCE_TRANSFORMER_MODEL": "all-MiniLM-L6-v2",
-    "RELOAD": False, # Uvicorn 是否自动重载，默认为 False
-    "TEST_DATABASE_URL": None, # 测试数据库 URL，默认为 None
+    "RELOAD": False,  # Uvicorn 是否自动重载，默认为 False
+    "TEST_DATABASE_URL": None,  # 测试数据库 URL，默认为 None
 }
 
 # 修正：这个字典现在反映了 DATABASE_URL 是由 POSTGRES_* 变量构建的预期结果。
@@ -92,7 +105,7 @@ MOCK_ENV_CONFIG: Dict[str, Any] = {
     "PWC_API_KEY": None,  # 不在测试中硬编码 API 密钥
     "HUGGINGFACE_API_KEY": None,  # 不在测试中硬编码 API 密钥
     "SENTENCE_TRANSFORMER_MODEL": "test-model",
-    "RELOAD": True, # 模拟设置为 True
+    "RELOAD": True,  # 模拟设置为 True
     # 假设 TEST_DATABASE_URL 的环境变量格式是正确的 DSN 字符串
     "TEST_DATABASE_URL": "postgresql://test:pass@host/db",
 }
@@ -101,29 +114,29 @@ MOCK_ENV_CONFIG: Dict[str, Any] = {
 
 # 当使用环境变量覆盖时，Settings 实例预期包含的值
 EXPECTED_SETTINGS_ENV = {
-    "project_name": "AIGraphX", # Pydantic 模型中定义的默认值
-    "api_v1_str": "/api/v1", # Pydantic 模型中定义的默认值
-    "log_level": "INFO", # Pydantic 模型中定义的默认值
-    "environment": "development", # 需要确保这个值是 'development'，除非被 env 覆盖
-    "database_url": "postgresql://test_pg_user:test_pg_pass@test_pg_host:1234/test_pg_db", # 从 MOCK_ENV_CONFIG 的 PG_* 构建
-    "pg_pool_min_size": 1, # Pydantic 模型中定义的默认值
-    "pg_pool_max_size": 10, # Pydantic 模型中定义的默认值
-    "neo4j_uri": "neo4j://test_neo4j_host:7777", # 从 MOCK_ENV_CONFIG 加载
-    "neo4j_username": "test_neo4j_user", # 从 MOCK_ENV_CONFIG 加载
+    "project_name": "AIGraphX",  # Pydantic 模型中定义的默认值
+    "api_v1_str": "/api/v1",  # Pydantic 模型中定义的默认值
+    "log_level": "INFO",  # Pydantic 模型中定义的默认值
+    "environment": "development",  # 需要确保这个值是 'development'，除非被 env 覆盖
+    "database_url": "postgresql://test_pg_user:test_pg_pass@test_pg_host:1234/test_pg_db",  # 从 MOCK_ENV_CONFIG 的 PG_* 构建
+    "pg_pool_min_size": 1,  # Pydantic 模型中定义的默认值
+    "pg_pool_max_size": 10,  # Pydantic 模型中定义的默认值
+    "neo4j_uri": "neo4j://test_neo4j_host:7777",  # 从 MOCK_ENV_CONFIG 加载
+    "neo4j_username": "test_neo4j_user",  # 从 MOCK_ENV_CONFIG 加载
     "neo4j_password": None,  # 不校验实际密码
-    "neo4j_database": "test_neo4j_db", # 需要环境变量 NEO4J_DATABASE 设置
+    "neo4j_database": "test_neo4j_db",  # 需要环境变量 NEO4J_DATABASE 设置
     "pwc_api_key": None,  # 不校验实际 API 密钥
     "huggingface_api_key": None,  # 不校验实际 API 密钥
-    "sentence_transformer_model": "test-model", # 从 MOCK_ENV_CONFIG 加载
-    "embedder_device": "cpu", # Pydantic 模型中定义的默认值
-    "faiss_index_path": "data/faiss_index.bin", # Pydantic 模型中定义的默认值
-    "faiss_mapping_path": "data/papers_faiss_ids.json", # Pydantic 模型中定义的默认值
-    "models_faiss_index_path": "data/models_faiss.index", # Pydantic 模型中定义的默认值
-    "models_faiss_mapping_path": "data/models_faiss_ids.json", # Pydantic 模型中定义的默认值
-    "reload": True, # 从 MOCK_ENV_CONFIG 加载
+    "sentence_transformer_model": "test-model",  # 从 MOCK_ENV_CONFIG 加载
+    "embedder_device": "cpu",  # Pydantic 模型中定义的默认值
+    "faiss_index_path": "data/faiss_index.bin",  # Pydantic 模型中定义的默认值
+    "faiss_mapping_path": "data/papers_faiss_ids.json",  # Pydantic 模型中定义的默认值
+    "models_faiss_index_path": "data/models_faiss.index",  # Pydantic 模型中定义的默认值
+    "models_faiss_mapping_path": "data/models_faiss_ids.json",  # Pydantic 模型中定义的默认值
+    "reload": True,  # 从 MOCK_ENV_CONFIG 加载
     # TEST_DATABASE_URL 应从环境变量加载，并由 Pydantic 添加驱动部分
     "test_database_url": "postgresql+psycopg://test:pass@host/db",
-    "build_faiss_batch_size": 128, # Pydantic 模型中定义的默认值
+    "build_faiss_batch_size": 128,  # Pydantic 模型中定义的默认值
     # 如果测试环境没有设置相应的 test 变量，则这些字段应为 None 或其默认值
     "test_neo4j_uri": None,
     "test_neo4j_password": None,
@@ -139,29 +152,29 @@ EXPECTED_SETTINGS_ENV = {
 # 以及 Settings 类中定义的默认值。
 # 这里的值是基于示例 .env 文件推断的，实际测试时需要与你的 .env 文件匹配。
 EXPECTED_SETTINGS_DEFAULTS = {
-    "project_name": "AIGraphX", # 类默认值
-    "api_v1_str": "/api/v1", # 类默认值
-    "log_level": "INFO", # 类默认值
-    "environment": "development", # 假设 .env 中是 development 或类默认值
+    "project_name": "AIGraphX",  # 类默认值
+    "api_v1_str": "/api/v1",  # 类默认值
+    "log_level": "INFO",  # 类默认值
+    "environment": "development",  # 假设 .env 中是 development 或类默认值
     # 预期从 .env 文件加载的值
     "database_url": "postgresql://aigraphx_user:aigraphx_password@postgres:5432/aigraphx",
-    "pg_pool_min_size": 1, # 类默认值
-    "pg_pool_max_size": 10, # 类默认值
+    "pg_pool_min_size": 1,  # 类默认值
+    "pg_pool_max_size": 10,  # 类默认值
     # 预期从 .env 文件加载的值 (注意 URI 中通常不包含密码)
     "neo4j_uri": "neo4j://neo4j:7687",
-    "neo4j_username": "neo4j", # 预期从 .env 加载
+    "neo4j_username": "neo4j",  # 预期从 .env 加载
     # 预期从 .env 文件加载的值 - 不再校验实际密码
     "neo4j_password": None,
-    "neo4j_database": "neo4j", # 预期从 .env 或类默认值加载
+    "neo4j_database": "neo4j",  # 预期从 .env 或类默认值加载
     # 预期从 .env 加载 - 不再校验实际 API 密钥
     "pwc_api_key": None,
-    "hf_api_key": None, # Hugging Face Key (注意 Settings 类字段名)
-    "github_api_key": None, # GitHub Key
-    "sentence_transformer_model": "all-MiniLM-L6-v2", # 预期从 .env 或类默认值加载
+    "hf_api_key": None,  # Hugging Face Key (注意 Settings 类字段名)
+    "github_api_key": None,  # GitHub Key
+    "sentence_transformer_model": "all-MiniLM-L6-v2",  # 预期从 .env 或类默认值加载
     # 预期从 .env 加载
     "embedder_device": "cuda",
-    "faiss_index_path": "data/faiss_index.bin", # 类默认值 (假设 .env 未定义)
-    "faiss_mapping_path": "data/papers_faiss_ids.json", # 类默认值 (假设 .env 未定义)
+    "faiss_index_path": "data/faiss_index.bin",  # 类默认值 (假设 .env 未定义)
+    "faiss_mapping_path": "data/papers_faiss_ids.json",  # 类默认值 (假设 .env 未定义)
     # 预期从 .env 加载
     "models_faiss_index_path": "data/models_faiss.index",
     "models_faiss_mapping_path": "data/models_faiss_ids.json",
@@ -169,11 +182,11 @@ EXPECTED_SETTINGS_DEFAULTS = {
     "reload": True,
     # 预期从 .env 加载 (注意主机名可能是 127.0.0.1)
     "test_database_url": "postgresql://aigraphx_test_user:aigraphx_test_password@127.0.0.1:5433/aigraphx_test",
-    "build_faiss_batch_size": 128, # 类默认值 (假设 .env 未定义)
-    "workers_count": os.cpu_count(), # 类默认值 (使用 os.cpu_count())
+    "build_faiss_batch_size": 128,  # 类默认值 (假设 .env 未定义)
+    "workers_count": os.cpu_count(),  # 类默认值 (使用 os.cpu_count())
     # 预期从 .env 加载的测试 Neo4j 配置
     "test_neo4j_uri": "neo4j://127.0.0.1:7688",
-    "test_neo4j_password": None, # 不校验密码
+    "test_neo4j_password": None,  # 不校验密码
     "test_neo4j_database": "neo4j",
     # 测试 Faiss 路径，如果 .env 未定义，则使用类默认值 (None)
     "test_faiss_paper_index_path": None,
@@ -214,7 +227,7 @@ EXPECTED_SETTINGS_DEFAULTS = {
 
 
 def test_settings_loading_with_env_vars_override(
-    monkeypatch: pytest.MonkeyPatch, # 请求 pytest 的 monkeypatch fixture
+    monkeypatch: pytest.MonkeyPatch,  # 请求 pytest 的 monkeypatch fixture
 ) -> None:
     """
     测试场景：加载 Settings，并使用环境变量覆盖 `.env` 文件或类定义中的部分值。
@@ -224,12 +237,12 @@ def test_settings_loading_with_env_vars_override(
     #    只定义那些我们想要改变的值。Pydantic-Settings 会优先使用这些值。
     #    直接设置最终期望的 URL，而不是组件。
     env_vars_to_override = {
-        "ENVIRONMENT": "testing_override_env", # 覆盖环境标识
-        "DATABASE_URL": "postgresql://test_pg_user:test_pg_pass@test_pg_host:1234/test_pg_db", # 直接覆盖数据库 URL
-        "NEO4J_URI": "neo4j://override_host:1111", # 覆盖 Neo4j URI
-        "NEO4J_PASSWORD": "override_neo4j_pass", # 覆盖 Neo4j 密码 (仅用于测试覆盖逻辑)
-        "RELOAD": "false", # 覆盖 reload 标志 (注意环境变量通常是字符串)
-        "TEST_DATABASE_URL": "postgresql://override_test:pass@host/db", # 覆盖测试数据库 URL
+        "ENVIRONMENT": "testing_override_env",  # 覆盖环境标识
+        "DATABASE_URL": "postgresql://test_pg_user:test_pg_pass@test_pg_host:1234/test_pg_db",  # 直接覆盖数据库 URL
+        "NEO4J_URI": "neo4j://override_host:1111",  # 覆盖 Neo4j URI
+        "NEO4J_PASSWORD": "override_neo4j_pass",  # 覆盖 Neo4j 密码 (仅用于测试覆盖逻辑)
+        "RELOAD": "false",  # 覆盖 reload 标志 (注意环境变量通常是字符串)
+        "TEST_DATABASE_URL": "postgresql://override_test:pass@host/db",  # 覆盖测试数据库 URL
     }
     # 使用 monkeypatch 设置这些环境变量
     for k, v in env_vars_to_override.items():
@@ -244,16 +257,18 @@ def test_settings_loading_with_env_vars_override(
     #    首先，复制一份基于 .env 和类默认值的期望状态 (EXPECTED_SETTINGS_DEFAULTS)。
     #    然后，手动更新那些我们通过环境变量覆盖了的字段。
     expected_env = EXPECTED_SETTINGS_DEFAULTS.copy()
-    expected_env["environment"] = "testing_override_env" # 应用覆盖
+    expected_env["environment"] = "testing_override_env"  # 应用覆盖
     expected_env["database_url"] = (
-        "postgresql://test_pg_user:test_pg_pass@test_pg_host:1234/test_pg_db" # 应用覆盖
+        "postgresql://test_pg_user:test_pg_pass@test_pg_host:1234/test_pg_db"  # 应用覆盖
     )
-    expected_env["neo4j_uri"] = "neo4j://override_host:1111" # 应用覆盖
+    expected_env["neo4j_uri"] = "neo4j://override_host:1111"  # 应用覆盖
     # 注意：虽然我们用 monkeypatch 设置了 NEO4J_PASSWORD，但在断言时通常会忽略它。
     # 但如果需要精确测试覆盖，可以在这里设置预期值，并调整下面的忽略逻辑。
     # expected_env["neo4j_password"] = "override_neo4j_pass"
-    expected_env["reload"] = False # 应用覆盖 (Pydantic 会将 "false" 转为 False)
-    expected_env["test_database_url"] = "postgresql://override_test:pass@host/db" # 应用覆盖
+    expected_env["reload"] = False  # 应用覆盖 (Pydantic 会将 "false" 转为 False)
+    expected_env["test_database_url"] = (
+        "postgresql://override_test:pass@host/db"  # 应用覆盖
+    )
 
     # 4. 断言实际加载的 Settings 与期望状态一致
     #    使用 Pydantic v2 的 model_dump() 获取实例的字典表示
@@ -269,10 +284,10 @@ def test_settings_loading_with_env_vars_override(
     # 创建一个包含不应进行值比较的敏感键（如 API 密钥、密码）的列表
     ignore_keys = [
         "pwc_api_key",
-        "hf_api_key", # Settings 类中使用的字段名
+        "hf_api_key",  # Settings 类中使用的字段名
         "github_api_key",
         "neo4j_password",
-        "huggingface_api_key", # 环境变量名，可能也存在于 dump 中，以防万一
+        "huggingface_api_key",  # 环境变量名，可能也存在于 dump 中，以防万一
         "test_neo4j_password",
     ]
 
@@ -317,7 +332,9 @@ def test_settings_loading_with_env_vars_override(
             # 特殊处理 workers_count，它可能因运行环境的 CPU 核心数而异
             if key == "workers_count":
                 # 只检查它是否是正整数
-                assert isinstance(actual_value, int) and actual_value > 0, f"workers_count 应为正整数，实际: {actual_value}"
+                assert isinstance(actual_value, int) and actual_value > 0, (
+                    f"workers_count 应为正整数，实际: {actual_value}"
+                )
             else:
                 # 普通的值比较
                 assert actual_value == expected_value, (
@@ -326,7 +343,7 @@ def test_settings_loading_with_env_vars_override(
 
 
 def test_settings_loading_defaults_with_env_file(
-    monkeypatch: pytest.MonkeyPatch, # 请求 monkeypatch fixture，虽然此测试不主动设置 env
+    monkeypatch: pytest.MonkeyPatch,  # 请求 monkeypatch fixture，虽然此测试不主动设置 env
 ) -> None:
     """
     测试场景：加载 Settings，不设置任何覆盖环境变量。
@@ -342,12 +359,12 @@ def test_settings_loading_defaults_with_env_file(
         project_root = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..")
         )
-        dotenv_path = os.path.join(project_root, ".env") # 构建 .env 文件路径
+        dotenv_path = os.path.join(project_root, ".env")  # 构建 .env 文件路径
         print(f"检查路径: {dotenv_path}")
-        if os.path.exists(dotenv_path): # 检查文件是否存在
+        if os.path.exists(dotenv_path):  # 检查文件是否存在
             # 使用 utf-8 编码打开文件
             with open(dotenv_path, "r", encoding="utf-8") as f:
-                content = f.read() # 读取文件内容
+                content = f.read()  # 读取文件内容
                 print(".env 文件内容示例 (前 100 字符):", content[:100])
                 # 尝试手动查找某个键，以确认文件内容是否符合预期
                 if "HF_API_KEY=" in content:
@@ -372,7 +389,10 @@ def test_settings_loading_defaults_with_env_file(
     # --- 添加调试打印 ---
     print("\n--- Defaults Test (默认值测试) --- ")
     print("Actual keys (实际加载的键):", sorted(actual_settings_dict.keys()))
-    print("Expected default keys (预期的默认键):", sorted(EXPECTED_SETTINGS_DEFAULTS.keys()))
+    print(
+        "Expected default keys (预期的默认键):",
+        sorted(EXPECTED_SETTINGS_DEFAULTS.keys()),
+    )
     # 打印一些关键的实际加载值，用于调试
     print("Actual DATABASE_URL:", actual_settings_dict.get("database_url"))
     print("Actual TEST_DATABASE_URL:", actual_settings_dict.get("test_database_url"))
@@ -414,11 +434,11 @@ def test_settings_loading_defaults_with_env_file(
             )
         # 处理 Pydantic 的特殊 URL 或 DSN 类型
         elif isinstance(expected_value, (PostgresDsn, HttpUrl)):
-            if expected_value is None: # 如果期望是 None
-                 assert actual_value is None, (
+            if expected_value is None:  # 如果期望是 None
+                assert actual_value is None, (
                     f"配置键 '{key}' 不匹配。预期默认值: None, 实际: '{actual_value}'"
-                 )
-            else: # 否则比较字符串形式
+                )
+            else:  # 否则比较字符串形式
                 assert str(actual_value) == str(expected_value), (
                     f"配置键 '{key}' 不匹配。预期默认值: '{str(expected_value)}', 实际: '{str(actual_value)}'"
                 )
@@ -431,21 +451,23 @@ def test_settings_loading_defaults_with_env_file(
         else:
             # 特殊处理 workers_count
             if key == "workers_count":
-                assert isinstance(actual_value, int) and actual_value > 0, f"workers_count 应为正整数，实际: {actual_value}"
+                assert isinstance(actual_value, int) and actual_value > 0, (
+                    f"workers_count 应为正整数，实际: {actual_value}"
+                )
             else:
                 assert actual_value == expected_value, (
                     f"配置键 '{key}' 不匹配。预期默认值: '{expected_value}', 实际: '{actual_value}'"
                 )
 
-# --- 以下部分似乎是一个独立的测试逻辑，用于测试 DATABASE_URL 和 TEST_DATABASE_URL 的修正 ---
-# 它定义了一个内部函数 run_case 来运行不同环境变量设置下的场景。
+    # --- 以下部分似乎是一个独立的测试逻辑，用于测试 DATABASE_URL 和 TEST_DATABASE_URL 的修正 ---
+    # 它定义了一个内部函数 run_case 来运行不同环境变量设置下的场景。
 
-# def test_postgres_driver_correction_logic(monkeypatch: pytest.MonkeyPatch) -> None:
-#     """
-#     测试 Pydantic Settings 在处理 DATABASE_URL 和 TEST_DATABASE_URL 时，
-#     是否能正确处理不同的 PostgreSQL 连接方案（带或不带 +psycopg）。
-#     这个测试现在修改为在 run_case 内部阻止 .env 加载，以隔离测试环境变量逻辑。
-#     """
+    # def test_postgres_driver_correction_logic(monkeypatch: pytest.MonkeyPatch) -> None:
+    #     """
+    #     测试 Pydantic Settings 在处理 DATABASE_URL 和 TEST_DATABASE_URL 时，
+    #     是否能正确处理不同的 PostgreSQL 连接方案（带或不带 +psycopg）。
+    #     这个测试现在修改为在 run_case 内部阻止 .env 加载，以隔离测试环境变量逻辑。
+    #     """
 
     def run_case(env_setup: Dict[str, Optional[str]]) -> Settings:
         """
@@ -461,17 +483,17 @@ def test_settings_loading_defaults_with_env_file(
         # 根据传入的 env_setup 字典设置环境变量
         for k, v in env_setup.items():
             if v is not None:
-                monkeypatch.setenv(k, v) # 设置环境变量
+                monkeypatch.setenv(k, v)  # 设置环境变量
             else:
-                monkeypatch.delenv(k, raising=False) # 删除环境变量
+                monkeypatch.delenv(k, raising=False)  # 删除环境变量
 
         # !!! 核心修改：临时覆盖 Settings 的 model_config 以阻止加载 .env 文件 !!!
         # 保存原始的 model_config
         original_config = Settings.model_config
         # 创建一个指向不存在的 .env 文件的测试配置
         test_config = SettingsConfigDict(
-            env_file="/tmp/nonexistent_for_correction_test.env", # 使用一个唯一的、不存在的路径
-            extra="ignore", # 忽略未定义的字段
+            env_file="/tmp/nonexistent_for_correction_test.env",  # 使用一个唯一的、不存在的路径
+            extra="ignore",  # 忽略未定义的字段
         )
         # 使用 monkeypatch 将 Settings.model_config 替换为我们的测试配置
         monkeypatch.setattr(aigraphx.core.config.Settings, "model_config", test_config)
@@ -485,10 +507,10 @@ def test_settings_loading_defaults_with_env_file(
 
     # 用例 1: TEST_DATABASE_URL 使用标准的 postgresql:// 方案
     env_1: Dict[str, Optional[str]] = {
-        "DATABASE_URL": "postgresql://original:pass@host/db", # 设置一个基础 URL
-        "TEST_DATABASE_URL": "postgresql://user:pass@host/db", # 测试 URL
+        "DATABASE_URL": "postgresql://original:pass@host/db",  # 设置一个基础 URL
+        "TEST_DATABASE_URL": "postgresql://user:pass@host/db",  # 测试 URL
     }
-    settings_instance_1 = run_case(env_1) # 运行测试用例
+    settings_instance_1 = run_case(env_1)  # 运行测试用例
     # 断言 test_database_url 不为 None
     assert settings_instance_1.test_database_url is not None
     # Pydantic V2 会保持原始方案，因此直接比较字符串
@@ -498,11 +520,10 @@ def test_settings_loading_defaults_with_env_file(
     # 断言 database_url 被正确加载（来自 env_1 设置）
     assert str(settings_instance_1.database_url) == "postgresql://original:pass@host/db"
 
-
     # 用例 2: TEST_DATABASE_URL 使用 postgresql+psycopg:// 方案
     env_2: Dict[str, Optional[str]] = {
         "DATABASE_URL": "postgresql://original2:pass@host/db",
-        "TEST_DATABASE_URL": "postgresql+psycopg://user:pass@host/db", # 使用带 +psycopg 的方案
+        "TEST_DATABASE_URL": "postgresql+psycopg://user:pass@host/db",  # 使用带 +psycopg 的方案
     }
     settings_instance_2 = run_case(env_2)
     assert settings_instance_2.test_database_url is not None
@@ -519,13 +540,15 @@ def test_settings_loading_defaults_with_env_file(
     # 用例 3: TEST_DATABASE_URL 环境变量未设置
     env_3: Dict[str, Optional[str]] = {
         "DATABASE_URL": "postgresql://original3:pass@host/db",
-        "TEST_DATABASE_URL": None, # 明确表示不设置此环境变量
+        "TEST_DATABASE_URL": None,  # 明确表示不设置此环境变量
     }
     settings_instance_3 = run_case(env_3)
     # 断言 test_database_url 应该为 None (因为 Settings 类中默认是 None)
     assert settings_instance_3.test_database_url is None
     # 断言 database_url 仍然从环境变量加载
-    assert str(settings_instance_3.database_url) == "postgresql://original3:pass@host/db"
+    assert (
+        str(settings_instance_3.database_url) == "postgresql://original3:pass@host/db"
+    )
 
 
 # 之前用于测试旧的 getenv 逻辑的注释，现在可以移除或保留作为历史参考

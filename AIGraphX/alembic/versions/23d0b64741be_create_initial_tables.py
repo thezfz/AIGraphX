@@ -12,17 +12,23 @@ Revises: None (这是第一个迁移)
 Create Date: 2024-08-04 17:59:14.276074
 """
 
-from typing import Sequence, Union # 导入类型提示
+from typing import Sequence, Union  # 导入类型提示
 
-from alembic import op # 导入 Alembic 的操作对象 (op)，用于执行数据库模式更改命令
-import sqlalchemy as sa # 导入 SQLAlchemy 库，Alembic 使用它来定义列类型等 (虽然这里主要用原生 SQL)
+from alembic import op  # 导入 Alembic 的操作对象 (op)，用于执行数据库模式更改命令
+import sqlalchemy as sa  # 导入 SQLAlchemy 库，Alembic 使用它来定义列类型等 (虽然这里主要用原生 SQL)
 
 
 # revision identifiers, used by Alembic.
-revision: str = "23d0b64741be" # 当前迁移的唯一标识符
-down_revision: Union[str, None] = None # 指向此迁移所基于的上一个迁移 ID (对于第一个迁移是 None)
-branch_labels: Union[str, Sequence[str], None] = None # 用于支持多分支迁移历史 (通常为 None)
-depends_on: Union[str, Sequence[str], None] = None # 用于声明此迁移依赖于其他分支的迁移 (通常为 None)
+revision: str = "23d0b64741be"  # 当前迁移的唯一标识符
+down_revision: Union[str, None] = (
+    None  # 指向此迁移所基于的上一个迁移 ID (对于第一个迁移是 None)
+)
+branch_labels: Union[str, Sequence[str], None] = (
+    None  # 用于支持多分支迁移历史 (通常为 None)
+)
+depends_on: Union[str, Sequence[str], None] = (
+    None  # 用于声明此迁移依赖于其他分支的迁移 (通常为 None)
+)
 
 
 def upgrade() -> None:
@@ -84,9 +90,13 @@ def upgrade() -> None:
     # --- 为 papers 表创建索引 ---
     # 提高基于 pwc_id, arxiv_id_base, area, published_date 的查询性能
     op.execute("CREATE INDEX IF NOT EXISTS idx_papers_pwc_id ON papers(pwc_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_papers_arxiv_id_base ON papers(arxiv_id_base);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_papers_arxiv_id_base ON papers(arxiv_id_base);"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_papers_area ON papers(area);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_papers_published_date ON papers(published_date);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_papers_published_date ON papers(published_date);"
+    )
     print("Created indexes on papers table.")
 
     # --- 创建 model_paper_links 表 ---
@@ -106,8 +116,12 @@ def upgrade() -> None:
     print("Created model_paper_links table.")
     # --- 为 model_paper_links 表创建索引 ---
     # 提高基于模型 ID 或论文 ID 查询关联的性能
-    op.execute("CREATE INDEX IF NOT EXISTS idx_model_paper_links_model ON model_paper_links(hf_model_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_model_paper_links_paper ON model_paper_links(paper_id);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_model_paper_links_model ON model_paper_links(hf_model_id);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_model_paper_links_paper ON model_paper_links(paper_id);"
+    )
     print("Created indexes on model_paper_links table.")
 
     # --- 创建 pwc_tasks 表 ---
@@ -142,8 +156,12 @@ def upgrade() -> None:
     """)
     print("Created pwc_datasets table.")
     # --- 为 pwc_datasets 表创建索引 ---
-    op.execute("CREATE INDEX IF NOT EXISTS idx_pwc_datasets_paper ON pwc_datasets(paper_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_pwc_datasets_name ON pwc_datasets(dataset_name);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_datasets_paper ON pwc_datasets(paper_id);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_datasets_name ON pwc_datasets(dataset_name);"
+    )
     print("Created indexes on pwc_datasets table.")
 
     # --- 创建 pwc_methods 表 ---
@@ -160,8 +178,12 @@ def upgrade() -> None:
     """)
     print("Created pwc_methods table.")
     # --- 为 pwc_methods 表创建索引 ---
-    op.execute("CREATE INDEX IF NOT EXISTS idx_pwc_methods_paper ON pwc_methods(paper_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_pwc_methods_name ON pwc_methods(method_name);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_methods_paper ON pwc_methods(paper_id);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_methods_name ON pwc_methods(method_name);"
+    )
     print("Created indexes on pwc_methods table.")
 
     # --- 创建 pwc_repositories 表 ---
@@ -181,8 +203,12 @@ def upgrade() -> None:
     """)
     print("Created pwc_repositories table.")
     # --- 为 pwc_repositories 表创建索引 ---
-    op.execute("CREATE INDEX IF NOT EXISTS idx_pwc_repositories_paper ON pwc_repositories(paper_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_pwc_repositories_url ON pwc_repositories(url);") # TEXT 列也可以创建索引
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_repositories_paper ON pwc_repositories(paper_id);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pwc_repositories_url ON pwc_repositories(url);"
+    )  # TEXT 列也可以创建索引
     print("Created indexes on pwc_repositories table.")
 
     # --- 创建触发器函数 ---

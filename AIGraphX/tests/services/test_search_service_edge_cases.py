@@ -71,6 +71,7 @@ from aigraphx.services.search_service import (
     ResultItem,  # 搜索结果项的基础类型 (Union[SearchResultItem, HFSearchResultItem])
     # DEFAULT_RRF_K,  # RRF 算法相关常量，测试中不直接使用
 )
+
 # 导入 API 数据模型 (用于构建预期结果或测试验证)
 from aigraphx.models.search import (
     SearchResultItem,  # 单个论文搜索结果项模型
@@ -80,6 +81,7 @@ from aigraphx.models.search import (
     PaginatedHFModelSearchResult,  # 分页的模型搜索结果模型
     SearchFilterModel,  # 搜索过滤器模型 (用于混合搜索测试)
 )
+
 # 导入依赖的仓库和嵌入器类 (用于类型提示和模拟)
 from aigraphx.repositories.postgres_repo import PostgresRepository
 from aigraphx.repositories.faiss_repo import FaissRepository
@@ -223,6 +225,7 @@ def create_dummy_model(
 
 
 # --- 测试 SearchService 的具体方法 ---
+
 
 # --- 测试 _convert_distance_to_score ---
 async def test_convert_distance_to_score_negative_distance(
@@ -869,7 +872,9 @@ async def test_apply_sorting_papers_none_values(
     """
     # --- Setup ---
     # 创建一个排序键为 None 的项和一个正常的项
-    item_with_none = create_dummy_paper(1, None, None, "")  # score=None, date=None, title=""
+    item_with_none = create_dummy_paper(
+        1, None, None, ""
+    )  # score=None, date=None, title=""
     item_normal = create_dummy_paper(2, 0.8, date(2023, 1, 1), "Paper Title")
     items = [item_with_none, item_normal]
     # --- Action ---
@@ -1361,7 +1366,9 @@ async def test_semantic_search_faiss_result_id_type_mismatch(
 
     # 模拟获取论文详情的方法，只为 ID 2 返回数据
     mock_details_fetch = AsyncMock(
-        return_value=[create_dummy_paper(2, 0.0, date(2023, 1, 2), "B")] # Score will be updated
+        return_value=[
+            create_dummy_paper(2, 0.0, date(2023, 1, 2), "B")
+        ]  # Score will be updated
     )
     # 使用 patch.object 替换实例上的 _get_paper_details_for_ids 方法
     with patch.object(search_service, "_get_paper_details_for_ids", mock_details_fetch):
@@ -1475,8 +1482,12 @@ async def test_semantic_search_invalid_sort_key(
     paper1_score = search_service._convert_distance_to_score(0.5)
     paper2_score = search_service._convert_distance_to_score(0.4)
     # 创建模拟的论文详情
-    paper1 = create_dummy_paper(1, 0.0, date(2023, 1, 1), "Paper A") # Score will be updated
-    paper2 = create_dummy_paper(2, 0.0, date(2023, 1, 2), "Paper B") # Score will be updated
+    paper1 = create_dummy_paper(
+        1, 0.0, date(2023, 1, 1), "Paper A"
+    )  # Score will be updated
+    paper2 = create_dummy_paper(
+        2, 0.0, date(2023, 1, 2), "Paper B"
+    )  # Score will be updated
 
     # 模拟获取详情方法，按 ID 顺序返回
     mock_details_fetch = AsyncMock(return_value=[paper1, paper2])
@@ -1745,12 +1756,12 @@ async def test_keyword_search_papers_item_conversion_error_inner(
         "authors": ["A"],
         "area": "cs.AI",
         "pdf_url": None,
-        "score": None, # 关键词搜索的 score 应该为 None
+        "score": None,  # 关键词搜索的 score 应该为 None
     }
     invalid_paper_data = {
         "paper_id": 2,
         "title": "Invalid",
-        "published_date": "bad-date", # 无效日期
+        "published_date": "bad-date",  # 无效日期
         "summary": "s",
         "pwc_id": "p2",
         "authors": ["B"],
@@ -1772,9 +1783,9 @@ async def test_keyword_search_papers_item_conversion_error_inner(
     # 我们假设内部异常处理按预期工作。
     # assert result.items == [] # 基于之前失败的断言
     # assert result.total == 0 # 基于之前失败的断言
-    assert len(result.items) == 1 # 预期只包含有效项
+    assert len(result.items) == 1  # 预期只包含有效项
     assert result.items[0].paper_id == 1
-    assert result.total == 2 # 总数应为 PG 返回的原始总数
+    assert result.total == 2  # 总数应为 PG 返回的原始总数
 
 
 async def test_keyword_search_models_item_conversion_error_inner(
@@ -1801,12 +1812,12 @@ async def test_keyword_search_models_item_conversion_error_inner(
         "library_name": "l",
         "downloads": 0,
         "last_modified": datetime(2023, 1, 1),
-        "score": None, # 关键词搜索的 score 应该为 None
+        "score": None,  # 关键词搜索的 score 应该为 None
         "tags": [],
     }
     invalid_model_data = {
         "model_id": "m2",
-        "likes": "not-an-int", # 无效类型
+        "likes": "not-an-int",  # 无效类型
         "pipeline_tag": "t",
         "author": "a",
         "library_name": "l",
@@ -1814,7 +1825,7 @@ async def test_keyword_search_models_item_conversion_error_inner(
         "last_modified": datetime(2023, 1, 1),
         "score": None,
         "tags": [],
-        }
+    }
     # 配置模拟 PG 方法返回这两条数据，总数为 2
     mock_pg_repo.search_models_by_keyword.return_value = (
         [valid_model_data, invalid_model_data],
@@ -1854,7 +1865,7 @@ async def test_hybrid_search_no_embedder(
         "pwc_id": "p1",
         "published_date": date(2023, 1, 1),
         "authors": ["Author"],
-        "area": "AI", # 添加 area
+        "area": "AI",  # 添加 area
     }
     # 配置 PG 关键词搜索返回这个结果
     mock_pg_repo.search_papers_by_keyword.return_value = ([kw_result], 1)
@@ -1906,7 +1917,7 @@ async def test_hybrid_search_embed_error(
         "area": "cs.AI",
     }
     mock_pg_repo.search_papers_by_keyword.return_value = ([kw_result], 1)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 模拟获取详情
     mock_pg_repo.get_papers_details_by_ids.return_value = [kw_result]
     # --- Action ---
@@ -1949,7 +1960,7 @@ async def test_hybrid_search_keyword_search_error(
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     # 配置 Faiss 语义搜索返回一个结果
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
+    mock_faiss_repo_papers.id_type = "int"
     mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5)]  # 找到论文 ID 1
     # 配置 PG 关键词搜索抛出异常
     mock_pg_repo.search_papers_by_keyword.side_effect = Exception(
@@ -1962,8 +1973,8 @@ async def test_hybrid_search_keyword_search_error(
         "summary": "s",
         "pwc_id": "p1",
         "published_date": date(2023, 1, 1),
-        "authors": ["A"], # 添加 authors
-        "area": "AI",   # 添加 area
+        "authors": ["A"],  # 添加 authors
+        "area": "AI",  # 添加 area
     }
     mock_pg_repo.get_papers_details_by_ids.return_value = [sem_details]
     # --- Action ---
@@ -2006,11 +2017,11 @@ async def test_hybrid_search_fetch_details_error(
     # 配置 embedder 和 Faiss 成功返回结果
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
-    mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5)] # 语义找到 ID 1
+    mock_faiss_repo_papers.id_type = "int"
+    mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5)]  # 语义找到 ID 1
     # 配置 PG 关键词搜索成功返回空结果
     mock_pg_repo.search_papers_by_keyword.return_value = ([], 0)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情时抛出异常
     mock_pg_repo.get_papers_details_by_ids.side_effect = Exception(
         "Fetch details failed"
@@ -2049,20 +2060,33 @@ async def test_hybrid_search_rrf_logic_semantic_only(
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     # 配置 Faiss 返回两个结果，ID 2 距离更小 (排名更高)
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
-    mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5), (2, 0.4)] # ID 2 rank 1, ID 1 rank 2
+    mock_faiss_repo_papers.id_type = "int"
+    mock_faiss_repo_papers.search_similar.return_value = [
+        (1, 0.5),
+        (2, 0.4),
+    ]  # ID 2 rank 1, ID 1 rank 2
     # 配置 PG 关键词搜索返回空结果
     mock_pg_repo.search_papers_by_keyword.return_value = ([], 0)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情
     details1 = {
-        "paper_id": 1, "title": "T1", "summary": "s1", "pwc_id": "p1",
-        "authors": ["A"], "published_date": date(2023,1,1), "area": "AI"
-        }
+        "paper_id": 1,
+        "title": "T1",
+        "summary": "s1",
+        "pwc_id": "p1",
+        "authors": ["A"],
+        "published_date": date(2023, 1, 1),
+        "area": "AI",
+    }
     details2 = {
-        "paper_id": 2, "title": "T2", "summary": "s2", "pwc_id": "p2",
-        "authors": ["B"], "published_date": date(2023,1,2), "area": "ML"
-        }
+        "paper_id": 2,
+        "title": "T2",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "authors": ["B"],
+        "published_date": date(2023, 1, 2),
+        "area": "ML",
+    }
     mock_pg_repo.get_papers_details_by_ids.return_value = [details1, details2]
     # --- Action ---
     result = await search_service.perform_hybrid_search("query")
@@ -2070,8 +2094,22 @@ async def test_hybrid_search_rrf_logic_semantic_only(
     assert isinstance(result, PaginatedPaperSearchResult)
     assert len(result.items) == 2
     # 查找结果项
-    item1 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 1), None)
-    item2 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 2), None)
+    item1 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 1
+        ),
+        None,
+    )
+    item2 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 2
+        ),
+        None,
+    )
     # 断言两项都存在且有分数
     assert item1 is not None and item1.score is not None
     assert item2 is not None and item2.score is not None
@@ -2108,19 +2146,29 @@ async def test_hybrid_search_rrf_logic_keyword_only(
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     # 配置 Faiss 返回空结果
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
+    mock_faiss_repo_papers.id_type = "int"
     mock_faiss_repo_papers.search_similar.return_value = []
     # 配置 PG 关键词搜索返回两个结果 (假设按默认排序返回)
     kw_result1 = {
-        "paper_id": 1, "title": "T1", "summary": "s1", "pwc_id": "p1",
-        "authors": ["A"], "published_date": date(2023, 1, 1), "area": "AI"
+        "paper_id": 1,
+        "title": "T1",
+        "summary": "s1",
+        "pwc_id": "p1",
+        "authors": ["A"],
+        "published_date": date(2023, 1, 1),
+        "area": "AI",
     }
     kw_result2 = {
-        "paper_id": 2, "title": "T2", "summary": "s2", "pwc_id": "p2",
-        "authors": ["B"], "published_date": date(2023, 1, 2), "area": "ML"
+        "paper_id": 2,
+        "title": "T2",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "authors": ["B"],
+        "published_date": date(2023, 1, 2),
+        "area": "ML",
     }
     mock_pg_repo.search_papers_by_keyword.return_value = ([kw_result1, kw_result2], 2)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情
     mock_pg_repo.get_papers_details_by_ids.return_value = [kw_result1, kw_result2]
     # --- Action ---
@@ -2129,8 +2177,22 @@ async def test_hybrid_search_rrf_logic_keyword_only(
     assert isinstance(result, PaginatedPaperSearchResult)
     assert len(result.items) == 2
     # 查找结果项
-    item1 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 1), None)
-    item2 = next((item for item in result.items if isinstance(item, SearchResultItem) and item.paper_id == 2), None)
+    item1 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 1
+        ),
+        None,
+    )
+    item2 = next(
+        (
+            item
+            for item in result.items
+            if isinstance(item, SearchResultItem) and item.paper_id == 2
+        ),
+        None,
+    )
     # 断言两项都存在，且 score 都为 None
     assert item1 is not None and item1.score is None
     assert item2 is not None and item2.score is None
@@ -2162,25 +2224,43 @@ async def test_hybrid_search_item_creation_error(
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     # 配置 Faiss 找到 ID 1
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
+    mock_faiss_repo_papers.id_type = "int"
     mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5)]
     # 配置 PG 关键词搜索找到 ID 2
     kw_result2 = {
-        "paper_id": 2, "title": "T2", "summary": "s2", "pwc_id": "p2",
-        "authors": ["B"], "published_date": date(2023,1,2), "area": "ML"
+        "paper_id": 2,
+        "title": "T2",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "authors": ["B"],
+        "published_date": date(2023, 1, 2),
+        "area": "ML",
     }
     mock_pg_repo.search_papers_by_keyword.return_value = ([kw_result2], 1)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情：ID 1 的详情有效，ID 2 的详情无效 (日期错误)
     details1_valid = {
-        "paper_id": 1, "title": "T1", "summary": "s1", "pwc_id": "p1",
-        "authors": ["A"], "published_date": date(2023,1,1), "area": "AI"
+        "paper_id": 1,
+        "title": "T1",
+        "summary": "s1",
+        "pwc_id": "p1",
+        "authors": ["A"],
+        "published_date": date(2023, 1, 1),
+        "area": "AI",
     }
     details2_invalid = {
-        "paper_id": 2, "title": "T2", "summary": "s2", "pwc_id": "p2",
-        "authors": ["B"], "published_date": "bad-date", "area": "ML" # 无效日期
+        "paper_id": 2,
+        "title": "T2",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "authors": ["B"],
+        "published_date": "bad-date",
+        "area": "ML",  # 无效日期
     }
-    mock_pg_repo.get_papers_details_by_ids.return_value = [details1_valid, details2_invalid]
+    mock_pg_repo.get_papers_details_by_ids.return_value = [
+        details1_valid,
+        details2_invalid,
+    ]
     # --- Action ---
     result = await search_service.perform_hybrid_search("query")
     # --- Assertion ---
@@ -2214,26 +2294,45 @@ async def test_hybrid_search_sorting_default(
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     # 配置 Faiss 结果: ID 1 (rank 2), ID 2 (rank 1)
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
+    mock_faiss_repo_papers.id_type = "int"
     mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5), (2, 0.4)]
     # 配置 PG 关键词结果: ID 2 (rank 1), ID 3 (rank 2)
     kw_result2 = {
-        "paper_id": 2, "title": "T2", "summary": "s2", "pwc_id": "p2",
-        "authors": ["B"], "published_date": date(2023,1,2), "area": "ML"
+        "paper_id": 2,
+        "title": "T2",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "authors": ["B"],
+        "published_date": date(2023, 1, 2),
+        "area": "ML",
     }
     kw_result3 = {
-        "paper_id": 3, "title": "T3", "summary": "s3", "pwc_id": "p3",
-        "authors": ["C"], "published_date": date(2023,1,3), "area": "CV"
+        "paper_id": 3,
+        "title": "T3",
+        "summary": "s3",
+        "pwc_id": "p3",
+        "authors": ["C"],
+        "published_date": date(2023, 1, 3),
+        "area": "CV",
     }
     mock_pg_repo.search_papers_by_keyword.return_value = ([kw_result2, kw_result3], 2)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情
     details1 = {
-        "paper_id": 1, "title": "T1", "summary": "s1", "pwc_id": "p1",
-        "authors": ["A"], "published_date": date(2023,1,1), "area": "AI"
+        "paper_id": 1,
+        "title": "T1",
+        "summary": "s1",
+        "pwc_id": "p1",
+        "authors": ["A"],
+        "published_date": date(2023, 1, 1),
+        "area": "AI",
     }
     # details2 和 details3 使用上面定义的 kw_result 数据
-    mock_pg_repo.get_papers_details_by_ids.return_value = [details1, kw_result2, kw_result3]
+    mock_pg_repo.get_papers_details_by_ids.return_value = [
+        details1,
+        kw_result2,
+        kw_result3,
+    ]
     # --- Action ---
     # 调用混合搜索，不指定排序 (filters=None)
     result = await search_service.perform_hybrid_search("query", filters=None)
@@ -2249,7 +2348,9 @@ async def test_hybrid_search_sorting_default(
     assert result.items[0].paper_id == 2
     # ID 1 和 ID 3 分数相同，它们的顺序取决于 Python sorted 的稳定性或次要排序键（可能没有）
     # 验证后两项的 ID 集合为 {1, 3}
-    paper_ids_last_two = {item.paper_id for item in result.items[1:] if isinstance(item, SearchResultItem)}
+    paper_ids_last_two = {
+        item.paper_id for item in result.items[1:] if isinstance(item, SearchResultItem)
+    }
     assert paper_ids_last_two == {1, 3}
 
 
@@ -2275,19 +2376,29 @@ async def test_hybrid_search_sorting_with_filter(
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     # 配置 Faiss 找到 ID 1
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
+    mock_faiss_repo_papers.id_type = "int"
     mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5)]
     # 配置 PG 关键词找到 ID 2
-    details1 = { # 会被 Faiss 找到
-        "paper_id": 1, "title": "ABC", "summary": "s1", "pwc_id": "p1",
-        "published_date": date(2023, 1, 5), "authors": ["A"], "area": "CV"
+    details1 = {  # 会被 Faiss 找到
+        "paper_id": 1,
+        "title": "ABC",
+        "summary": "s1",
+        "pwc_id": "p1",
+        "published_date": date(2023, 1, 5),
+        "authors": ["A"],
+        "area": "CV",
     }
-    details2 = { # 会被关键词找到
-        "paper_id": 2, "title": "XYZ", "summary": "s2", "pwc_id": "p2",
-        "published_date": date(2023, 1, 1), "authors": ["B"], "area": "NLP"
+    details2 = {  # 会被关键词找到
+        "paper_id": 2,
+        "title": "XYZ",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "published_date": date(2023, 1, 1),
+        "authors": ["B"],
+        "area": "NLP",
     }
     mock_pg_repo.search_papers_by_keyword.return_value = ([details2], 1)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情
     mock_pg_repo.get_papers_details_by_ids.return_value = [details1, details2]
     # --- Setup: 创建 Filter ---
@@ -2316,7 +2427,7 @@ async def test_hybrid_search_sorting_with_filter(
     assert result.items[1].paper_id == 2
     # 分数可能仍被计算，但排序不基于它
     assert result.items[0].score is not None
-    assert result.items[1].score is None # ID 2 只有关键词结果
+    assert result.items[1].score is None  # ID 2 只有关键词结果
 
 
 async def test_hybrid_search_sorting_invalid_filter_key(
@@ -2341,26 +2452,36 @@ async def test_hybrid_search_sorting_invalid_filter_key(
     # 配置 Faiss 返回两个结果，ID 2 分数更高
     mock_embedder.embed.return_value = np.array([0.1, 0.2])
     mock_faiss_repo_papers.is_ready.return_value = True
-    mock_faiss_repo_papers.id_type = 'int'
+    mock_faiss_repo_papers.id_type = "int"
     mock_faiss_repo_papers.search_similar.return_value = [(1, 0.5), (2, 0.4)]
     # 配置 PG 关键词搜索返回空
     mock_pg_repo.search_papers_by_keyword.return_value = ([], 0)
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # Clear side effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = None  # Clear side effect
     # 配置 PG 获取详情
     details1 = {
-        "paper_id": 1, "title": "T1", "summary": "s1", "pwc_id": "p1",
-        "authors": ["A"], "published_date": date(2023,1,1), "area": "AI"
-        }
+        "paper_id": 1,
+        "title": "T1",
+        "summary": "s1",
+        "pwc_id": "p1",
+        "authors": ["A"],
+        "published_date": date(2023, 1, 1),
+        "area": "AI",
+    }
     details2 = {
-        "paper_id": 2, "title": "T2", "summary": "s2", "pwc_id": "p2",
-        "authors": ["B"], "published_date": date(2023,1,2), "area": "ML"
-        }
+        "paper_id": 2,
+        "title": "T2",
+        "summary": "s2",
+        "pwc_id": "p2",
+        "authors": ["B"],
+        "published_date": date(2023, 1, 2),
+        "area": "ML",
+    }
     mock_pg_repo.get_papers_details_by_ids.return_value = [details1, details2]
     # --- Setup: 创建 Filter ---
     # 创建一个包含无效排序键的 Filter 对象
     filters = SearchFilterModel(
-        sort_by=cast(PaperSortByLiteral, "invalid_key"), # 无效键
-        sort_order="desc", # 提供有效的 order
+        sort_by=cast(PaperSortByLiteral, "invalid_key"),  # 无效键
+        sort_order="desc",  # 提供有效的 order
         # 其他过滤条件设为 None 或默认值
         published_after=None,
         published_before=None,

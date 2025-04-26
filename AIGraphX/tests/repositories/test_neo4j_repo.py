@@ -94,7 +94,7 @@ EXPECTED_DDL_QUERIES = [
     "CREATE CONSTRAINT IF NOT EXISTS FOR (r:Repository) REQUIRE r.url IS UNIQUE;",  # 代码仓库节点 url 唯一性约束
     "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Author) REQUIRE a.name IS UNIQUE;",  # 作者节点 name 唯一性约束 (注意：实际情况可能需要更复杂的作者消歧)
     "CREATE CONSTRAINT IF NOT EXISTS FOR (ar:Area) REQUIRE ar.name IS UNIQUE;",  # 研究领域节点 name 唯一性约束
-    "CREATE CONSTRAINT IF NOT EXISTS FOR (f:Framework) REQUIRE f.name IS UNIQUE;", # 框架节点 name 唯一性约束
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (f:Framework) REQUIRE f.name IS UNIQUE;",  # 框架节点 name 唯一性约束
     "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.arxiv_id_base);",  # 论文节点 arxiv_id_base 索引
     "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.title);",  # 论文节点 title 索引
     "CREATE INDEX IF NOT EXISTS FOR (m:HFModel) ON (m.author);",  # HF 模型节点 author 索引
@@ -243,10 +243,15 @@ async def test_save_papers_batch_integration(
             "title": "Integ Test Paper 1",  # 标题
             "summary": "Summary 1",  # 摘要
             "published_date": "2023-01-01",  # 发表日期 (字符串格式)
-            "authors": ["Author A", "Author B"],  # 作者列表 (将创建 Author 节点和 AUTHORED 关系)
+            "authors": [
+                "Author A",
+                "Author B",
+            ],  # 作者列表 (将创建 Author 节点和 AUTHORED 关系)
             "area": "Computer Science",  # 研究领域 (将创建 Area 节点和 HAS_AREA 关系)
             "tasks": ["Task 1"],  # 相关任务 (将创建 Task 节点和 HAS_TASK 关系)
-            "datasets": ["Dataset X"],  # 使用的数据集 (将创建 Dataset 节点和 USES_DATASET 关系)
+            "datasets": [
+                "Dataset X"
+            ],  # 使用的数据集 (将创建 Dataset 节点和 USES_DATASET 关系)
             "repositories": [  # 关联的代码仓库 (将创建 Repository 节点和 HAS_REPOSITORY 关系)
                 {
                     "url": "http://repo1-integ.com",  # 仓库 URL (主键)
@@ -259,7 +264,10 @@ async def test_save_papers_batch_integration(
             "pdf_url": "http://pdf1.com",  # PDF 下载 URL
             "doi": "doi1-integ",  # DOI
             "primary_category": "cs.AI",  # 主要 ArXiv 分类
-            "categories": ["cs.AI", "cs.LG"],  # 所有 ArXiv 分类 (将创建 Category 节点和 HAS_CATEGORY 关系)
+            "categories": [
+                "cs.AI",
+                "cs.LG",
+            ],  # 所有 ArXiv 分类 (将创建 Category 节点和 HAS_CATEGORY 关系)
         },
         {
             "pwc_id": "paper2-integ",
@@ -476,7 +484,9 @@ async def test_save_papers_batch_failure(mock_logger: MagicMock) -> None:
     sample_papers_data = [{"pwc_id": "paper1", "title": "Title"}]  # 简单的测试数据
 
     # 创建 Mock 的 Neo4j 驱动和会话
-    mock_driver = AsyncMock(spec=AsyncDriver)  # spec=确保 Mock 对象有 AsyncDriver 的接口
+    mock_driver = AsyncMock(
+        spec=AsyncDriver
+    )  # spec=确保 Mock 对象有 AsyncDriver 的接口
     mock_session = AsyncMock(spec=AsyncSession)
     # 配置 mock_driver.session() 返回一个异步上下文管理器，其 __aenter__ 返回 mock_session
     mock_driver.session.return_value.__aenter__.return_value = mock_session
@@ -589,9 +599,7 @@ async def test_link_paper_to_task_integration(
                     tname=task_name,
                 )
             )
-        logger.info(
-            f"测试设置完成: 已创建 Paper {pwc_id} 和 Task {task_name}"
-        )
+        logger.info(f"测试设置完成: 已创建 Paper {pwc_id} 和 Task {task_name}")
 
         # --- Action: 调用被测方法 ---
         await repo.link_paper_to_task(pwc_id, task_name)
@@ -652,7 +660,10 @@ async def test_search_nodes_success_with_results() -> None:
     # --- Setup: 定义预期的模拟返回结果 ---
     # 模拟 `search_nodes` 应该返回的数据格式
     expected_results = [
-        {"node": {"id": 1, "title": "Paper 1"}, "score": 0.9},  # 模拟找到的节点和相似度分数
+        {
+            "node": {"id": 1, "title": "Paper 1"},
+            "score": 0.9,
+        },  # 模拟找到的节点和相似度分数
         {"node": {"id": 2, "name": "Author A"}, "score": 0.8},
     ]
 
@@ -783,7 +794,9 @@ async def test_get_neighbors_success_with_results_integration(
         # --- Action: 调用被测方法 ---
         # 注意：get_neighbors 现在不需要 max_neighbors 参数了（根据代码）
         neighbors_data = await repo.get_neighbors(
-            node_label="TestNode", node_prop="node_id", node_val=node_id # <--- FIX: Changed from node_value to node_val
+            node_label="TestNode",
+            node_prop="node_id",
+            node_val=node_id,  # <--- FIX: Changed from node_value to node_val
         )
 
         # --- Assertions: 验证返回结果 ---
@@ -797,19 +810,19 @@ async def test_get_neighbors_success_with_results_integration(
 
         # 验证邻居 1 (neighbor_id_1) 的详细信息
         neighbor1_data = results_dict[neighbor_id_1]
-        assert (
-            neighbor1_data["relationship"]["properties"]["weight"] == 1.0
-        )  # 关系属性
+        assert neighbor1_data["relationship"]["properties"]["weight"] == 1.0  # 关系属性
         assert neighbor1_data["relationship"]["type"] == "CONNECTS_TO"  # 关系类型
-        assert neighbor1_data["direction"] == "OUT"  # 关系方向 (对于中心节点 n1 来说是出向)
+        assert (
+            neighbor1_data["direction"] == "OUT"
+        )  # 关系方向 (对于中心节点 n1 来说是出向)
 
         # 验证邻居 2 (neighbor_id_2) 的详细信息
         neighbor2_data = results_dict[neighbor_id_2]
-        assert (
-            neighbor2_data["relationship"]["properties"]["weight"] == 2.0
-        )  # 关系属性
+        assert neighbor2_data["relationship"]["properties"]["weight"] == 2.0  # 关系属性
         assert neighbor2_data["relationship"]["type"] == "CONNECTS_TO"  # 关系类型
-        assert neighbor2_data["direction"] == "IN"  # 关系方向 (对于中心节点 n1 来说是入向)
+        assert (
+            neighbor2_data["direction"] == "IN"
+        )  # 关系方向 (对于中心节点 n1 来说是入向)
 
     finally:
         # --- Cleanup: 清理 ---
@@ -837,7 +850,9 @@ async def test_get_neighbors_no_results_integration(
     # --- Action: 调用被测方法查询一个不存在的节点 ---
     # 注意：get_neighbors 现在不需要 max_neighbors 参数了
     neighbors_data = await repo.get_neighbors(
-        node_label="NonExistentLabel", node_prop="node_id", node_val="non_existent_id" # <--- FIX: Changed from node_value to node_val
+        node_label="NonExistentLabel",
+        node_prop="node_id",
+        node_val="non_existent_id",  # <--- FIX: Changed from node_value to node_val
     )
     # --- Assertion: 验证返回空列表 ---
     assert neighbors_data == []
@@ -865,7 +880,9 @@ async def test_get_neighbors_failure(mock_logger: MagicMock) -> None:
     # --- Action & Assertion: 调用并断言异常 ---
     with pytest.raises(Exception, match="Neighbor query error"):
         await repo.get_neighbors(
-            node_label="Paper", node_prop="pwc_id", node_val="node_id_val" # <--- FIX: Changed from node_value to node_val
+            node_label="Paper",
+            node_prop="pwc_id",
+            node_val="node_id_val",  # <--- FIX: Changed from node_value to node_val
         )
 
     # --- Assertion: 验证 Mock 调用 ---
@@ -1637,7 +1654,7 @@ async def test_save_papers_by_arxiv_batch_integration(
             "published_date": "2024-01-03",
             "authors": ["Author D", "Author E"],
             "primary_category": "cs.NE",
-            "categories": ["cs.NE", "cs.AI"], # 注意 cs.AI 会被复用
+            "categories": ["cs.NE", "cs.AI"],  # 注意 cs.AI 会被复用
         },
     ]
 
@@ -1659,7 +1676,7 @@ async def test_save_papers_by_arxiv_batch_integration(
         # 2. 验证 Author 节点数量 (应创建 5 个不同的 Author 节点)
         result_authors = await session.run(
             # 匹配所有 Author 节点，并去重计数
-             "MATCH (a:Author) RETURN count(DISTINCT a.name) AS count"
+            "MATCH (a:Author) RETURN count(DISTINCT a.name) AS count"
             # 或者通过关系计数，但可能会重复计算作者
             # "MATCH (a:Author)-[:AUTHORED]->(p:Paper) WHERE p.arxiv_id_base IN $ids RETURN count(DISTINCT a.name) AS count",
             # {"ids": ["2401.00001", "2401.00002", "2401.00003"]},
@@ -1677,7 +1694,7 @@ async def test_save_papers_by_arxiv_batch_integration(
         )
         categories_count = await result_categories.single()
         assert categories_count is not None
-        assert categories_count["count"] == 4 # 共有 4 个不同的分类
+        assert categories_count["count"] == 4  # 共有 4 个不同的分类
 
         # 4. （可选）验证关系数量，例如 AUTHORED 关系应有 5 条
 
@@ -1755,12 +1772,13 @@ async def test_search_nodes_integration(
 
         # (可选) 验证 mock 方法是否被正确调用
         mock_method.assert_awaited_once_with(
-             search_term="neural",
-             index_name="paper_fulltext",
-             labels=["Paper"],
-             limit=10,
-             skip=0,
+            search_term="neural",
+            index_name="paper_fulltext",
+            labels=["Paper"],
+            limit=10,
+            skip=0,
         )
+
 
 @pytest.mark.parametrize(
     "start_node_label,start_node_prop,relationship_type,target_node_label, expected_target_prop_value_map",
@@ -1775,11 +1793,11 @@ async def test_search_nodes_integration(
 )
 @pytest.mark.asyncio
 async def test_get_related_nodes_different_types_integration(
-    start_node_label: str, # 起始节点标签 (参数化)
+    start_node_label: str,  # 起始节点标签 (参数化)
     start_node_prop: str,  # 起始节点匹配属性 (参数化)
-    relationship_type: str, # 关系类型 (参数化)
-    target_node_label: str, # 目标节点标签 (参数化)
-    expected_target_prop_value_map: set, # 预期找到的目标节点的某个属性值的集合 (参数化)
+    relationship_type: str,  # 关系类型 (参数化)
+    target_node_label: str,  # 目标节点标签 (参数化)
+    expected_target_prop_value_map: set,  # 预期找到的目标节点的某个属性值的集合 (参数化)
     neo4j_repo_fixture: Neo4jRepository,
     neo4j_driver: AsyncDriver,
     test_settings: Settings,
@@ -1855,14 +1873,14 @@ async def test_get_related_nodes_different_types_integration(
     # --- Action: 调用被测方法 ---
     # 根据关系类型推断方向 (这是一个简化，实际可能更复杂)
     direction: Literal["OUT", "IN", "BOTH"] = "OUT"
-    if relationship_type == "MENTIONS": # MENTIONS 是 HFModel -> Paper
-        direction = "OUT" # 从 HFModel 出发是 OUT
+    if relationship_type == "MENTIONS":  # MENTIONS 是 HFModel -> Paper
+        direction = "OUT"  # 从 HFModel 出发是 OUT
         # 如果从 Paper 出发查找 HFModel，这里应该是 IN
         # 为了测试通用性，我们固定从 HFModel 出发查找 Paper
         if start_node_label == "Paper":
-             logger.warning("Adjusting direction to IN for Paper->MENTIONS->HFModel")
-             direction = "IN"
-             start_node_val = "paper-test-1" # 修正起始节点
+            logger.warning("Adjusting direction to IN for Paper->MENTIONS->HFModel")
+            direction = "IN"
+            start_node_val = "paper-test-1"  # 修正起始节点
 
     results = await repo.get_related_nodes(
         start_node_label=start_node_label,

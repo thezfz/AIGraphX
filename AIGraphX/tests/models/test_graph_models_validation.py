@@ -27,16 +27,16 @@ Pydantic 模型用于确保创建节点和关系对象时，其属性（如名�
 这些测试对于确保数据进入知识图谱之前的质量至关重要，防止无效或格式错误的数据破坏图的结构或后续处理。
 """
 
-import pytest # 导入 pytest 测试框架
+import pytest  # 导入 pytest 测试框架
 from pydantic import (
-    BaseModel, # Pydantic 模型基类
-    Field, # 用于为字段添加额外信息和验证规则（如默认值、最小长度等）
-    HttpUrl, # Pydantic 提供的用于验证 HTTP/HTTPS URL 的类型
-    field_validator, # Pydantic V2 装饰器，用于定义自定义字段验证逻辑
-    ValidationError, # 当数据验证失败时 Pydantic 抛出的异常类型
+    BaseModel,  # Pydantic 模型基类
+    Field,  # 用于为字段添加额外信息和验证规则（如默认值、最小长度等）
+    HttpUrl,  # Pydantic 提供的用于验证 HTTP/HTTPS URL 的类型
+    field_validator,  # Pydantic V2 装饰器，用于定义自定义字段验证逻辑
+    ValidationError,  # 当数据验证失败时 Pydantic 抛出的异常类型
 )
-from datetime import date, datetime, timezone # 导入日期和时间相关类型
-from typing import Optional, List, Dict, Any, Type, Union, cast # 导入类型提示工具
+from datetime import date, datetime, timezone  # 导入日期和时间相关类型
+from typing import Optional, List, Dict, Any, Type, Union, cast  # 导入类型提示工具
 
 # 理想情况下，应该替换下面的模型定义为从项目实际模型文件中导入
 # 例如: from aigraphx.models.graph import Area, Author, ...
@@ -44,11 +44,13 @@ from typing import Optional, List, Dict, Any, Type, Union, cast # 导入类型�
 
 # --- 基础模型 ---
 
+
 class NodePropertiesBase(BaseModel):
     """
     节点属性的 Pydantic 基模型。
     所有节点模型都应继承此类，以包含通用属性。
     """
+
     # 定义 created_at 字段，类型为 datetime
     # 使用 default_factory 指定一个函数，在创建实例时自动生成默认值（当前的 UTC 时间）
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -58,8 +60,10 @@ class NodePropertiesBase(BaseModel):
 # 下面的每个类代表图中的一种节点类型，继承自 NodePropertiesBase，
 # 并使用 Pydantic 的 Field 和验证器来定义其特定的属性和规则。
 
+
 class Area(NodePropertiesBase):
     """测试 Area (领域/区域) 节点的 Pydantic 模型。"""
+
     # 定义 name 字段，类型为 str
     # ... 表示该字段是必需的
     # min_length=1 表示字符串长度必须至少为 1
@@ -72,7 +76,8 @@ class Area(NodePropertiesBase):
 
 class Author(NodePropertiesBase):
     """测试 Author (作者) 节点的 Pydantic 模型。"""
-    name: str = Field(..., min_length=1) # 必需字段，最小长度为 1
+
+    name: str = Field(..., min_length=1)  # 必需字段，最小长度为 1
     # 定义 affiliations (所属机构) 字段，类型为字符串列表，默认为空列表
     affiliations: List[str] = Field(default_factory=list)
     # 定义 emails 字段，类型为字符串列表，默认为空列表
@@ -83,59 +88,62 @@ class Author(NodePropertiesBase):
 
 class Dataset(NodePropertiesBase):
     """测试 Dataset (数据集) 节点的 Pydantic 模型。"""
-    name: str = Field(..., min_length=1) # 必需字段，最小长度为 1
-    description: Optional[str] = None # 可选描述
+
+    name: str = Field(..., min_length=1)  # 必需字段，最小长度为 1
+    description: Optional[str] = None  # 可选描述
 
     # 移除手动 __init__ 验证
 
 
 class Framework(NodePropertiesBase):
     """测试 Framework (框架) 节点的 Pydantic 模型。"""
-    name: str = Field(..., min_length=1) # 必需字段，最小长度为 1
+
+    name: str = Field(..., min_length=1)  # 必需字段，最小长度为 1
 
     # 移除手动 __init__ 验证
 
 
 class HFModel(NodePropertiesBase):
     """测试 HFModel (Hugging Face 模型) 节点的 Pydantic 模型。"""
-    model_id: str = Field(..., min_length=1) # 必需字段，模型 ID
-    author: Optional[str] = None # 可选作者
-    sha: Optional[str] = None # 可选的 commit SHA
-    last_modified: Optional[datetime] = None # 可选的最后修改时间
-    tags: List[str] = Field(default_factory=list) # 标签列表，默认为空
-    pipeline_tag: Optional[str] = None # 可选的 pipeline 标签
-    siblings: List[Dict[str, Any]] = Field(default_factory=list) # 文件列表，默认为空
-    private: bool = False # 是否私有，默认为 False
-    downloads: int = 0 # 下载数，默认为 0
-    likes: int = 0 # 点赞数，默认为 0
-    library_name: Optional[str] = None # 可选的库名称
-    masked: bool = False # 是否被屏蔽，默认为 False
-    model_index: Optional[Dict[str, Any]] = None # 可选的模型索引信息
-    config: Dict[str, Any] = Field(default_factory=dict) # 配置字典，默认为空
-    security: Optional[Any] = None # 安全信息，类型可以是任意
-    card_data: Dict[str, Any] = Field(default_factory=dict) # 模型卡片数据，默认为空
-    model_filenames: List[str] = Field(default_factory=list) # 模型文件名列表，默认为空
+
+    model_id: str = Field(..., min_length=1)  # 必需字段，模型 ID
+    author: Optional[str] = None  # 可选作者
+    sha: Optional[str] = None  # 可选的 commit SHA
+    last_modified: Optional[datetime] = None  # 可选的最后修改时间
+    tags: List[str] = Field(default_factory=list)  # 标签列表，默认为空
+    pipeline_tag: Optional[str] = None  # 可选的 pipeline 标签
+    siblings: List[Dict[str, Any]] = Field(default_factory=list)  # 文件列表，默认为空
+    private: bool = False  # 是否私有，默认为 False
+    downloads: int = 0  # 下载数，默认为 0
+    likes: int = 0  # 点赞数，默认为 0
+    library_name: Optional[str] = None  # 可选的库名称
+    masked: bool = False  # 是否被屏蔽，默认为 False
+    model_index: Optional[Dict[str, Any]] = None  # 可选的模型索引信息
+    config: Dict[str, Any] = Field(default_factory=dict)  # 配置字典，默认为空
+    security: Optional[Any] = None  # 安全信息，类型可以是任意
+    card_data: Dict[str, Any] = Field(default_factory=dict)  # 模型卡片数据，默认为空
+    model_filenames: List[str] = Field(default_factory=list)  # 模型文件名列表，默认为空
 
     # 使用 Pydantic V2 的 field_validator 装饰器定义一个自定义验证器
     # mode='before' 表示在 Pydantic 进行标准类型验证之前运行此验证器
     @field_validator("last_modified", mode="before")
-    @classmethod # 验证器必须是类方法
+    @classmethod  # 验证器必须是类方法
     def parse_last_modified(cls, v: Any) -> Optional[datetime]:
         """
         自定义验证和解析 last_modified 字段。
         允许输入是 ISO 格式的字符串 (包括带 'Z' 的 UTC 表示) 或 datetime 对象。
         """
-        if isinstance(v, str): # 如果输入是字符串
+        if isinstance(v, str):  # 如果输入是字符串
             try:
                 # 尝试将 ISO 格式字符串转换为 datetime 对象
                 # 特别处理 Hugging Face API 可能返回的 'Z' 后缀，将其替换为 UTC 时区偏移量 '+00:00'
                 return datetime.fromisoformat(v.replace("Z", "+00:00"))
-            except ValueError: # 如果字符串格式无效
+            except ValueError:  # 如果字符串格式无效
                 raise ValueError(f"无效的 last_modified 日期时间格式: {v}")
-        elif isinstance(v, datetime): # 如果输入已经是 datetime 对象
-            return v # 直接返回
-        elif v is None: # 如果输入是 None
-            return None # 允许为 None
+        elif isinstance(v, datetime):  # 如果输入已经是 datetime 对象
+            return v  # 直接返回
+        elif v is None:  # 如果输入是 None
+            return None  # 允许为 None
         # 如果输入是其他不支持的类型
         raise TypeError("last_modified 必须是 str 或 datetime 类型")
 
@@ -144,45 +152,49 @@ class HFModel(NodePropertiesBase):
 
 class Method(NodePropertiesBase):
     """测试 Method (方法) 节点的 Pydantic 模型。"""
-    name: str = Field(..., min_length=1) # 必需字段，最小长度为 1
-    description: Optional[str] = None # 可选描述
+
+    name: str = Field(..., min_length=1)  # 必需字段，最小长度为 1
+    description: Optional[str] = None  # 可选描述
 
     # 移除手动 __init__ 验证
 
 
 class Paper(NodePropertiesBase):
     """测试 Paper (论文) 节点的 Pydantic 模型。"""
-    pwc_id: str = Field(..., min_length=1) # 必需字段，Papers With Code ID
-    title: Optional[str] = None # 可选标题
-    arxiv_id_base: Optional[str] = None # 可选 arXiv ID (不带版本)
-    arxiv_id_versioned: Optional[str] = None # 可选 arXiv ID (带版本)
-    summary: Optional[str] = None # 可选摘要
-    published_date: Optional[date] = None # 可选发表日期 (注意类型是 date)
+
+    pwc_id: str = Field(..., min_length=1)  # 必需字段，Papers With Code ID
+    title: Optional[str] = None  # 可选标题
+    arxiv_id_base: Optional[str] = None  # 可选 arXiv ID (不带版本)
+    arxiv_id_versioned: Optional[str] = None  # 可选 arXiv ID (带版本)
+    summary: Optional[str] = None  # 可选摘要
+    published_date: Optional[date] = None  # 可选发表日期 (注意类型是 date)
     pwc_url: Optional[HttpUrl] = None  # 可选 PWC 链接，使用 HttpUrl 类型进行验证
     pdf_url: Optional[HttpUrl] = None  # 可选 PDF 链接，使用 HttpUrl 类型进行验证
-    doi: Optional[str] = None # 可选 DOI
-    primary_category: Optional[str] = None # 可选主要分类
-    categories: List[str] = Field(default_factory=list) # 分类列表，默认为空
+    doi: Optional[str] = None  # 可选 DOI
+    primary_category: Optional[str] = None  # 可选主要分类
+    categories: List[str] = Field(default_factory=list)  # 分类列表，默认为空
 
     # 移除手动 __init__ 验证
 
 
 class Repository(NodePropertiesBase):
     """测试 Repository (代码仓库) 节点的 Pydantic 模型。"""
+
     url: HttpUrl  # 必需字段，仓库 URL，使用 HttpUrl 类型验证
-    stars: int = 0 # 星标数，默认为 0
-    is_official: bool = False # 是否官方仓库，默认为 False
-    framework: Optional[str] = None # 可选使用的框架
-    repo_name: Optional[str] = None # 可选仓库名称
-    repo_owner: Optional[str] = None # 可选仓库所有者
+    stars: int = 0  # 星标数，默认为 0
+    is_official: bool = False  # 是否官方仓库，默认为 False
+    framework: Optional[str] = None  # 可选使用的框架
+    repo_name: Optional[str] = None  # 可选仓库名称
+    repo_owner: Optional[str] = None  # 可选仓库所有者
 
     # 移除手动 __init__ 验证
 
 
 class Task(NodePropertiesBase):
     """测试 Task (任务) 节点的 Pydantic 模型。"""
-    name: str = Field(..., min_length=1) # 必需字段，最小长度为 1
-    description: Optional[str] = None # 可选描述
+
+    name: str = Field(..., min_length=1)  # 必需字段，最小长度为 1
+    description: Optional[str] = None  # 可选描述
 
     # 移除手动 __init__ 验证
 
@@ -190,20 +202,24 @@ class Task(NodePropertiesBase):
 # --- 测试关系模型 (使用 Pydantic) ---
 # 下面的每个类代表图中的一种关系类型。
 
+
 class RelationshipPropertiesBase(BaseModel):
     """关系属性的 Pydantic 基模型。"""
+
     # 同样包含 created_at 字段
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Authored(RelationshipPropertiesBase):
     """测试 Authored (创作了) 关系的模型。"""
+
     # 除了基类属性外，没有其他特定属性
     pass
 
 
 class HasDataset(RelationshipPropertiesBase):
     """测试 HasDataset (拥有数据集) 关系的模型。"""
+
     # 可选的数据集切分 (split)
     split: Optional[str] = None
     # 可选的数据集配置 (config)
@@ -212,51 +228,58 @@ class HasDataset(RelationshipPropertiesBase):
 
 class HasMethod(RelationshipPropertiesBase):
     """测试 HasMethod (拥有方法) 关系的模型。"""
+
     pass
 
 
 class HasTask(RelationshipPropertiesBase):
     """测试 HasTask (拥有任务) 关系的模型。"""
+
     pass
 
 
 class ImplementsMethod(RelationshipPropertiesBase):
     """测试 ImplementsMethod (实现了方法) 关系的模型。"""
+
     pass
 
 
 class MentionsPaper(RelationshipPropertiesBase):
     """测试 MentionsPaper (提及了论文) 关系的模型。"""
+
     # 可选的提及上下文
     context: Optional[str] = None
 
 
 class TrainedOn(RelationshipPropertiesBase):
     """测试 TrainedOn (在...上训练) 关系的模型。"""
-    split: Optional[str] = None # 可选切分
-    config: Optional[str] = None # 可选配置
+
+    split: Optional[str] = None  # 可选切分
+    config: Optional[str] = None  # 可选配置
 
 
 class UsesFramework(RelationshipPropertiesBase):
     """测试 UsesFramework (使用了框架) 关系的模型。"""
+
     pass
 
 
 # --- 节点属性验证测试 ---
 # 下面的测试函数分别验证上面定义的各个节点模型的属性验证逻辑。
 
+
 def test_node_properties_base_validation() -> None:
     """测试 NodePropertiesBase 基模型的验证。"""
     # 测试默认工厂：不提供 created_at 时，应自动生成
     node = NodePropertiesBase()
-    assert isinstance(node.created_at, datetime) # 验证类型是 datetime
-    assert node.created_at.tzinfo == timezone.utc # 验证时区是 UTC
+    assert isinstance(node.created_at, datetime)  # 验证类型是 datetime
+    assert node.created_at.tzinfo == timezone.utc  # 验证时区是 UTC
 
     # 测试提供 specific created_at：应使用提供的值
     now = datetime.now(timezone.utc)
     # Pydantic V2 推荐使用关键字参数初始化
     node = NodePropertiesBase(created_at=now)
-    assert node.created_at == now # 验证值是否匹配
+    assert node.created_at == now  # 验证值是否匹配
 
 
 def test_area_validation() -> None:
@@ -265,14 +288,15 @@ def test_area_validation() -> None:
     area = Area(name="Computer Science", description="Area of CS")
     assert area.name == "Computer Science"
     assert area.description == "Area of CS"
-    assert isinstance(area.created_at, datetime) # 验证基类属性
+    assert isinstance(area.created_at, datetime)  # 验证基类属性
 
     # --- 无效情况：名称为空字符串 ---
     # 使用 pytest.raises 捕获预期的 ValidationError
     with pytest.raises(
-        ValidationError, match="String should have at least 1 character" # 检查错误消息
+        ValidationError,
+        match="String should have at least 1 character",  # 检查错误消息
     ):
-        Area(name="") # 尝试使用空字符串创建
+        Area(name="")  # 尝试使用空字符串创建
 
 
 def test_author_validation() -> None:
@@ -325,7 +349,7 @@ def test_framework_validation() -> None:
 def test_hfmodel_validation() -> None:
     """测试 HFModel (Hugging Face 模型) 节点模型的验证，特别是 last_modified 字段。"""
     # --- 有效情况 ---
-    now_str = "2023-01-15T10:00:00Z" # 包含 'Z' 的 UTC 时间字符串
+    now_str = "2023-01-15T10:00:00Z"  # 包含 'Z' 的 UTC 时间字符串
     # 预期解析后的 datetime 对象 (带 UTC 时区)
     now_dt = datetime.fromisoformat("2023-01-15T10:00:00+00:00")
     model = HFModel(
@@ -335,7 +359,7 @@ def test_hfmodel_validation() -> None:
         last_modified=now_str,  # type: ignore[arg-type] # Pass string, validator handles conversion
         tags=["nlp", "transformer"],
         pipeline_tag="text-generation",
-        siblings=[{"name": "config.json"}], # 列表包含字典
+        siblings=[{"name": "config.json"}],  # 列表包含字典
         private=False,
         downloads=1000,
         likes=50,
@@ -359,17 +383,17 @@ def test_hfmodel_validation() -> None:
         ValidationError, match="String should have at least 1 character"
     ):
         # last_modified 设为 now_str 避免因它而失败
-        HFModel(model_id="", author="org", sha="abc", last_modified=now_str) # type: ignore[arg-type]
+        HFModel(model_id="", author="org", sha="abc", last_modified=now_str)  # type: ignore[arg-type]
 
     # --- 无效情况：last_modified 格式无效 ---
     with pytest.raises(ValidationError, match="Invalid datetime format"):
-        HFModel(model_id="test-id", last_modified="invalid-date-string") # type: ignore[arg-type]
+        HFModel(model_id="test-id", last_modified="invalid-date-string")  # type: ignore[arg-type]
 
     # --- 无效情况：last_modified 类型错误 ---
     # 预期自定义验证器抛出 TypeError
     with pytest.raises(TypeError, match="last_modified must be str or datetime"):
         # 尝试传入整数类型
-        HFModel(model_id="test-id", last_modified=12345) # type: ignore # 忽略类型检查器的警告
+        HFModel(model_id="test-id", last_modified=12345)  # type: ignore # 忽略类型检查器的警告
 
 
 def test_method_validation() -> None:
@@ -390,22 +414,22 @@ def test_method_validation() -> None:
 def test_paper_validation() -> None:
     """测试 Paper (论文) 节点模型的验证，特别是 URL 和日期字段。"""
     # --- 有效情况 ---
-    pub_date = date(2023, 1, 15) # 创建 date 对象
+    pub_date = date(2023, 1, 15)  # 创建 date 对象
     paper = Paper(
-        pwc_id="attention-all-need", # 必需字段
+        pwc_id="attention-all-need",  # 必需字段
         title="Attention Is All You Need",
         arxiv_id_base="1706.03762",
         arxiv_id_versioned="1706.03762v5",
         summary="Proposes the Transformer model.",
-        published_date=pub_date, # 传入 date 对象
-        pwc_url="http://pwc.com/attention-all-need", # type: ignore[arg-type] # 传入有效的 URL 字符串
-        pdf_url="http://arxiv.org/pdf/1706.03762.pdf", # type: ignore[arg-type] # 传入有效的 URL 字符串
+        published_date=pub_date,  # 传入 date 对象
+        pwc_url="http://pwc.com/attention-all-need",  # type: ignore[arg-type] # 传入有效的 URL 字符串
+        pdf_url="http://arxiv.org/pdf/1706.03762.pdf",  # type: ignore[arg-type] # 传入有效的 URL 字符串
         doi="10.some/doi",
         primary_category="cs.CL",
         categories=["cs.CL", "cs.LG"],
     )
     assert paper.pwc_id == "attention-all-need"
-    assert paper.published_date == pub_date # 验证日期
+    assert paper.published_date == pub_date  # 验证日期
     assert paper.categories == ["cs.CL", "cs.LG"]
     # 验证 URL 字符串被 Pydantic 转换为了 HttpUrl 类型
     assert isinstance(paper.pwc_url, HttpUrl)
@@ -421,14 +445,14 @@ def test_paper_validation() -> None:
     # --- 无效情况：URL 格式无效 ---
     # 尝试使用 ftp 协议，这不被 HttpUrl 支持
     with pytest.raises(ValidationError, match="URL scheme should be 'http' or 'https'"):
-        Paper(pwc_id="test-id", title="Invalid URL", pwc_url="ftp://invalid.com") # type: ignore[arg-type]
+        Paper(pwc_id="test-id", title="Invalid URL", pwc_url="ftp://invalid.com")  # type: ignore[arg-type]
 
 
 def test_repository_validation() -> None:
     """测试 Repository (代码仓库) 节点模型的验证，特别是 URL 字段。"""
     # --- 有效情况 ---
     repo = Repository(
-        url="https://github.com/org/repo", # type: ignore[arg-type] # 必需的 URL
+        url="https://github.com/org/repo",  # type: ignore[arg-type] # 必需的 URL
         stars=100,
         is_official=True,
         framework="jax",
@@ -443,8 +467,8 @@ def test_repository_validation() -> None:
     assert isinstance(repo.created_at, datetime)
 
     # --- 无效情况：URL 格式无效 ---
-    with pytest.raises(ValidationError) as excinfo: # 捕获 ValidationError
-        Repository(url="invalid-url") # type: ignore[arg-type] # 传入无效 URL 字符串
+    with pytest.raises(ValidationError) as excinfo:  # 捕获 ValidationError
+        Repository(url="invalid-url")  # type: ignore[arg-type] # 传入无效 URL 字符串
     # 检查 Pydantic V2 的错误细节
     errors = excinfo.value.errors()
     # 确认错误列表中包含针对 'url' 字段的 'url_parsing' 类型错误
@@ -456,7 +480,7 @@ def test_repository_validation() -> None:
     with pytest.raises(ValidationError) as excinfo:
         # 提供一个 url 参数，即使它是无效的，以满足 mypy 对必需参数的检查
         # Pydantic 仍然会因为 url 字段本身的类型验证失败而抛出 ValidationError
-        Repository(stars=10, url="invalid-for-missing-test") # type: ignore[arg-type]
+        Repository(stars=10, url="invalid-for-missing-test")  # type: ignore[arg-type]
     errors = excinfo.value.errors()
     # 确认错误列表中包含针对 'url' 字段的 'missing' 类型错误
     # Update: Check for url_parsing error instead, as we are providing an invalid URL now
@@ -482,6 +506,7 @@ def test_task_validation() -> None:
 
 # --- 关系属性验证测试 ---
 # 下面的测试函数验证关系模型的属性。
+
 
 def test_relationship_properties_base_validation() -> None:
     """测试 RelationshipPropertiesBase 基模型的验证。"""
@@ -546,7 +571,7 @@ def test_mentions_paper_validation() -> None:
 
     # --- 不提供可选 context ---
     rel_minimal = MentionsPaper()
-    assert rel_minimal.context is None # 验证默认为 None
+    assert rel_minimal.context is None  # 验证默认为 None
     assert isinstance(rel_minimal.created_at, datetime)
 
 
@@ -560,8 +585,8 @@ def test_trained_on_validation() -> None:
 
     # --- 不提供可选属性 ---
     rel_minimal = TrainedOn()
-    assert rel_minimal.split is None # 验证默认为 None
-    assert rel_minimal.config is None # 验证默认为 None
+    assert rel_minimal.split is None  # 验证默认为 None
+    assert rel_minimal.config is None  # 验证默认为 None
     assert isinstance(rel_minimal.created_at, datetime)
 
 

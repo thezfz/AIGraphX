@@ -38,76 +38,88 @@
 这些测试确保数据加载脚本能够可靠地将数据导入数据库，并且检查点机制能够正确工作，允许从中断处恢复。
 """
 
-import pytest # 导入 pytest 测试框架
-import pytest_asyncio # 导入 pytest 的异步扩展
-from unittest.mock import patch, AsyncMock, mock_open, call, ANY # 导入模拟工具
+import pytest  # 导入 pytest 测试框架
+import pytest_asyncio  # 导入 pytest 的异步扩展
+from unittest.mock import patch, AsyncMock, mock_open, call, ANY  # 导入模拟工具
 import asyncpg  # type: ignore[import-untyped] # 导入 asyncpg 库，即使被 mock，类型提示也可能需要 (忽略 mypy 找不到类型存根的错误)
-import json # 导入 json 库，用于处理 JSON 数据
-import os # 导入 os 模块，用于访问环境变量
+import json  # 导入 json 库，用于处理 JSON 数据
+import os  # 导入 os 模块，用于访问环境变量
 import builtins  # 导入 builtins 模块，用于模拟内置的 open 函数
 from pathlib import Path  # 从 pathlib 导入 Path 对象，用于处理文件路径 (配合 tmp_path)
-from aigraphx.core import config  # 导入配置模块，可能用于获取默认配置（如下面的数据库URL）
+from aigraphx.core import (
+    config,
+)  # 导入配置模块，可能用于获取默认配置（如下面的数据库URL）
 from typing import Tuple  # 从 typing 导入 Tuple 类型提示
-from pytest_mock import MockerFixture  # 导入 MockerFixture 类型，用于 pytest-mock 的 mocker fixture 类型提示
+from pytest_mock import (
+    MockerFixture,
+)  # 导入 MockerFixture 类型，用于 pytest-mock 的 mocker fixture 类型提示
 
 # 导入需要测试的脚本中的 main 函数和一些内部函数/常量
-from scripts.load_postgres import main as load_pg_main # 导入主函数并重命名，避免与关键字冲突
 from scripts.load_postgres import (
-    process_batch, # 处理一批数据的函数 (虽然测试主要调用 main)
-    insert_hf_model, # 插入 HF 模型的函数
-    get_or_insert_paper, # 获取或插入论文的函数
-    insert_model_paper_link, # 插入模型-论文关联的函数
-    insert_pwc_relation, # 插入 PWC 关系的函数
-    insert_pwc_repositories, # 插入 PWC 代码仓库的函数
-    CHECKPOINT_FILE, # 脚本中定义的检查点文件名常量
-    DEFAULT_INPUT_JSONL_FILE, # 脚本中定义的默认输入文件名常量
+    main as load_pg_main,
+)  # 导入主函数并重命名，避免与关键字冲突
+from scripts.load_postgres import (
+    process_batch,  # 处理一批数据的函数 (虽然测试主要调用 main)
+    insert_hf_model,  # 插入 HF 模型的函数
+    get_or_insert_paper,  # 获取或插入论文的函数
+    insert_model_paper_link,  # 插入模型-论文关联的函数
+    insert_pwc_relation,  # 插入 PWC 关系的函数
+    insert_pwc_repositories,  # 插入 PWC 代码仓库的函数
+    CHECKPOINT_FILE,  # 脚本中定义的检查点文件名常量
+    DEFAULT_INPUT_JSONL_FILE,  # 脚本中定义的默认输入文件名常量
 )
 
 # 导入真实的 PostgreSQL 仓库 fixture，用于集成测试中断言数据库状态
 # 这个 fixture 在 conftest.py 中定义，负责连接测试数据库并进行清理
 from tests.conftest import repository as postgres_repository_fixture
-from aigraphx.repositories.postgres_repo import PostgresRepository # 导入仓库类类型
+from aigraphx.repositories.postgres_repo import PostgresRepository  # 导入仓库类类型
 
 # --- 测试样本数据 ---
 # 定义一些 JSON 字符串，模拟输入 JSONL 文件中的行
 
-SAMPLE_MODEL_LINE_1 = json.dumps( # 第一行数据：包含一个模型和关联论文
+SAMPLE_MODEL_LINE_1 = json.dumps(  # 第一行数据：包含一个模型和关联论文
     {
         "hf_model_id": "test-model-1",  # 使用不同的 ID 以便测试区分
         "hf_author": "author1",
-        "hf_last_modified": "2023-01-01T10:00:00+00:00", # ISO 格式日期时间
+        "hf_last_modified": "2023-01-01T10:00:00+00:00",  # ISO 格式日期时间
         "hf_tags": ["tagA"],
-        "linked_papers": [ # 关联的论文列表
+        "linked_papers": [  # 关联的论文列表
             {
-                "arxiv_id_base": "1111.1111", # 论文的 arXiv ID
-                "arxiv_metadata": { # arXiv 元数据
+                "arxiv_id_base": "1111.1111",  # 论文的 arXiv ID
+                "arxiv_metadata": {  # arXiv 元数据
                     "arxiv_id_versioned": "1111.1111v1",
                     "title": "Test Paper 1 Title",
                     "authors": ["Auth1"],
                     "summary": "Summary 1",
-                    "published_date": "2023-01-01", # 日期字符串
+                    "published_date": "2023-01-01",  # 日期字符串
                 },
-                "pwc_entry": { # PapersWithCode 条目信息
+                "pwc_entry": {  # PapersWithCode 条目信息
                     "pwc_id": "test-pwc-1",  # 使用不同的 PWC ID
-                    "tasks": ["Task A"], # 任务列表
-                    "datasets": ["Data X"], # 数据集列表
-                    "repositories": [{"url": "repo.com/1", "stars": 10}], # 代码仓库列表
+                    "tasks": ["Task A"],  # 任务列表
+                    "datasets": ["Data X"],  # 数据集列表
+                    "repositories": [
+                        {"url": "repo.com/1", "stars": 10}
+                    ],  # 代码仓库列表
                 },
             }
         ],
     }
 )
-SAMPLE_MODEL_LINE_2 = json.dumps( # 第二行数据：只包含一个模型，没有关联论文
+SAMPLE_MODEL_LINE_2 = json.dumps(  # 第二行数据：只包含一个模型，没有关联论文
     {
         "hf_model_id": "test-model-2",
         "hf_author": "author2",
-        "hf_last_modified": "2023-01-02T11:00:00Z", # 使用 Z 表示 UTC
+        "hf_last_modified": "2023-01-02T11:00:00Z",  # 使用 Z 表示 UTC
         "hf_tags": ["tagB", "tagC"],
         "linked_papers": [],  # 空的论文列表
     }
 )
-SAMPLE_INVALID_JSON_LINE = "{invalid json" # 无效的 JSON 字符串，用于测试错误处理（如果需要）
-SAMPLE_MODEL_LINE_NO_ID = json.dumps({"hf_author": "author3"}) # 缺少必需的 hf_model_id，用于测试错误处理
+SAMPLE_INVALID_JSON_LINE = (
+    "{invalid json"  # 无效的 JSON 字符串，用于测试错误处理（如果需要）
+)
+SAMPLE_MODEL_LINE_NO_ID = json.dumps(
+    {"hf_author": "author3"}
+)  # 缺少必需的 hf_model_id，用于测试错误处理
 
 # --- 添加诊断性打印语句 ---
 # 在模块加载时打印环境变量的值，有助于调试测试环境配置问题
@@ -122,14 +134,15 @@ print(
 # 使用 pytest.mark.skipif 标记此模块
 # 如果 os.getenv("TEST_DATABASE_URL") 返回假值 (None 或空字符串)，则跳过此文件中的所有测试
 pytestmark = pytest.mark.skipif(
-    not os.getenv("TEST_DATABASE_URL"), # 直接在 skipif 中调用 os.getenv
-    reason="TEST_DATABASE_URL environment variable not set", # 跳过原因
+    not os.getenv("TEST_DATABASE_URL"),  # 直接在 skipif 中调用 os.getenv
+    reason="TEST_DATABASE_URL environment variable not set",  # 跳过原因
 )
 # 使用 pytest.mark.asyncio 将此文件中的所有测试标记为异步测试
 # 注意：可以将多个标记合并，例如 pytestmark = [pytest.mark.skipif(...), pytest.mark.asyncio]
 pytestmark = pytest.mark.asyncio
 
 # --- 测试 Fixtures ---
+
 
 @pytest_asyncio.fixture
 async def mock_db_pool(mocker: MockerFixture) -> Tuple[AsyncMock, AsyncMock, AsyncMock]:
@@ -174,6 +187,7 @@ async def mock_db_pool(mocker: MockerFixture) -> Tuple[AsyncMock, AsyncMock, Asy
 
 # --- 测试用例 (重构为集成测试) ---
 
+
 @pytest.mark.asyncio
 async def test_load_postgres_integration_success(
     postgres_repository_fixture: PostgresRepository,  # 请求真实的仓库 fixture (来自 conftest.py)
@@ -195,8 +209,9 @@ async def test_load_postgres_integration_success(
 
     # 2. 准备临时的检查点文件路径 (脚本会尝试读写这个路径)
     checkpoint_path = tmp_path / "checkpoint.txt"
-    print(f"[DEBUG] test_load_postgres_success: Using checkpoint path {checkpoint_path}")
-
+    print(
+        f"[DEBUG] test_load_postgres_success: Using checkpoint path {checkpoint_path}"
+    )
 
     # --- 关键：Patch 脚本依赖 ---
     # 假设 load_postgres.py 脚本内部通过某种方式获取数据库连接/仓库。
@@ -216,9 +231,11 @@ async def test_load_postgres_integration_success(
     # 即使 conftest 可能设置了环境变量，最好在测试内部显式 patch 脚本使用的变量，确保隔离性。
     # 在测试函数内部获取测试数据库 URL
     test_db_url = os.getenv("TEST_DATABASE_URL")
-    if not test_db_url: # 如果未设置，则跳过测试
+    if not test_db_url:  # 如果未设置，则跳过测试
         pytest.skip("TEST_DATABASE_URL 未在环境/配置中设置。")
-    print(f"[DEBUG] test_load_postgres_success: Patching DATABASE_URL in script to: {test_db_url}")
+    print(
+        f"[DEBUG] test_load_postgres_success: Patching DATABASE_URL in script to: {test_db_url}"
+    )
     # 直接 patch 掉 `scripts.load_postgres` 模块中的 `DATABASE_URL` 变量
     mocker.patch("scripts.load_postgres.DATABASE_URL", test_db_url)
 
@@ -231,7 +248,6 @@ async def test_load_postgres_integration_success(
     )
     print("[DEBUG] test_load_postgres_success: load_pg_main finished.")
 
-
     # --- 断言 ---
     # 4. 使用真实的 repository fixture 连接测试数据库，验证数据是否已正确插入
     # 这里直接使用 repo.pool 获取连接，因为 repo fixture 已经初始化好了
@@ -243,7 +259,7 @@ async def test_load_postgres_integration_success(
                 "SELECT hf_author, hf_tags FROM hf_models WHERE hf_model_id = %s",
                 ("test-model-1",),
             )
-            model1 = await cur.fetchone() # 获取一行结果
+            model1 = await cur.fetchone()  # 获取一行结果
             assert model1 is not None, "Model 1 not found in DB"
             assert model1[0] == "author1"
             assert model1[1] == ["tagA"]
@@ -265,7 +281,7 @@ async def test_load_postgres_integration_success(
             )
             paper1 = await cur.fetchone()
             assert paper1 is not None, "Paper 1 (pwc_id=test-pwc-1) not found in DB"
-            paper1_id = paper1[0] # 获取插入后生成的 paper_id
+            paper1_id = paper1[0]  # 获取插入后生成的 paper_id
             assert paper1[1] == "Test Paper 1 Title"
             assert paper1[2] == ["Auth1"]
             # assert paper1[3] == "AI" # area 字段的断言可能不稳定，暂时注释掉
@@ -338,7 +354,9 @@ async def test_load_postgres_integration_resume(
                 "SELECT 1 FROM hf_models WHERE hf_model_id = %s", ("test-model-1",)
             )
             model1 = await cur.fetchone()
-            assert model1 is None, "Model 1 should not have been processed in this resume run"
+            assert model1 is None, (
+                "Model 1 should not have been processed in this resume run"
+            )
 
             # 模型 2 (来自第 1 行) *应该* 被插入
             await cur.execute(
@@ -375,9 +393,7 @@ async def test_load_postgres_integration_reset(
     # Patch 检查点文件路径
     mocker.patch("scripts.load_postgres.CHECKPOINT_FILE", str(checkpoint_path))
     # Mock _load_checkpoint，因为 reset=True，它应该返回 0
-    mock_load = mocker.patch(
-        "scripts.load_postgres._load_checkpoint", return_value=0
-    )
+    mock_load = mocker.patch("scripts.load_postgres._load_checkpoint", return_value=0)
     mock_save = mocker.patch("scripts.load_postgres._save_checkpoint")
 
     # Patch 脚本使用的 DATABASE_URL

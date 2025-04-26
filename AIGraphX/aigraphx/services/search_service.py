@@ -60,11 +60,16 @@ from typing import (  # 用于类型提示，增强代码可读性和健壮性
 )
 
 # 导入第三方库
-from fastapi import HTTPException, status  # FastAPI 框架的组件，HTTPException 用于主动返回 HTTP 错误响应，status 包含 HTTP 状态码常量
+from fastapi import (
+    HTTPException,
+    status,
+)  # FastAPI 框架的组件，HTTPException 用于主动返回 HTTP 错误响应，status 包含 HTTP 状态码常量
 from pydantic import ValidationError  # Pydantic 库的组件，用于数据验证错误
 
 # 导入项目内部组件
-from aigraphx.repositories.postgres_repo import PostgresRepository  # 导入 PostgreSQL 数据仓库类
+from aigraphx.repositories.postgres_repo import (
+    PostgresRepository,
+)  # 导入 PostgreSQL 数据仓库类
 from aigraphx.repositories.faiss_repo import FaissRepository  # 导入 Faiss 数据仓库类
 from aigraphx.vectorization.embedder import TextEmbedder  # 导入文本嵌入器类
 from aigraphx.models.search import (  # 导入搜索相关的 Pydantic 模型
@@ -240,7 +245,9 @@ class SearchService:
                             summary=details.get("summary", ""),
                             score=score,  # 允许 score 为 None
                             pdf_url=details.get("pdf_url", ""),
-                            published_date=details.get("published_date"),  # 直接传递日期对象
+                            published_date=details.get(
+                                "published_date"
+                            ),  # 直接传递日期对象
                             authors=details.get(
                                 "authors", []
                             ),  # 获取作者列表，默认为空列表
@@ -444,7 +451,9 @@ class SearchService:
                 likes_int = int(likes_val) if likes_val is not None else None
 
                 downloads_val = detail_result.get("hf_downloads")
-                downloads_int = int(downloads_val) if downloads_val is not None else None
+                downloads_int = (
+                    int(downloads_val) if downloads_val is not None else None
+                )
 
                 # 使用从数据库获取的值创建 Pydantic 模型实例
                 # 注意：这里的键名 (如 model_id, pipeline_tag) 必须与 HFSearchResultItem 模型定义的字段名匹配
@@ -596,8 +605,12 @@ class SearchService:
                 # 为 None 值定义默认值，以确保排序行为一致且可预测
                 # 这些默认值通常应放在排序顺序的开头或末尾
                 min_date = date.min  # 最小日期
-                min_datetime = datetime.min.replace(tzinfo=timezone.utc) # 最小带时区日期时间
-                min_score = -math.inf  # 负无穷大，用于分数排序时将 None 排在最前面 (升序)
+                min_datetime = datetime.min.replace(
+                    tzinfo=timezone.utc
+                )  # 最小带时区日期时间
+                min_score = (
+                    -math.inf
+                )  # 负无穷大，用于分数排序时将 None 排在最前面 (升序)
                 min_int = -1  # 负数，用于整数排序时将 None 排在最前面 (升序)
                 min_str = ""  # 空字符串，用于字符串排序时将 None 排在最前面 (升序)
 
@@ -618,14 +631,16 @@ class SearchService:
                             primary_key = (
                                 item.score if item.score is not None else min_score
                             )
-                            secondary_key = item.paper_id  # 假设 paper_id 总是存在且可比较
+                            secondary_key = (
+                                item.paper_id
+                            )  # 假设 paper_id 总是存在且可比较
                             return (primary_key, secondary_key)
                         else:
                             # 如果 sort_by 对于论文类型无效，记录警告并返回 None
                             logger.warning(
                                 f"不支持的 SearchResultItem 排序键 '{sort_by}'。"
                             )
-                            return None # 返回 None 表示此项无法参与排序
+                            return None  # 返回 None 表示此项无法参与排序
 
                     elif isinstance(item, HFSearchResultItem):  # 如果是模型
                         if sort_by == "likes":
@@ -635,13 +650,15 @@ class SearchService:
                         elif sort_by == "downloads":
                             # 修复 mypy 错误：显式检查 None
                             downloads_val = item.downloads
-                            return downloads_val if downloads_val is not None else min_int
+                            return (
+                                downloads_val if downloads_val is not None else min_int
+                            )
                         elif sort_by == "last_modified":
                             # 如果 last_modified 为 None，使用 min_datetime
                             # 确保比较的是带时区的 datetime 对象
                             dt = item.last_modified
                             if dt and dt.tzinfo is None:
-                                dt = dt.replace(tzinfo=timezone.utc) # 假设 UTC
+                                dt = dt.replace(tzinfo=timezone.utc)  # 假设 UTC
                             return dt if dt else min_datetime
                         elif sort_by == "score":
                             # 如果 score 为 None，使用 min_score
@@ -689,7 +706,7 @@ class SearchService:
 
                 # 记录排序前的部分数据（ID 和分数），用于调试
                 logger.debug(
-                    f"_apply_sorting_and_pagination: 排序前 (sort_by='{sort_by}', reverse={reverse}): {[(getattr(i, 'paper_id', getattr(i, 'model_id', 'N/A')), getattr(i, 'score', None)) for i in valid_items[:20]]}" # 最多显示前20条
+                    f"_apply_sorting_and_pagination: 排序前 (sort_by='{sort_by}', reverse={reverse}): {[(getattr(i, 'paper_id', getattr(i, 'model_id', 'N/A')), getattr(i, 'score', None)) for i in valid_items[:20]]}"  # 最多显示前20条
                 )
 
                 # 对有效项进行排序
@@ -697,7 +714,7 @@ class SearchService:
 
                 # 记录排序后的部分数据（ID 和分数），用于调试
                 logger.debug(
-                    f"_apply_sorting_and_pagination: 排序后: {[(getattr(i, 'paper_id', getattr(i, 'model_id', 'N/A')), getattr(i, 'score', None)) for i in valid_items[:20]]}" # 最多显示前20条
+                    f"_apply_sorting_and_pagination: 排序后: {[(getattr(i, 'paper_id', getattr(i, 'model_id', 'N/A')), getattr(i, 'score', None)) for i in valid_items[:20]]}"  # 最多显示前20条
                 )
 
                 # 将排序后的有效项列表用于后续分页
@@ -712,9 +729,7 @@ class SearchService:
                 items_to_paginate = items_to_sort
             except Exception as e:
                 # 如果发生其他意外错误
-                logger.error(
-                    f"按 '{sort_by}' 排序时发生意外错误: {e}", exc_info=True
-                )
+                logger.error(f"按 '{sort_by}' 排序时发生意外错误: {e}", exc_info=True)
                 # 在发生其他错误时，也回退到使用原始顺序
                 items_to_paginate = items_to_sort
 
@@ -740,15 +755,17 @@ class SearchService:
 
     async def perform_semantic_search(
         self,
-        query: str, # 搜索查询字符串
-        target: SearchTarget, # 搜索目标 ('papers', 'models')
-        page: int = 1, # 页码
-        page_size: int = 10, # 每页大小
-        top_n: int = DEFAULT_TOP_N_SEMANTIC, # 从 Faiss 获取的初始结果数量
-        date_from: Optional[date] = None, # 起始日期过滤器
-        date_to: Optional[date] = None, # 结束日期过滤器
-        sort_by: Optional[Union[PaperSortByLiteral, ModelSortByLiteral]] = "score", # 排序字段，默认为 'score'
-        sort_order: SortOrderLiteral = "desc", # 排序顺序，默认为 'desc'
+        query: str,  # 搜索查询字符串
+        target: SearchTarget,  # 搜索目标 ('papers', 'models')
+        page: int = 1,  # 页码
+        page_size: int = 10,  # 每页大小
+        top_n: int = DEFAULT_TOP_N_SEMANTIC,  # 从 Faiss 获取的初始结果数量
+        date_from: Optional[date] = None,  # 起始日期过滤器
+        date_to: Optional[date] = None,  # 结束日期过滤器
+        sort_by: Optional[
+            Union[PaperSortByLiteral, ModelSortByLiteral]
+        ] = "score",  # 排序字段，默认为 'score'
+        sort_order: SortOrderLiteral = "desc",  # 排序顺序，默认为 'desc'
     ) -> PaginatedResult:
         """
         执行语义搜索。
@@ -814,7 +831,9 @@ class SearchService:
                 items=[], total=0, skip=skip, limit=page_size
             )
         # 验证 target 是否是预期的值 ('papers' 或 'models')
-        if target not in get_args(SearchTarget): # get_args(SearchTarget) 会返回 ('papers', 'models', 'all')
+        if target not in get_args(
+            SearchTarget
+        ):  # get_args(SearchTarget) 会返回 ('papers', 'models', 'all')
             logger.error(f"无效的搜索目标 '{target}'。")
             # 返回空的通用分页结果
             return PaginatedSemanticSearchResult(
@@ -826,22 +845,22 @@ class SearchService:
         # 这样可以减少代码重复
         target_configs = {
             "papers": {
-                "faiss_repo": self.faiss_repo_papers, # 使用论文 Faiss 仓库
-                "fetch_details_func": self._get_paper_details_for_ids, # 使用获取论文详情的函数
-                "id_type": int, # 论文 ID 是整数
-                "ResultModel": SearchResultItem, # 结果项的模型是 SearchResultItem
-                "PaginatedModel": PaginatedPaperSearchResult, # 分页结果的模型
-                "sort_options": get_args(PaperSortByLiteral), # 论文允许的排序字段
-                "EmptyModel": PaginatedPaperSearchResult, # 空结果时使用的模型
+                "faiss_repo": self.faiss_repo_papers,  # 使用论文 Faiss 仓库
+                "fetch_details_func": self._get_paper_details_for_ids,  # 使用获取论文详情的函数
+                "id_type": int,  # 论文 ID 是整数
+                "ResultModel": SearchResultItem,  # 结果项的模型是 SearchResultItem
+                "PaginatedModel": PaginatedPaperSearchResult,  # 分页结果的模型
+                "sort_options": get_args(PaperSortByLiteral),  # 论文允许的排序字段
+                "EmptyModel": PaginatedPaperSearchResult,  # 空结果时使用的模型
             },
             "models": {
-                "faiss_repo": self.faiss_repo_models, # 使用模型 Faiss 仓库
-                "fetch_details_func": self._get_model_details_for_ids, # 使用获取模型详情的函数
-                "id_type": str, # 模型 ID 是字符串
-                "ResultModel": HFSearchResultItem, # 结果项的模型是 HFSearchResultItem
-                "PaginatedModel": PaginatedHFModelSearchResult, # 分页结果的模型
-                "sort_options": get_args(ModelSortByLiteral), # 模型允许的排序字段
-                "EmptyModel": PaginatedHFModelSearchResult, # 空结果时使用的模型
+                "faiss_repo": self.faiss_repo_models,  # 使用模型 Faiss 仓库
+                "fetch_details_func": self._get_model_details_for_ids,  # 使用获取模型详情的函数
+                "id_type": str,  # 模型 ID 是字符串
+                "ResultModel": HFSearchResultItem,  # 结果项的模型是 HFSearchResultItem
+                "PaginatedModel": PaginatedHFModelSearchResult,  # 分页结果的模型
+                "sort_options": get_args(ModelSortByLiteral),  # 模型允许的排序字段
+                "EmptyModel": PaginatedHFModelSearchResult,  # 空结果时使用的模型
             },
         }
 
@@ -861,14 +880,16 @@ class SearchService:
             Callable[..., Coroutine[Any, Any, List[ResultItem]]],
             config["fetch_details_func"],
         )
-        id_type: Type = cast(Type, config["id_type"]) # ID 的类型 (int 或 str)
+        id_type: Type = cast(Type, config["id_type"])  # ID 的类型 (int 或 str)
         PaginatedModel: Type[PaginatedResult] = cast(
             Type[PaginatedResult], config["PaginatedModel"]
-        ) # 分页模型的类型
-        target_sort_options: Tuple = cast(Tuple, config["sort_options"]) # 该目标允许的排序字段元组
+        )  # 分页模型的类型
+        target_sort_options: Tuple = cast(
+            Tuple, config["sort_options"]
+        )  # 该目标允许的排序字段元组
         EmptyModel: Type[PaginatedResult] = cast(
             Type[PaginatedResult], config["EmptyModel"]
-        ) # 空结果时使用的分页模型类型
+        )  # 空结果时使用的分页模型类型
 
         # --- 查询验证 ---
         # 如果查询字符串为空或仅包含空白，则不执行搜索
@@ -879,9 +900,9 @@ class SearchService:
 
         # --- 嵌入 (Embedding) ---
         # 将查询文本转换为向量
-        embedding: Optional[np.ndarray] = None # 初始化为 None
+        embedding: Optional[np.ndarray] = None  # 初始化为 None
         try:
-            embedding = self.embedder.embed(query) # 调用嵌入器的 embed 方法
+            embedding = self.embedder.embed(query)  # 调用嵌入器的 embed 方法
             # 如果嵌入失败 (返回 None)
             if embedding is None:
                 logger.error("[perform_semantic_search] 生成嵌入向量失败。")
@@ -912,8 +933,12 @@ class SearchService:
         # --- 验证 Faiss ID 类型 ---
         # 检查 Faiss 仓库内部配置的 ID 类型是否与服务配置的 ID 类型匹配
         # 这是为了防止因配置错误导致后续处理失败
-        faiss_id_type_name = getattr(faiss_repo, "id_type", None) # 获取 Faiss 仓库记录的 ID 类型名称
-        expected_id_type_name = id_type.__name__ # 获取服务期望的 ID 类型名称 (如 'int', 'str')
+        faiss_id_type_name = getattr(
+            faiss_repo, "id_type", None
+        )  # 获取 Faiss 仓库记录的 ID 类型名称
+        expected_id_type_name = (
+            id_type.__name__
+        )  # 获取服务期望的 ID 类型名称 (如 'int', 'str')
         if faiss_id_type_name != expected_id_type_name:
             logger.error(
                 f"[perform_semantic_search] ID 类型不匹配: 目标 '{target}' 的 Faiss 仓库期望 '{faiss_id_type_name}'，但服务配置为 '{expected_id_type_name}'"
@@ -944,13 +969,15 @@ class SearchService:
         # --- 处理 Faiss 结果 ---
         # 如果 Faiss 没有返回任何结果
         if not search_results_raw:
-            logger.info(f"[perform_semantic_search] 目标 '{target}' 的 Faiss 搜索未返回结果。")
+            logger.info(
+                f"[perform_semantic_search] 目标 '{target}' 的 Faiss 搜索未返回结果。"
+            )
             # 返回特定目标的空分页模型
             return PaginatedModel(items=[], total=0, skip=skip, limit=page_size)
 
         # 初始化用于存储有效 ID 和对应分数的列表和字典
-        result_ids: list = [] # 存储有效 ID (类型可能是 int 或 str)
-        result_scores: dict = {} # 存储 ID 到分数的映射
+        result_ids: list = []  # 存储有效 ID (类型可能是 int 或 str)
+        result_scores: dict = {}  # 存储 ID 到分数的映射
         # 遍历 Faiss 返回的原始结果 (ID, 距离) 对
         for original_id_union, distance in search_results_raw:
             # 再次验证从 Faiss 获取的 ID 类型是否与当前目标期望的类型一致
@@ -1013,8 +1040,9 @@ class SearchService:
         )
         # 如果过滤后列表不等于原列表，可以记录一下过滤掉了多少项 (可选)
         if len(filtered_items) != len(all_items_list):
-             logger.debug(f"日期过滤将结果从 {len(all_items_list)} 项减少到 {len(filtered_items)} 项。")
-
+            logger.debug(
+                f"日期过滤将结果从 {len(all_items_list)} 项减少到 {len(filtered_items)} 项。"
+            )
 
         # --- 排序和分页 ---
         # 验证排序键是否对当前目标有效
@@ -1034,17 +1062,17 @@ class SearchService:
                 valid_sort_by = "score"
 
         # 调用排序和分页的辅助方法
-        paginated_items_list: List[ResultItem] # 排序分页后的项目列表
-        total_items: int # 过滤后、分页前的总项目数
-        calculated_skip: int # 计算出的偏移量
-        calculated_limit: int # 页面大小
+        paginated_items_list: List[ResultItem]  # 排序分页后的项目列表
+        total_items: int  # 过滤后、分页前的总项目数
+        calculated_skip: int  # 计算出的偏移量
+        calculated_limit: int  # 页面大小
         paginated_items_list, total_items, calculated_skip, calculated_limit = (
             self._apply_sorting_and_pagination(
-                filtered_items, # 使用过滤后的列表
-                sort_by=valid_sort_by, # 使用验证/默认后的排序键
-                sort_order=sort_order, # 使用传入的排序顺序
-                page=page, # 使用传入的页码
-                page_size=page_size, # 使用传入的页面大小
+                filtered_items,  # 使用过滤后的列表
+                sort_by=valid_sort_by,  # 使用验证/默认后的排序键
+                sort_order=sort_order,  # 使用传入的排序顺序
+                page=page,  # 使用传入的页码
+                page_size=page_size,  # 使用传入的页面大小
             )
         )
 
@@ -1058,27 +1086,29 @@ class SearchService:
         # 使用 cast 告诉类型检查器 paginated_items_list 的具体类型 (虽然它是 ResultItem 列表，但 PaginatedModel 需要更具体的类型)
         # 我们在这里可以确信类型是正确的，因为它是基于 target 选择的 PaginatedModel
         return PaginatedModel(
-            items=cast(List[Any], paginated_items_list), # 将结果列表强制转换为 Any 列表以匹配 Pydantic 模型签名
-            total=total_items, # 过滤后、分页前的总数
-            skip=calculated_skip, # 计算出的偏移量
-            limit=calculated_limit, # 页面大小
+            items=cast(
+                List[Any], paginated_items_list
+            ),  # 将结果列表强制转换为 Any 列表以匹配 Pydantic 模型签名
+            total=total_items,  # 过滤后、分页前的总数
+            skip=calculated_skip,  # 计算出的偏移量
+            limit=calculated_limit,  # 页面大小
         )
 
     async def perform_keyword_search(
         self,
-        query: str, # 搜索查询文本
-        target: SearchTarget, # 搜索目标 ('papers' 或 'models')
-        page: int = 1, # 页码
-        page_size: int = 10, # 每页大小
-        date_from: Optional[date] = None, # (论文) 起始日期过滤器
-        date_to: Optional[date] = None, # (论文) 结束日期过滤器
-        area: Optional[List[str]] = None, # (论文) 领域过滤器 (支持多选)
-        pipeline_tag: Optional[str] = None, # (模型) pipeline_tag 过滤器
+        query: str,  # 搜索查询文本
+        target: SearchTarget,  # 搜索目标 ('papers' 或 'models')
+        page: int = 1,  # 页码
+        page_size: int = 10,  # 每页大小
+        date_from: Optional[date] = None,  # (论文) 起始日期过滤器
+        date_to: Optional[date] = None,  # (论文) 结束日期过滤器
+        area: Optional[List[str]] = None,  # (论文) 领域过滤器 (支持多选)
+        pipeline_tag: Optional[str] = None,  # (模型) pipeline_tag 过滤器
         # 新增：其他可选过滤器
-        filter_authors: Optional[List[str]] = None, # (论文) 作者过滤器 (支持多选)
-        filter_library_name: Optional[str] = None, # (模型) 库名称过滤器
-        filter_tags: Optional[List[str]] = None, # (模型) 标签过滤器 (支持多选)
-        filter_author: Optional[str] = None, # (模型) 作者 (hf_author) 过滤器
+        filter_authors: Optional[List[str]] = None,  # (论文) 作者过滤器 (支持多选)
+        filter_library_name: Optional[str] = None,  # (模型) 库名称过滤器
+        filter_tags: Optional[List[str]] = None,  # (模型) 标签过滤器 (支持多选)
+        filter_author: Optional[str] = None,  # (模型) 作者 (hf_author) 过滤器
         # 允许指定排序字段和顺序
         sort_by: Optional[Union[PaperSortByLiteral, ModelSortByLiteral]] = None,
         sort_order: SortOrderLiteral = "desc",
@@ -1182,12 +1212,14 @@ class SearchService:
                 logger.warning(
                     f"[perform_keyword_search] 无效或不支持的排序键 '{sort_by}' 用于论文关键词搜索。将使用 'published_date'。"
                 )
-                valid_pg_sort_by = "published_date" # PG 仓库期望的列名
+                valid_pg_sort_by = "published_date"  # PG 仓库期望的列名
             else:
                 # 类型转换，确保传递给 PG 的是它能理解的字符串
                 # 假设 PG 仓库期望的排序键与 Literal 定义一致
                 valid_pg_sort_by = cast(
-                    Optional[Literal["published_date", "title"]], # PG 可能支持按 title 排序
+                    Optional[
+                        Literal["published_date", "title"]
+                    ],  # PG 可能支持按 title 排序
                     sort_by,
                 )
 
@@ -1214,7 +1246,7 @@ class SearchService:
                 logger.warning(
                     f"[perform_keyword_search] 无效或不支持的排序键 '{sort_by}' 用于模型关键词搜索。将使用 'last_modified'。"
                 )
-                valid_pg_sort_by = "last_modified" # PG 仓库期望的列名
+                valid_pg_sort_by = "last_modified"  # PG 仓库期望的列名
             else:
                 # 类型转换
                 valid_pg_sort_by = cast(
@@ -1231,21 +1263,21 @@ class SearchService:
             # 构建传递给 PG 仓库方法的参数字典
             pg_params: Dict[str, Any] = {
                 "query": query,
-                "limit": page_size, # 分页大小
-                "skip": skip, # 分页偏移量
-                "sort_by": valid_pg_sort_by, # 验证/默认后的排序字段
-                "sort_order": sort_order, # 排序顺序
+                "limit": page_size,  # 分页大小
+                "skip": skip,  # 分页偏移量
+                "sort_by": valid_pg_sort_by,  # 验证/默认后的排序字段
+                "sort_order": sort_order,  # 排序顺序
             }
 
             # 根据目标类型，添加特定于该目标的过滤参数
             if target == "papers":
                 pg_params["published_after"] = date_from
                 pg_params["published_before"] = date_to
-                pg_params["filter_area"] = area # 传递领域过滤器
-                pg_params["filter_authors"] = filter_authors # 传递作者过滤器
+                pg_params["filter_area"] = area  # 传递领域过滤器
+                pg_params["filter_authors"] = filter_authors  # 传递作者过滤器
             elif target == "models":
                 pg_params["pipeline_tag"] = pipeline_tag
-                pg_params["filter_library_name"] = filter_library_name # 传递库名过滤器
+                pg_params["filter_library_name"] = filter_library_name  # 传递库名过滤器
                 pg_params["filter_tags"] = filter_tags  # 新增
                 pg_params["filter_author"] = filter_author  # 新增
 
@@ -1285,7 +1317,7 @@ class SearchService:
                             logger.warning(
                                 f"[perform_keyword_search] Could not decode authors JSON for paper_id {item_dict.get('paper_id')}"
                             )
-                            item_dict["authors"] = [] # 保证 authors 字段是列表类型
+                            item_dict["authors"] = []  # 保证 authors 字段是列表类型
 
                     # 尝试使用字典创建 SearchResultItem 实例
                     # Pydantic 会进行验证，如果字典缺少必需字段或类型不匹配会抛出 ValidationError
@@ -1295,16 +1327,16 @@ class SearchService:
                         # 如果单个项目验证失败，记录错误并跳过该项目
                         logger.error(
                             f"[perform_keyword_search] 从字典创建 SearchResultItem 时出错: {item_error}\n数据: {item_dict}",
-                            exc_info=False, # 通常不需要完整堆栈
+                            exc_info=False,  # 通常不需要完整堆栈
                         )
-                        continue # 继续处理下一个项目
+                        continue  # 继续处理下一个项目
                     except Exception as e:
-                         # 捕获其他可能的错误
-                         logger.error(
+                        # 捕获其他可能的错误
+                        logger.error(
                             f"[perform_keyword_search] 创建 SearchResultItem 时发生意外错误: {e}\n数据: {item_dict}",
                             exc_info=True,
-                         )
-                         continue
+                        )
+                        continue
 
                 # 使用成功转换的 Pydantic 模型列表和总数创建分页结果对象
                 return PaginatedPaperSearchResult(
@@ -1333,7 +1365,9 @@ class SearchService:
 
                         # 安全处理 'tags' (可能为 JSON 字符串) - 复用 _get_model_details_for_ids 中的逻辑
                         processed_tags: Optional[List[str]] = None
-                        tags_list = item_dict.get("hf_tags") # 从 PG 结果获取 'hf_tags' 列
+                        tags_list = item_dict.get(
+                            "hf_tags"
+                        )  # 从 PG 结果获取 'hf_tags' 列
                         if isinstance(tags_list, str):
                             try:
                                 parsed_tags = json.loads(tags_list)
@@ -1352,7 +1386,9 @@ class SearchService:
 
                         # 安全处理 'last_modified' - 复用并调整 _get_model_details_for_ids 中的逻辑
                         final_last_modified_dt: Optional[datetime] = None
-                        last_modified_val = item_dict.get("hf_last_modified") # 从 PG 结果获取
+                        last_modified_val = item_dict.get(
+                            "hf_last_modified"
+                        )  # 从 PG 结果获取
                         if isinstance(last_modified_val, (datetime, date)):
                             # 确保是 datetime 对象
                             final_last_modified_dt = (
@@ -1436,11 +1472,11 @@ class SearchService:
 
     async def perform_hybrid_search(
         self,
-        query: str, # 搜索查询文本
-        target: SearchTarget = "papers", # 搜索目标，默认为 'papers'
-        page: int = 1, # 页码
-        page_size: int = 10, # 每页大小
-        filters: Optional[SearchFilterModel] = None, # 可选的过滤器对象
+        query: str,  # 搜索查询文本
+        target: SearchTarget = "papers",  # 搜索目标，默认为 'papers'
+        page: int = 1,  # 页码
+        page_size: int = 10,  # 每页大小
+        filters: Optional[SearchFilterModel] = None,  # 可选的过滤器对象
     ) -> PaginatedResult:
         """
         执行混合搜索，结合语义搜索和关键词搜索的结果。
@@ -1487,7 +1523,7 @@ class SearchService:
                 return PaginatedPaperSearchResult(
                     items=[], total=0, skip=skip, limit=page_size
                 )
-            else: # target == "models" 或其他 (虽然理论上只有 models)
+            else:  # target == "models" 或其他 (虽然理论上只有 models)
                 return PaginatedHFModelSearchResult(
                     items=[], total=0, skip=skip, limit=page_size
                 )
@@ -1497,14 +1533,14 @@ class SearchService:
         published_after: Optional[date] = None
         published_before: Optional[date] = None
         filter_area: Optional[List[str]] = None
-        pipeline_tag: Optional[str] = None # 模型特有的过滤器
-        filter_authors: Optional[List[str]] = None # 论文特有
-        filter_library_name: Optional[str] = None # 模型特有
-        filter_tags: Optional[List[str]] = None # 模型特有
-        filter_author: Optional[str] = None # 模型特有
+        pipeline_tag: Optional[str] = None  # 模型特有的过滤器
+        filter_authors: Optional[List[str]] = None  # 论文特有
+        filter_library_name: Optional[str] = None  # 模型特有
+        filter_tags: Optional[List[str]] = None  # 模型特有
+        filter_author: Optional[str] = None  # 模型特有
         # 修复 mypy 错误：使用不同的变量名接收初始的 Optional[str]
         sort_by_from_filter: Optional[str] = None
-        sort_order: SortOrderLiteral = "desc" # 默认降序
+        sort_order: SortOrderLiteral = "desc"  # 默认降序
 
         # 如果提供了 filters 对象，则从中提取值覆盖默认值
         if filters:
@@ -1571,10 +1607,10 @@ class SearchService:
         published_after: Optional[date] = None,
         published_before: Optional[date] = None,
         filter_area: Optional[List[str]] = None,
-        filter_authors: Optional[List[str]] = None, # 添加作者过滤器参数
-        sort_by: Optional[PaperSortByLiteral] = None, # 现在从外部传入
-        sort_order: SortOrderLiteral = "desc", # 现在从外部传入
-        filters: Optional[SearchFilterModel] = None, # 接收完整的 filters 对象
+        filter_authors: Optional[List[str]] = None,  # 添加作者过滤器参数
+        sort_by: Optional[PaperSortByLiteral] = None,  # 现在从外部传入
+        sort_order: SortOrderLiteral = "desc",  # 现在从外部传入
+        filters: Optional[SearchFilterModel] = None,  # 接收完整的 filters 对象
     ) -> PaginatedPaperSearchResult:
         """
         内部方法，专门为论文执行混合搜索（语义 + 关键词）。
@@ -1594,11 +1630,13 @@ class SearchService:
         skip = (page - 1) * page_size
 
         # --- 步骤 1: 执行语义搜索 (获取 ID 和分数) ---
-        semantic_results_map: Dict[int, float] = {} # 存储 paper_id -> semantic_score
+        semantic_results_map: Dict[int, float] = {}  # 存储 paper_id -> semantic_score
         try:
             # 检查嵌入器是否可用
             if self.embedder is None:
-                logger.warning("[_perform_hybrid_search_papers] 嵌入器不可用，无法执行语义搜索部分。")
+                logger.warning(
+                    "[_perform_hybrid_search_papers] 嵌入器不可用，无法执行语义搜索部分。"
+                )
             else:
                 # 生成查询嵌入向量
                 embedding = self.embedder.embed(query)
@@ -1607,7 +1645,7 @@ class SearchService:
                     # 获取比 page_size 更多的结果 (例如 30 或 DEFAULT_TOP_N_SEMANTIC)，以便后续 RRF 和过滤有足够数据
                     semantic_results_raw = await self.faiss_repo_papers.search_similar(
                         embedding,
-                        k=self.DEFAULT_TOP_N_SEMANTIC, # 使用常量
+                        k=self.DEFAULT_TOP_N_SEMANTIC,  # 使用常量
                     )
                     # 将 (faiss_id, distance) 转换为 (paper_id, score) 的字典
                     semantic_results_map = {
@@ -1615,11 +1653,16 @@ class SearchService:
                         int(paper_id): self._convert_distance_to_score(distance)
                         for paper_id, distance in semantic_results_raw
                         # 确保 paper_id 不是 None 且可以转换为 int
-                        if paper_id is not None and isinstance(paper_id, (int, np.integer)) # Faiss 可能返回 numpy int
+                        if paper_id is not None
+                        and isinstance(
+                            paper_id, (int, np.integer)
+                        )  # Faiss 可能返回 numpy int
                     }
-                    logger.debug(f"语义搜索找到 {len(semantic_results_map)} 个初始结果。")
+                    logger.debug(
+                        f"语义搜索找到 {len(semantic_results_map)} 个初始结果。"
+                    )
                 else:
-                     logger.error("[_perform_hybrid_search_papers] 生成查询嵌入失败。")
+                    logger.error("[_perform_hybrid_search_papers] 生成查询嵌入失败。")
         except Exception as e:
             # 记录语义搜索部分的错误，但不中断流程
             logger.error(
@@ -1627,8 +1670,10 @@ class SearchService:
             )
 
         # --- 步骤 2: 执行关键词搜索 (获取 ID 和初步详情) ---
-        keyword_results_list: List[Dict[str, Any]] = [] # 存储 PG 返回的原始字典列表
-        keyword_ids_ordered: List[int] = [] # 按 PG 返回顺序存储 ID，用于后续计算关键词排名
+        keyword_results_list: List[Dict[str, Any]] = []  # 存储 PG 返回的原始字典列表
+        keyword_ids_ordered: List[
+            int
+        ] = []  # 按 PG 返回顺序存储 ID，用于后续计算关键词排名
         try:
             # 调用 PG 仓库的关键词搜索方法
             # 同样获取更多结果 (例如 30 或 DEFAULT_TOP_N_KEYWORD)
@@ -1636,13 +1681,13 @@ class SearchService:
             # 传递日期和领域过滤器给 PG，让它先做一轮过滤
             keyword_results_list, _ = await self.pg_repo.search_papers_by_keyword(
                 query=query,
-                limit=self.DEFAULT_TOP_N_KEYWORD, # 使用常量
-                skip=0, # 从头开始获取
+                limit=self.DEFAULT_TOP_N_KEYWORD,  # 使用常量
+                skip=0,  # 从头开始获取
                 # 传递过滤器给 PG
                 published_after=published_after,
                 published_before=published_before,
                 filter_area=filter_area,
-                filter_authors=filter_authors, # 传递作者过滤器
+                filter_authors=filter_authors,  # 传递作者过滤器
                 # 可以指定一个默认的 PG 排序，比如按日期，即使 RRF 会覆盖分数
                 sort_by="published_date",
                 sort_order="desc",
@@ -1650,25 +1695,28 @@ class SearchService:
 
             # 提取关键词搜索结果的 ID，并保持 PG 返回的顺序
             for result in keyword_results_list:
-                 paper_id_val = result.get("paper_id")
-                 if paper_id_val is not None:
-                     try:
-                         keyword_ids_ordered.append(int(paper_id_val))
-                     except ValueError:
-                         logger.warning(f"无法将关键词搜索结果的 paper_id '{paper_id_val}' 转换为整数。")
+                paper_id_val = result.get("paper_id")
+                if paper_id_val is not None:
+                    try:
+                        keyword_ids_ordered.append(int(paper_id_val))
+                    except ValueError:
+                        logger.warning(
+                            f"无法将关键词搜索结果的 paper_id '{paper_id_val}' 转换为整数。"
+                        )
 
             logger.debug(f"关键词搜索找到 {len(keyword_ids_ordered)} 个初始结果。")
 
         except Exception as e:
             # 记录关键词搜索部分的错误
             logger.error(
-                f"[_perform_hybrid_search_papers] 关键词搜索部分出错: {e}", exc_info=True
+                f"[_perform_hybrid_search_papers] 关键词搜索部分出错: {e}",
+                exc_info=True,
             )
 
         # --- 步骤 3: 合并结果 ID ---
         # 获取所有唯一 ID (来自语义搜索和关键词搜索)
         semantic_ids = set(semantic_results_map.keys())
-        keyword_ids = set(keyword_ids_ordered) # 从有序列表创建集合以去重
+        keyword_ids = set(keyword_ids_ordered)  # 从有序列表创建集合以去重
         all_combined_ids: Set[int] = semantic_ids.union(keyword_ids)
 
         # 如果两种搜索都没有结果，直接返回空
@@ -1680,20 +1728,24 @@ class SearchService:
 
         # --- 步骤 4: 获取所有合并后 ID 的论文详情 ---
         # (即使关键词搜索已返回部分详情，也需要批量获取所有 ID 的最新详情，确保数据一致性)
-        all_paper_details_map: Dict[int, Dict[str, Any]] = {} # paper_id -> details_dict
+        all_paper_details_map: Dict[
+            int, Dict[str, Any]
+        ] = {}  # paper_id -> details_dict
         try:
             paper_details_list = await self.pg_repo.get_papers_details_by_ids(
-                list(all_combined_ids) # 将集合转为列表传入
+                list(all_combined_ids)  # 将集合转为列表传入
             )
             # 修复 mypy 错误：使用显式循环创建映射，并在调用 int() 前检查 None
             for details in paper_details_list:
                 paper_id_val = details.get("paper_id")
                 if paper_id_val is not None:
                     try:
-                        paper_id_int = int(paper_id_val) # 安全转换
+                        paper_id_int = int(paper_id_val)  # 安全转换
                         all_paper_details_map[paper_id_int] = details
                     except (ValueError, TypeError):
-                         logger.warning(f"无法将论文详情中的 paper_id '{paper_id_val}' 转换为整数。")
+                        logger.warning(
+                            f"无法将论文详情中的 paper_id '{paper_id_val}' 转换为整数。"
+                        )
 
             logger.debug(f"获取了 {len(all_paper_details_map)} 篇论文的详情。")
         except Exception as fetch_error:
@@ -1712,11 +1764,12 @@ class SearchService:
         # 确定实际有详情的 ID 集合 (可能比 all_combined_ids 少)
         valid_ids_with_details = set(all_paper_details_map.keys())
         if len(valid_ids_with_details) < len(all_combined_ids):
-             logger.warning(f"合并后的 {len(all_combined_ids) - len(valid_ids_with_details)} 个 ID 没有找到对应的详情。")
-
+            logger.warning(
+                f"合并后的 {len(all_combined_ids) - len(valid_ids_with_details)} 个 ID 没有找到对应的详情。"
+            )
 
         # 计算语义搜索结果的排名 (仅针对有详情的 ID)
-        semantic_ranks: Dict[int, int] = {} # paper_id -> rank (从 1 开始)
+        semantic_ranks: Dict[int, int] = {}  # paper_id -> rank (从 1 开始)
         if semantic_results_map:
             # 1. 过滤掉没有详情的语义结果
             valid_semantic_results = {
@@ -1734,11 +1787,11 @@ class SearchService:
             }
 
         # 计算关键词搜索结果的排名 (仅针对有详情的 ID)
-        keyword_ranks: Dict[int, int] = {} # paper_id -> rank (从 1 开始)
+        keyword_ranks: Dict[int, int] = {}  # paper_id -> rank (从 1 开始)
         if keyword_ids_ordered:
             # 1. 过滤掉没有详情的关键词 ID，并保持原始顺序
             valid_keyword_ids_ordered = [
-                 pid for pid in keyword_ids_ordered if pid in valid_ids_with_details
+                pid for pid in keyword_ids_ordered if pid in valid_ids_with_details
             ]
             # 2. 生成排名 (rank 从 1 开始)
             keyword_ranks = {
@@ -1746,18 +1799,26 @@ class SearchService:
             }
 
         # 计算 RRF 融合分数 (仅针对有详情的 ID)
-        combined_scores: Dict[int, Optional[float]] = {} # paper_id -> rrf_score (或 None)
+        combined_scores: Dict[
+            int, Optional[float]
+        ] = {}  # paper_id -> rrf_score (或 None)
         # 检查是否只有关键词结果（并且这些结果都有详情）
         # 注意：这里不能简单地检查 semantic_ranks 是否为空，因为可能语义搜索有结果但那些结果恰好没详情
         # 一个更可靠的判断可能是检查 valid_semantic_results 是否为空
-        has_valid_semantic_results = bool(semantic_ranks) # 如果 semantic_ranks 有内容，说明至少有一个语义结果有详情
-        has_valid_keyword_results = bool(keyword_ranks) # 如果 keyword_ranks 有内容，说明至少有一个关键词结果有详情
+        has_valid_semantic_results = bool(
+            semantic_ranks
+        )  # 如果 semantic_ranks 有内容，说明至少有一个语义结果有详情
+        has_valid_keyword_results = bool(
+            keyword_ranks
+        )  # 如果 keyword_ranks 有内容，说明至少有一个关键词结果有详情
 
-        is_keyword_only_effective = has_valid_keyword_results and not has_valid_semantic_results
+        is_keyword_only_effective = (
+            has_valid_keyword_results and not has_valid_semantic_results
+        )
 
-        rrf_k = self.DEFAULT_RRF_K # RRF 的 k 参数
+        rrf_k = self.DEFAULT_RRF_K  # RRF 的 k 参数
 
-        for paper_id in valid_ids_with_details: # 只迭代有详情的 ID
+        for paper_id in valid_ids_with_details:  # 只迭代有详情的 ID
             rrf_score = 0.0
             sem_rank = semantic_ranks.get(paper_id)
             kw_rank = keyword_ranks.get(paper_id)
@@ -1770,11 +1831,11 @@ class SearchService:
 
             # 存储计算出的 RRF 分数
             if rrf_score > 0:
-                 # 如果实际上只有有效的关键词结果，混合分数没有意义，设为 None
+                # 如果实际上只有有效的关键词结果，混合分数没有意义，设为 None
                 if is_keyword_only_effective:
-                     combined_scores[paper_id] = None
+                    combined_scores[paper_id] = None
                 else:
-                     combined_scores[paper_id] = rrf_score
+                    combined_scores[paper_id] = rrf_score
             # 如果分数是 0 (意味着该 ID 在两个有效排名中都不存在)，则不记录
 
         logger.debug(f"为 {len(combined_scores)} 篇论文计算了 RRF 分数。")
@@ -1782,11 +1843,11 @@ class SearchService:
         # --- 步骤 6: 创建 SearchResultItem 对象列表 ---
         # 使用获取到的详情和计算出的 RRF 分数构建最终的结果项列表
         all_items: List[SearchResultItem] = []
-        for paper_id in valid_ids_with_details: # 再次确保只处理有详情的 ID
+        for paper_id in valid_ids_with_details:  # 再次确保只处理有详情的 ID
             # 获取详情字典
             details_optional = all_paper_details_map.get(paper_id)
-            if not details_optional: # 理论上不会发生，因为是基于这个 map 的 key 迭代的
-                 continue
+            if not details_optional:  # 理论上不会发生，因为是基于这个 map 的 key 迭代的
+                continue
             # 修复 Linter 错误：使用 cast 明确 details 不为 None
             details = cast(Dict[str, Any], details_optional)
 
@@ -1796,7 +1857,7 @@ class SearchService:
                 try:
                     authors = json.loads(authors)
                 except (json.JSONDecodeError, TypeError):
-                    authors = [] # 出错时设为空列表
+                    authors = []  # 出错时设为空列表
 
             # 尝试创建 SearchResultItem 实例
             try:
@@ -1809,7 +1870,7 @@ class SearchService:
                     score=combined_scores.get(paper_id),
                     pdf_url=details.get("pdf_url", ""),
                     published_date=details.get("published_date"),
-                    authors=authors, # 使用处理后的列表
+                    authors=authors,  # 使用处理后的列表
                     area=details.get("area", ""),
                 )
                 all_items.append(item)
@@ -1831,17 +1892,23 @@ class SearchService:
             filtered_items = [
                 item
                 for item in filtered_items
-                if item.published_date is not None # 确保有日期
+                if item.published_date is not None  # 确保有日期
                 and (published_after is None or item.published_date >= published_after)
-                and (published_before is None or item.published_date <= published_before)
+                and (
+                    published_before is None or item.published_date <= published_before
+                )
             ]
             if len(filtered_items) < original_count:
-                 logger.debug(f"混合搜索：日期过滤将结果从 {original_count} 减少到 {len(filtered_items)}")
+                logger.debug(
+                    f"混合搜索：日期过滤将结果从 {original_count} 减少到 {len(filtered_items)}"
+                )
 
         # 领域多选过滤
         if filter_area and len(filter_area) > 0:
             original_count = len(filtered_items)
-            filter_area_lower = {area.lower() for area in filter_area} # 转换为小写集合以提高效率
+            filter_area_lower = {
+                area.lower() for area in filter_area
+            }  # 转换为小写集合以提高效率
             filtered_items = [
                 item
                 for item in filtered_items
@@ -1849,7 +1916,9 @@ class SearchService:
                 if item.area and item.area.lower() in filter_area_lower
             ]
             if len(filtered_items) < original_count:
-                 logger.debug(f"混合搜索：领域过滤将结果从 {original_count} 减少到 {len(filtered_items)}")
+                logger.debug(
+                    f"混合搜索：领域过滤将结果从 {original_count} 减少到 {len(filtered_items)}"
+                )
 
         # --- 步骤 8: 排序和分页 ---
         total_items_after_filtering = len(filtered_items)
@@ -1916,9 +1985,9 @@ class SearchService:
         filter_tags: Optional[List[str]] = None,
         filter_author: Optional[str] = None,
         # 排序参数
-        sort_by: Optional[ModelSortByLiteral] = None, # 从外部传入
-        sort_order: SortOrderLiteral = "desc", # 从外部传入
-        filters: Optional[SearchFilterModel] = None, # 完整的 filters 对象
+        sort_by: Optional[ModelSortByLiteral] = None,  # 从外部传入
+        sort_order: SortOrderLiteral = "desc",  # 从外部传入
+        filters: Optional[SearchFilterModel] = None,  # 完整的 filters 对象
     ) -> PaginatedHFModelSearchResult:
         """
         内部方法，专门为模型执行混合搜索（语义 + 关键词）。
@@ -1940,42 +2009,46 @@ class SearchService:
         skip = (page - 1) * page_size
 
         # --- 步骤 1: 执行语义搜索 (获取 ID 和分数) ---
-        semantic_results_map: Dict[str, float] = {} # 存储 model_id -> semantic_score
+        semantic_results_map: Dict[str, float] = {}  # 存储 model_id -> semantic_score
         try:
             if self.embedder is None:
-                logger.warning("[_perform_hybrid_search_models] 嵌入器不可用，无法执行语义搜索部分。")
+                logger.warning(
+                    "[_perform_hybrid_search_models] 嵌入器不可用，无法执行语义搜索部分。"
+                )
             else:
                 embedding = self.embedder.embed(query)
                 if embedding is not None:
                     # 调用模型 Faiss 仓库
                     semantic_results_raw = await self.faiss_repo_models.search_similar(
                         embedding,
-                        k=self.DEFAULT_TOP_N_SEMANTIC, # 获取足够多的初始结果
+                        k=self.DEFAULT_TOP_N_SEMANTIC,  # 获取足够多的初始结果
                     )
                     # 将 (faiss_id, distance) 转换为 (model_id, score) 的字典
                     semantic_results_map = {
                         # 确保 ID 是字符串
                         str(model_id): self._convert_distance_to_score(distance)
                         for model_id, distance in semantic_results_raw
-                        if model_id is not None # 确保 model_id 不是 None
+                        if model_id is not None  # 确保 model_id 不是 None
                     }
-                    logger.debug(f"语义搜索找到 {len(semantic_results_map)} 个初始模型结果。")
+                    logger.debug(
+                        f"语义搜索找到 {len(semantic_results_map)} 个初始模型结果。"
+                    )
                 else:
-                     logger.error("[_perform_hybrid_search_models] 生成查询嵌入失败。")
+                    logger.error("[_perform_hybrid_search_models] 生成查询嵌入失败。")
         except Exception as e:
             logger.error(
                 f"[_perform_hybrid_search_models] 语义搜索部分出错: {e}", exc_info=True
             )
 
         # --- 步骤 2: 执行关键词搜索 (获取 ID 和初步详情) ---
-        keyword_results_list: List[Dict[str, Any]] = [] # 存储 PG 返回的原始字典
-        keyword_ids_ordered: List[str] = [] # 按 PG 顺序存储模型 ID
+        keyword_results_list: List[Dict[str, Any]] = []  # 存储 PG 返回的原始字典
+        keyword_ids_ordered: List[str] = []  # 按 PG 顺序存储模型 ID
         try:
             # 调用 PG 仓库的模型关键词搜索方法
             # 传递模型相关的过滤器
             keyword_results_list, _ = await self.pg_repo.search_models_by_keyword(
                 query=query,
-                limit=self.DEFAULT_TOP_N_KEYWORD, # 获取足够多的初始结果
+                limit=self.DEFAULT_TOP_N_KEYWORD,  # 获取足够多的初始结果
                 skip=0,
                 # 传递过滤器给 PG
                 pipeline_tag=pipeline_tag,
@@ -1983,21 +2056,25 @@ class SearchService:
                 filter_tags=filter_tags,
                 filter_author=filter_author,
                 # 同样可以指定 PG 内部的默认排序
-                sort_by=cast(Optional[Literal["likes", "downloads", "last_modified"]],"last_modified"),
+                sort_by=cast(
+                    Optional[Literal["likes", "downloads", "last_modified"]],
+                    "last_modified",
+                ),
                 sort_order="desc",
             )
 
             # 提取关键词搜索结果的模型 ID，保持顺序
             for result in keyword_results_list:
-                 model_id_val = result.get("hf_model_id") # PG 返回的是 hf_model_id
-                 if model_id_val is not None:
-                      keyword_ids_ordered.append(str(model_id_val)) # 确保是字符串
+                model_id_val = result.get("hf_model_id")  # PG 返回的是 hf_model_id
+                if model_id_val is not None:
+                    keyword_ids_ordered.append(str(model_id_val))  # 确保是字符串
 
             logger.debug(f"关键词搜索找到 {len(keyword_ids_ordered)} 个初始模型结果。")
 
         except Exception as e:
             logger.error(
-                f"[_perform_hybrid_search_models] 关键词搜索部分出错: {e}", exc_info=True
+                f"[_perform_hybrid_search_models] 关键词搜索部分出错: {e}",
+                exc_info=True,
             )
 
         # --- 步骤 3: 合并结果 ID ---
@@ -2012,7 +2089,9 @@ class SearchService:
             )
 
         # --- 步骤 4: 获取所有合并后 ID 的模型详情 ---
-        all_model_details_map: Dict[str, Dict[str, Any]] = {} # model_id -> details_dict
+        all_model_details_map: Dict[
+            str, Dict[str, Any]
+        ] = {}  # model_id -> details_dict
         try:
             # 调用 PG 仓库批量获取模型详情
             model_details_list = await self.pg_repo.get_hf_models_by_ids(
@@ -2020,7 +2099,7 @@ class SearchService:
             )
             # 创建 ID 到详情的映射
             all_model_details_map = {
-                str(details.get("hf_model_id")): details # 确保 key 是 str
+                str(details.get("hf_model_id")): details  # 确保 key 是 str
                 for details in model_details_list
                 if details.get("hf_model_id") is not None
             }
@@ -2037,10 +2116,12 @@ class SearchService:
         # --- 步骤 5: 使用 RRF 合并结果并计算融合分数 ---
         valid_ids_with_details = set(all_model_details_map.keys())
         if len(valid_ids_with_details) < len(all_combined_ids):
-             logger.warning(f"合并后的 {len(all_combined_ids) - len(valid_ids_with_details)} 个模型 ID 没有找到对应的详情。")
+            logger.warning(
+                f"合并后的 {len(all_combined_ids) - len(valid_ids_with_details)} 个模型 ID 没有找到对应的详情。"
+            )
 
         # 计算语义排名 (只对有详情的 ID)
-        semantic_ranks: Dict[str, int] = {} # model_id -> rank
+        semantic_ranks: Dict[str, int] = {}  # model_id -> rank
         if semantic_results_map:
             valid_semantic_results = {
                 mid: score
@@ -2055,7 +2136,7 @@ class SearchService:
             }
 
         # 计算关键词排名 (只对有详情的 ID)
-        keyword_ranks: Dict[str, int] = {} # model_id -> rank
+        keyword_ranks: Dict[str, int] = {}  # model_id -> rank
         if keyword_ids_ordered:
             valid_keyword_ids_ordered = [
                 mid for mid in keyword_ids_ordered if mid in valid_ids_with_details
@@ -2065,10 +2146,14 @@ class SearchService:
             }
 
         # 计算融合分数
-        combined_scores: Dict[str, Optional[float]] = {} # model_id -> rrf_score (或 None)
+        combined_scores: Dict[
+            str, Optional[float]
+        ] = {}  # model_id -> rrf_score (或 None)
         has_valid_semantic_results = bool(semantic_ranks)
         has_valid_keyword_results = bool(keyword_ranks)
-        is_keyword_only_effective = has_valid_keyword_results and not has_valid_semantic_results
+        is_keyword_only_effective = (
+            has_valid_keyword_results and not has_valid_semantic_results
+        )
 
         rrf_k = self.DEFAULT_RRF_K
 
@@ -2084,24 +2169,23 @@ class SearchService:
 
             if rrf_score > 0:
                 if is_keyword_only_effective:
-                     combined_scores[model_id] = None # 纯关键词结果，分数设为 None
+                    combined_scores[model_id] = None  # 纯关键词结果，分数设为 None
                 else:
-                     combined_scores[model_id] = rrf_score
+                    combined_scores[model_id] = rrf_score
 
         logger.debug(f"为 {len(combined_scores)} 个模型计算了 RRF 分数。")
-
 
         # --- 步骤 6: 创建 HFSearchResultItem 对象列表 ---
         all_items: List[HFSearchResultItem] = []
         for model_id in valid_ids_with_details:
             details = all_model_details_map.get(model_id)
             if not details:
-                 continue
+                continue
 
             # 安全地处理字段并创建实例
             try:
                 # 处理 tags (可能为 JSON str)
-                tags = details.get("hf_tags", []) # 从详情字典获取
+                tags = details.get("hf_tags", [])  # 从详情字典获取
                 if isinstance(tags, str):
                     try:
                         tags = json.loads(tags)
@@ -2125,31 +2209,35 @@ class SearchService:
                         )
                 elif isinstance(last_modified_val, str):
                     try:
-                        dt_obj = datetime.fromisoformat(last_modified_val.replace("Z", "+00:00"))
+                        dt_obj = datetime.fromisoformat(
+                            last_modified_val.replace("Z", "+00:00")
+                        )
                         if dt_obj.tzinfo is None:
                             dt_obj = dt_obj.replace(tzinfo=timezone.utc)
                         final_last_modified_dt = dt_obj
                     except ValueError:
-                        pass # 解析失败则为 None
+                        pass  # 解析失败则为 None
 
                 # 修复 mypy 错误：在调用 int() 前检查 None
                 likes_val = details.get("hf_likes")
                 likes_int = int(likes_val) if likes_val is not None else None
 
                 downloads_val = details.get("hf_downloads")
-                downloads_int = int(downloads_val) if downloads_val is not None else None
+                downloads_int = (
+                    int(downloads_val) if downloads_val is not None else None
+                )
 
                 # 创建 HFSearchResultItem 实例
                 item = HFSearchResultItem(
-                    model_id=model_id, # 使用迭代的 model_id
+                    model_id=model_id,  # 使用迭代的 model_id
                     author=str(details.get("hf_author", "")),
                     pipeline_tag=str(details.get("hf_pipeline_tag", "")),
                     library_name=str(details.get("hf_library_name", "")),
-                    tags=tags, # 使用处理后的列表
-                    likes=likes_int, # 使用安全转换后的 int 或 None
-                    downloads=downloads_int, # 使用安全转换后的 int 或 None
-                    last_modified=final_last_modified_dt, # 使用处理后的 datetime
-                    score=combined_scores.get(model_id), # 使用 RRF 分数
+                    tags=tags,  # 使用处理后的列表
+                    likes=likes_int,  # 使用安全转换后的 int 或 None
+                    downloads=downloads_int,  # 使用安全转换后的 int 或 None
+                    last_modified=final_last_modified_dt,  # 使用处理后的 datetime
+                    score=combined_scores.get(model_id),  # 使用 RRF 分数
                 )
                 all_items.append(item)
             except ValidationError as ve:
@@ -2175,48 +2263,55 @@ class SearchService:
                 if item.pipeline_tag and item.pipeline_tag.lower() == pipeline_tag_lower
             ]
             if len(filtered_items) < original_count:
-                 logger.debug(f"混合搜索：pipeline_tag 过滤将结果从 {original_count} 减少到 {len(filtered_items)}")
-
+                logger.debug(
+                    f"混合搜索：pipeline_tag 过滤将结果从 {original_count} 减少到 {len(filtered_items)}"
+                )
 
         # 应用 library_name 过滤器
         if filter_library_name:
-             original_count = len(filtered_items)
-             filter_library_name_lower = filter_library_name.lower()
-             filtered_items = [
-                 item
-                 for item in filtered_items
-                 if item.library_name and item.library_name.lower() == filter_library_name_lower
-             ]
-             if len(filtered_items) < original_count:
-                 logger.debug(f"混合搜索：library_name 过滤将结果从 {original_count} 减少到 {len(filtered_items)}")
+            original_count = len(filtered_items)
+            filter_library_name_lower = filter_library_name.lower()
+            filtered_items = [
+                item
+                for item in filtered_items
+                if item.library_name
+                and item.library_name.lower() == filter_library_name_lower
+            ]
+            if len(filtered_items) < original_count:
+                logger.debug(
+                    f"混合搜索：library_name 过滤将结果从 {original_count} 减少到 {len(filtered_items)}"
+                )
 
         # 应用 tags 过滤器 (需要匹配所有指定的标签)
         if filter_tags:
-             original_count = len(filtered_items)
-             filter_tags_lower = {tag.lower() for tag in filter_tags}
-             filtered_items = [
-                 item
-                 for item in filtered_items
-                 # 确保 item 有 tags 列表
-                 if item.tags
-                 # 检查 item 的 tags (转为小写集合) 是否包含所有过滤标签
-                 and filter_tags_lower.issubset({tag.lower() for tag in item.tags})
-             ]
-             if len(filtered_items) < original_count:
-                 logger.debug(f"混合搜索：tags 过滤将结果从 {original_count} 减少到 {len(filtered_items)}")
+            original_count = len(filtered_items)
+            filter_tags_lower = {tag.lower() for tag in filter_tags}
+            filtered_items = [
+                item
+                for item in filtered_items
+                # 确保 item 有 tags 列表
+                if item.tags
+                # 检查 item 的 tags (转为小写集合) 是否包含所有过滤标签
+                and filter_tags_lower.issubset({tag.lower() for tag in item.tags})
+            ]
+            if len(filtered_items) < original_count:
+                logger.debug(
+                    f"混合搜索：tags 过滤将结果从 {original_count} 减少到 {len(filtered_items)}"
+                )
 
         # 应用 author 过滤器
         if filter_author:
-             original_count = len(filtered_items)
-             filter_author_lower = filter_author.lower()
-             filtered_items = [
-                 item
-                 for item in filtered_items
-                 if item.author and item.author.lower() == filter_author_lower
-             ]
-             if len(filtered_items) < original_count:
-                 logger.debug(f"混合搜索：author 过滤将结果从 {original_count} 减少到 {len(filtered_items)}")
-
+            original_count = len(filtered_items)
+            filter_author_lower = filter_author.lower()
+            filtered_items = [
+                item
+                for item in filtered_items
+                if item.author and item.author.lower() == filter_author_lower
+            ]
+            if len(filtered_items) < original_count:
+                logger.debug(
+                    f"混合搜索：author 过滤将结果从 {original_count} 减少到 {len(filtered_items)}"
+                )
 
         # --- 步骤 8: 排序和分页 ---
         total_items_after_filtering = len(filtered_items)
@@ -2228,15 +2323,17 @@ class SearchService:
         if current_sort_by_from_filter:
             if current_sort_by_from_filter in get_args(ModelSortByLiteral):
                 final_sort_by = cast(ModelSortByLiteral, current_sort_by_from_filter)
-                if final_sort_by != 'score' and is_keyword_only_effective:
-                     logger.warning(f"结果仅来自关键词搜索，但排序依据为 '{final_sort_by}' 而不是 'score'。排序可能不符合预期。")
+                if final_sort_by != "score" and is_keyword_only_effective:
+                    logger.warning(
+                        f"结果仅来自关键词搜索，但排序依据为 '{final_sort_by}' 而不是 'score'。排序可能不符合预期。"
+                    )
             else:
                 logger.warning(
                     f"[_perform_hybrid_search_models] Filter 中提供了无效的排序键 '{current_sort_by_from_filter}'。将默认使用 'score'。"
                 )
                 final_sort_by = "score"
         else:
-            final_sort_by = "score" # 混合搜索默认按 RRF 分数排序
+            final_sort_by = "score"  # 混合搜索默认按 RRF 分数排序
 
         # 确定最终排序顺序
         final_sort_order: SortOrderLiteral = "desc"
@@ -2254,7 +2351,7 @@ class SearchService:
             calculated_skip,
             calculated_limit,
         ) = self._apply_sorting_and_pagination(
-            filtered_items, # 对过滤后的结果排序分页
+            filtered_items,  # 对过滤后的结果排序分页
             sort_by=final_sort_by,
             sort_order=final_sort_order,
             page=page,
@@ -2269,7 +2366,7 @@ class SearchService:
         # --- 步骤 9: 返回分页结果 ---
         return PaginatedHFModelSearchResult(
             items=paginated_items_list,
-            total=total_items_after_filtering, # 使用过滤后的总数
+            total=total_items_after_filtering,  # 使用过滤后的总数
             skip=calculated_skip,
             limit=calculated_limit,
         )

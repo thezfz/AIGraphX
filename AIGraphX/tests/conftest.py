@@ -49,7 +49,10 @@ from fastapi import FastAPI  # FastAPI 应用类
 from functools import partial  # 用于创建偏函数，固定函数的部分参数
 import httpx  # HTTP 客户端库，用于 API 测试
 from httpx import AsyncClient, ASGITransport  # 异步 HTTP 客户端和 ASGI 传输适配器
-from unittest.mock import AsyncMock, MagicMock  # 单元测试模拟工具 (AsyncMock 用于异步，MagicMock 通用)
+from unittest.mock import (
+    AsyncMock,
+    MagicMock,
+)  # 单元测试模拟工具 (AsyncMock 用于异步，MagicMock 通用)
 from typing import (  # 类型提示工具
     AsyncGenerator,  # 异步生成器类型 (用于异步 Fixture)
     Generator,  # 同步生成器类型 (用于同步 Fixture)
@@ -74,7 +77,9 @@ import faiss  # Faiss 库，用于向量相似性搜索
 import numpy as np  # NumPy 库，用于处理向量数据
 from pathlib import Path  # 面向对象的路径操作
 from unittest.mock import patch  # 模拟工具，用于替换对象或方法
-from starlette.datastructures import State  # Starlette 的状态对象，FastAPI 应用使用它存储共享状态
+from starlette.datastructures import (
+    State,
+)  # Starlette 的状态对象，FastAPI 应用使用它存储共享状态
 from contextlib import asynccontextmanager  # 用于创建异步上下文管理器
 import inspect  # 用于获取运行时信息，如此处的调用者函数名
 
@@ -92,7 +97,7 @@ from aigraphx.api.v1.api import api_router as api_v1_router  # API v1 路由
 
 # 导入服务类 (用于模拟时的类型规范 spec)
 from aigraphx.services.graph_service import GraphService
-from aigraphx.services.search_service import SearchService # 添加 SearchService 导入
+from aigraphx.services.search_service import SearchService  # 添加 SearchService 导入
 
 # 导入仓库类 (用于集成测试 Fixture)
 from aigraphx.repositories.postgres_repo import PostgresRepository
@@ -100,7 +105,16 @@ from aigraphx.repositories.neo4j_repo import Neo4jRepository
 
 # 导入原始的 FastAPI 依赖项获取函数 (用于覆盖或测试)
 # from aigraphx.api.v1 import deps # 路径不正确
-from aigraphx.api.v1.dependencies import get_graph_service, get_search_service, get_postgres_repository, get_neo4j_repository, get_faiss_repository_papers, get_faiss_repository_models, get_embedder, get_app_state # 正确路径
+from aigraphx.api.v1.dependencies import (
+    get_graph_service,
+    get_search_service,
+    get_postgres_repository,
+    get_neo4j_repository,
+    get_faiss_repository_papers,
+    get_faiss_repository_models,
+    get_embedder,
+    get_app_state,
+)  # 正确路径
 
 # 导入被测试的 lifespan 函数
 from aigraphx.core.db import lifespan
@@ -132,8 +146,9 @@ load_dotenv(dotenv_path=dotenv_path)
 # 从环境变量中读取测试数据库的 URL 和 Neo4j 连接信息
 TEST_DB_URL_FROM_ENV = os.getenv("TEST_DATABASE_URL")
 TEST_NEO4J_URI = os.getenv("TEST_NEO4J_URI")
-TEST_NEO4J_USER = os.getenv("TEST_NEO4J_USER", "neo4j") # 如果未设置，默认为 "neo4j"
+TEST_NEO4J_USER = os.getenv("TEST_NEO4J_USER", "neo4j")  # 如果未设置，默认为 "neo4j"
 TEST_NEO4J_PASSWORD = os.getenv("TEST_NEO4J_PASSWORD")
+
 
 # --- 会话范围的异步锁 ---
 # `scope="session"` 表示这个 Fixture 在整个测试会话期间只创建一次实例。
@@ -186,9 +201,7 @@ def temp_faiss_files(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, str]
 
     # 创建一个简单的 ID 映射 (Faiss 内部索引 -> 论文 paper_id (int))
     # 示例: Faiss 索引 0 对应 paper_id 100, 1 对应 101, ...
-    paper_id_map = {
-        i: i + 100 for i in range(num_vectors)
-    }
+    paper_id_map = {i: i + 100 for i in range(num_vectors)}
     try:
         # 将映射写入 JSON 文件
         with open(paper_map_path, "w") as f:
@@ -259,7 +272,7 @@ def test_settings(temp_faiss_files: Dict[str, str]) -> Settings:
         f"db_url='{settings_from_env.database_url}', "
         f"test_neo4j_uri='{settings_from_env.test_neo4j_uri}', "
         f"neo4j_uri='{settings_from_env.neo4j_uri}', "
-        f"test_neo4j_pwd set={'***' if settings_from_env.test_neo4j_password else 'No'}, " # 不记录密码本身
+        f"test_neo4j_pwd set={'***' if settings_from_env.test_neo4j_password else 'No'}, "  # 不记录密码本身
         f"neo4j_pwd set={'***' if settings_from_env.neo4j_password else 'No'}, "
         f"test_neo4j_db='{settings_from_env.test_neo4j_database}', "
         f"neo4j_db='{settings_from_env.neo4j_database}'"
@@ -320,9 +333,10 @@ def test_settings(temp_faiss_files: Dict[str, str]) -> Settings:
         )
         # 确保最终使用的 neo4j_database 不为 None 或空字符串，如果需要默认为 'neo4j'
         if not settings_from_env.neo4j_database:
-             settings_from_env.neo4j_database = "neo4j"
-             logger.info(f"[test_settings fixture] 由于 neo4j_database 为空, 设置为默认值 'neo4j'.")
-
+            settings_from_env.neo4j_database = "neo4j"
+            logger.info(
+                f"[test_settings fixture] 由于 neo4j_database 为空, 设置为默认值 'neo4j'."
+            )
 
     # 3. 覆盖 Faiss 文件路径
     settings_from_env.faiss_index_path = temp_faiss_files["paper_index"]
@@ -363,23 +377,19 @@ def loaded_text_embedder(
     Yields:
         TextEmbedder: 加载好模型的 TextEmbedder 实例。
     """
-    logger.info(
-        "[loaded_text_embedder fixture] 正在为测试会话初始化 TextEmbedder..."
-    )
+    logger.info("[loaded_text_embedder fixture] 正在为测试会话初始化 TextEmbedder...")
     # 确保模型名称配置存在
     if not test_settings.sentence_transformer_model:
         logger.error(
             "[loaded_text_embedder fixture] test_settings 中未设置 sentence_transformer_model。"
         )
-        pytest.fail(
-            "测试设置中需要 sentence_transformer_model 但未找到。"
-        )
+        pytest.fail("测试设置中需要 sentence_transformer_model 但未找到。")
 
     # 创建 TextEmbedder 实例，传入配置
     embedder = TextEmbedder(
         model_name=test_settings.sentence_transformer_model,
         # cache_dir=test_settings.embedding_model_cache_dir, # Settings 中无此属性，移除
-        device=test_settings.embedder_device, # 使用配置的设备 (cpu, cuda)
+        device=test_settings.embedder_device,  # 使用配置的设备 (cpu, cuda)
     )
     try:
         # TextEmbedder 的 __init__ 方法会自动调用 _load_model() 加载模型
@@ -406,9 +416,7 @@ def loaded_text_embedder(
         logger.exception(
             f"[loaded_text_embedder fixture] TextEmbedder 初始化过程中出错: {e}"
         )
-        pytest.fail(
-            f"在会话范围的 Fixture 中 TextEmbedder 初始化失败: {e}"
-        )
+        pytest.fail(f"在会话范围的 Fixture 中 TextEmbedder 初始化失败: {e}")
 
 
 # --- 会话范围的测试 FastAPI 应用实例 Fixture ---
@@ -463,7 +471,7 @@ def test_app(
     )
 
     # 包含 API 路由
-    app.include_router(api_v1_router, prefix="/api/v1") # 确保使用正确的前缀
+    app.include_router(api_v1_router, prefix="/api/v1")  # 确保使用正确的前缀
     logger.info(f"[test_app fixture] 已包含 API v1 路由。")
 
     logger.info(f"[test_app fixture] 返回测试应用实例。")
@@ -488,33 +496,28 @@ async def client(
     Yields:
         httpx.AsyncClient: 可用于发送请求的异步 HTTP 客户端。
     """
-    logger.debug(
-        "\n--- [client fixture - function scope] 开始执行 ---"
-    )
+    logger.debug("\n--- [client fixture - function scope] 开始执行 ---")
     # 使用 LifespanManager 包装测试应用，它会在进入上下文时触发 startup 事件，退出时触发 shutdown 事件
     async with LifespanManager(test_app) as manager:
-        logger.debug(
-            "--- [client fixture] LifespanManager 已启动应用 ---"
-        )
+        logger.debug("--- [client fixture] LifespanManager 已启动应用 ---")
         # 确保应用状态已由 lifespan 初始化 (如果 lifespan 逻辑正确的话)
-        logger.debug(f"--- [client fixture] manager.app.state: {getattr(manager.app, 'state', 'N/A')}")
+        logger.debug(
+            f"--- [client fixture] manager.app.state: {getattr(manager.app, 'state', 'N/A')}"
+        )
 
         # 创建 ASGI 传输层，使用已启动的应用
         transport = ASGITransport(app=manager.app)
         # 创建异步 HTTP 客户端，使用该传输层
         async with AsyncClient(
-            transport=transport, base_url="http://test" # base_url 用于相对路径请求
+            transport=transport,
+            base_url="http://test",  # base_url 用于相对路径请求
         ) as async_client:
-            logger.debug(
-                "--- [client fixture] AsyncClient 已创建，Lifespan 已管理 ---"
-            )
+            logger.debug("--- [client fixture] AsyncClient 已创建，Lifespan 已管理 ---")
             # 使用 yield 将客户端提供给测试函数
             yield async_client
         logger.debug("--- [client fixture] AsyncClient 上下文结束 ---")
     # LifespanManager 在退出上下文时会自动处理应用的 shutdown 事件
-    logger.debug(
-        "--- [client fixture] LifespanManager 已关闭应用，Fixture 结束 ---"
-    )
+    logger.debug("--- [client fixture] LifespanManager 已关闭应用，Fixture 结束 ---")
 
 
 # --- 模拟 GraphService 的 Fixture ---
@@ -545,7 +548,9 @@ async def mock_graph_service_fixture(
     override_key = get_graph_service
     # 设置覆盖：当请求 get_graph_service 依赖时，返回我们的 mock_service
     test_app.dependency_overrides[override_key] = lambda: mock_service
-    logger.debug("[mock_graph_service_fixture] 已在 test_app 上应用 GraphService 依赖覆盖。")
+    logger.debug(
+        "[mock_graph_service_fixture] 已在 test_app 上应用 GraphService 依赖覆盖。"
+    )
 
     # 使用 yield 将模拟对象提供给测试函数
     yield mock_service
@@ -554,6 +559,7 @@ async def mock_graph_service_fixture(
     # 恢复原始的依赖覆盖设置
     test_app.dependency_overrides = original_overrides
     logger.debug("[mock_graph_service_fixture] 已恢复原始的依赖覆盖。")
+
 
 # --- 应用 Alembic 数据库迁移的 Fixture ---
 # `scope="module"` 表示这个 Fixture 在每个测试模块（文件）执行前只运行一次。
@@ -576,9 +582,7 @@ def apply_migrations() -> None:
         logger.warning("全局 TEST_DATABASE_URL 未设置，跳过数据库迁移。")
         return
 
-    logger.info(
-        f"正在将 Alembic 迁移应用到由 TEST_DATABASE_URL 定义的测试数据库。"
-    )
+    logger.info(f"正在将 Alembic 迁移应用到由 TEST_DATABASE_URL 定义的测试数据库。")
     # Alembic 需要的数据库 URL 格式可能与 psycopg 不同 (需要 'postgresql+psycopg://')
     db_url_for_alembic = TEST_DB_URL_FROM_ENV
     if db_url_for_alembic and db_url_for_alembic.startswith("postgresql://"):
@@ -592,10 +596,10 @@ def apply_migrations() -> None:
     alembic_env["DATABASE_URL"] = db_url_for_alembic
 
     # --- 记录传递给子进程的 PATH 环境变量 (用于调试 Conda 环境问题) ---
-    conda_prefix = os.environ.get("CONDA_PREFIX") # 直接获取 Conda 环境前缀
+    conda_prefix = os.environ.get("CONDA_PREFIX")  # 直接获取 Conda 环境前缀
     expected_bin_path = ""
     if conda_prefix:
-        expected_bin_path = os.path.join(conda_prefix, "bin") # Conda 环境的 bin 目录
+        expected_bin_path = os.path.join(conda_prefix, "bin")  # Conda 环境的 bin 目录
     else:
         # 如果不在 Conda 环境中，尝试基于 Python 可执行文件猜测
         # 这不太可靠，但作为后备
@@ -606,7 +610,9 @@ def apply_migrations() -> None:
         )
 
     logger.info(f"[apply_migrations] 检查 Conda bin 路径: {expected_bin_path}")
-    current_path = alembic_env.get("PATH", "PATH 键未找到!") # 获取将传递给子进程的 PATH
+    current_path = alembic_env.get(
+        "PATH", "PATH 键未找到!"
+    )  # 获取将传递给子进程的 PATH
     if expected_bin_path and expected_bin_path not in current_path:
         logger.warning(
             f"[apply_migrations] 预期的 Conda bin 路径 '{expected_bin_path}' 未在 PATH 中找到! 当前 PATH: {current_path}"
@@ -621,12 +627,12 @@ def apply_migrations() -> None:
         logger.info("正在运行: alembic upgrade head")
         # 使用 subprocess.run 执行 alembic 命令
         result = subprocess.run(
-            ["alembic", "upgrade", "head"], # 命令和参数
-            env=alembic_env, # 传递包含数据库 URL 的环境变量
-            check=True,      # 如果命令返回非零退出码，则抛出 CalledProcessError
-            capture_output=True, # 捕获标准输出和标准错误
-            text=True,       # 以文本模式处理输出
-            timeout=60,      # 设置超时时间 (秒)
+            ["alembic", "upgrade", "head"],  # 命令和参数
+            env=alembic_env,  # 传递包含数据库 URL 的环境变量
+            check=True,  # 如果命令返回非零退出码，则抛出 CalledProcessError
+            capture_output=True,  # 捕获标准输出和标准错误
+            text=True,  # 以文本模式处理输出
+            timeout=60,  # 设置超时时间 (秒)
         )
         logger.info("Alembic upgrade 命令成功完成 (退出码 0)。")
         logger.info("Alembic upgrade head 标准输出:\n%s", result.stdout)
@@ -643,22 +649,20 @@ def apply_migrations() -> None:
     except subprocess.TimeoutExpired as e:
         # 如果命令执行超时
         logger.error(f"在模块设置期间 Alembic upgrade 超时: {e.timeout}s。")
-        if e.stdout: logger.error("超时前的 Alembic 标准输出:\n%s", e.stdout)
-        if e.stderr: logger.error("超时前的 Alembic 标准错误:\n%s", e.stderr)
+        if e.stdout:
+            logger.error("超时前的 Alembic 标准输出:\n%s", e.stdout)
+        if e.stderr:
+            logger.error("超时前的 Alembic 标准错误:\n%s", e.stderr)
         pytest.fail("在模块设置期间 Alembic upgrade 超时。")
     except subprocess.CalledProcessError as e:
         # 如果命令返回非零退出码
-        logger.error(
-            f"在模块设置期间 Alembic upgrade 失败 (退出码 {e.returncode})!"
-        )
+        logger.error(f"在模块设置期间 Alembic upgrade 失败 (退出码 {e.returncode})!")
         logger.error("Alembic 标准输出:\n%s", e.stdout)
         logger.error("Alembic 标准错误:\n%s", e.stderr)
         pytest.fail(f"在模块设置期间 Alembic upgrade head 失败: {e}")
     except Exception as e:
         # 捕获其他意外错误
-        logger.exception(
-            "在 Alembic 迁移 (模块设置) 过程中发生意外错误。"
-        )
+        logger.exception("在 Alembic 迁移 (模块设置) 过程中发生意外错误。")
         pytest.fail(f"在 Alembic 迁移 (模块设置) 过程中发生意外错误: {e}")
     logger.info("--- [apply_migrations fixture - module scope] 执行结束 ---")
 
@@ -668,7 +672,7 @@ def apply_migrations() -> None:
 # 或者至少确保连接池在每个测试后正确关闭。
 @pytest_asyncio.fixture(scope="function")
 async def db_pool(
-    test_settings: Settings, # 依赖测试配置以获取数据库 URL
+    test_settings: Settings,  # 依赖测试配置以获取数据库 URL
 ) -> AsyncGenerator[AsyncConnectionPool, None]:
     """
     为每个测试函数管理一个异步 PostgreSQL 连接池。
@@ -695,18 +699,16 @@ async def db_pool(
     try:
         # 创建连接池实例
         pool = AsyncConnectionPool(
-            conninfo=test_db_url, # 使用测试数据库 URL
-            min_size=test_settings.pg_pool_min_size, # 使用配置的池大小
+            conninfo=test_db_url,  # 使用测试数据库 URL
+            min_size=test_settings.pg_pool_min_size,  # 使用配置的池大小
             max_size=test_settings.pg_pool_max_size,
-            open=False, # 先不打开，下面手动打开
-            timeout=60, # 连接超时时间
+            open=False,  # 先不打开，下面手动打开
+            timeout=60,  # 连接超时时间
         )
         logger.info("[db_pool fixture] 正在打开连接池...")
         # 异步打开连接池并等待其准备就绪
         await pool.open(wait=True)
-        logger.info(
-            "[db_pool fixture] 测试数据库连接池成功打开。"
-        )
+        logger.info("[db_pool fixture] 测试数据库连接池成功打开。")
 
         # 使用 yield 将连接池提供给测试函数
         yield pool
@@ -730,8 +732,8 @@ async def db_pool(
 # `scope="function"` 确保每个测试函数获得一个新的仓库实例，并执行测试前清理。
 @pytest_asyncio.fixture()
 async def repository(
-    db_pool: AsyncConnectionPool, # 依赖上面定义的函数范围连接池
-    db_cleanup_lock: asyncio.Lock, # 依赖会话范围的清理锁
+    db_pool: AsyncConnectionPool,  # 依赖上面定义的函数范围连接池
+    db_cleanup_lock: asyncio.Lock,  # 依赖会话范围的清理锁
 ) -> AsyncGenerator[PostgresRepository, None]:
     """
     创建 `PostgresRepository` 实例，使用测试数据库连接池。
@@ -751,18 +753,16 @@ async def repository(
 
     # 获取调用此 fixture 的测试函数的名称，用于日志记录
     frame = inspect.currentframe()
-    func_name = "unknown_test" # 默认名称
+    func_name = "unknown_test"  # 默认名称
     if frame and frame.f_back:
         caller_frame = frame.f_back
         if caller_frame:
             func_name = caller_frame.f_code.co_name
 
     # --- 测试前清理 (使用锁确保串行执行) ---
-    logger.info(
-        f"[repository fixture for {func_name}] 测试前: 尝试获取数据库清理锁..."
-    )
+    logger.info(f"[repository fixture for {func_name}] 测试前: 尝试获取数据库清理锁...")
     try:
-        async with db_cleanup_lock: # 获取锁
+        async with db_cleanup_lock:  # 获取锁
             logger.info(
                 f"[repository fixture for {func_name}] 测试前: 数据库清理锁已获取。正在清理表..."
             )
@@ -816,7 +816,7 @@ async def repository(
     # 使用清理后的连接池创建仓库实例
     repo = PostgresRepository(pool=db_pool)
     logger.info(f"[repository fixture for {func_name}] 正在提供仓库实例。")
-    yield repo # 将仓库实例提供给测试函数
+    yield repo  # 将仓库实例提供给测试函数
 
     # --- 测试后清理 (已移除) ---
     # logger.info(f"[repository fixture for {func_name}] 测试结束 (无测试后清理)。")
@@ -841,9 +841,9 @@ async def neo4j_driver(test_settings: Settings) -> AsyncGenerator[AsyncDriver, N
     # 注意：Neo4j 社区版限制，测试通常连接到测试容器内的默认 'neo4j' 数据库。
     # 测试隔离依赖于在每次测试前清理数据库。
     neo4j_uri = test_settings.neo4j_uri
-    neo4j_user = test_settings.neo4j_username # Settings 中已包含默认 'neo4j'
+    neo4j_user = test_settings.neo4j_username  # Settings 中已包含默认 'neo4j'
     neo4j_pwd = test_settings.neo4j_password
-    neo4j_db = test_settings.neo4j_database # 从 test_settings 获取最终生效的数据库名
+    neo4j_db = test_settings.neo4j_database  # 从 test_settings 获取最终生效的数据库名
 
     # 检查必要的连接信息是否存在
     if not neo4j_uri or not neo4j_user or not neo4j_pwd:
@@ -852,7 +852,7 @@ async def neo4j_driver(test_settings: Settings) -> AsyncGenerator[AsyncDriver, N
         )
         pytest.skip("未配置用于测试的 Neo4j URI、用户名或密码。")
         # 下面的 yield None 不会执行，但满足类型检查器
-        yield None # type: ignore
+        yield None  # type: ignore
         return
 
     # 使用 neo4j.basic_auth 创建认证对象
@@ -886,7 +886,7 @@ async def neo4j_driver(test_settings: Settings) -> AsyncGenerator[AsyncDriver, N
             f"[neo4j_driver fixture] 创建 Neo4j 驱动程序时出错: {e}", exc_info=True
         )
         pytest.fail(f"创建 Neo4j 驱动程序失败: {e}")
-        yield None # 不会执行，满足类型检查器
+        yield None  # 不会执行，满足类型检查器
     finally:
         # 测试函数结束后，无论成功与否，都尝试关闭驱动程序
         if driver:
@@ -921,7 +921,7 @@ async def neo4j_driver(test_settings: Settings) -> AsyncGenerator[AsyncDriver, N
 # `scope="function"` 确保每个测试获得新的仓库实例，并在此 Fixture 内执行测试前清理。
 @pytest_asyncio.fixture(scope="function")
 async def neo4j_repo_fixture(
-    neo4j_driver: AsyncDriver, # 依赖上面定义的函数范围驱动程序
+    neo4j_driver: AsyncDriver,  # 依赖上面定义的函数范围驱动程序
 ) -> AsyncGenerator[Neo4jRepository, None]:
     """
     为每个测试函数提供一个 `Neo4jRepository` 实例。
@@ -934,32 +934,26 @@ async def neo4j_repo_fixture(
     Yields:
         Neo4jRepository: 连接到测试数据库的 Neo4j 仓库实例。
     """
-    logger.info(
-        "[neo4j_repo_fixture] 正在创建 Neo4jRepository 并清理数据库 (函数范围)"
-    )
+    logger.info("[neo4j_repo_fixture] 正在创建 Neo4jRepository 并清理数据库 (函数范围)")
     # --- 测试前清理 ---
     try:
         # 使用驱动程序创建会话并执行清理查询
-        async with neo4j_driver.session() as session: # 默认连接到驱动配置的数据库
+        async with neo4j_driver.session() as session:  # 默认连接到驱动配置的数据库
             logger.info(
                 "[neo4j_repo_fixture] 测试前正在运行: MATCH (n) DETACH DELETE n..."
             )
             # 注意：这里没有使用 execute_write，因为清理操作通常不需要事务保证，
             # 且 run() 对于简单查询更直接。如果需要事务性清理，应使用 execute_write。
             await session.run("MATCH (n) DETACH DELETE n")
-            logger.info(
-                "[neo4j_repo_fixture] 测试前完成: MATCH (n) DETACH DELETE n。"
-            )
+            logger.info("[neo4j_repo_fixture] 测试前完成: MATCH (n) DETACH DELETE n。")
     except Exception as e:
-        logger.exception(
-            f"[neo4j_repo_fixture] 测试前清理 Neo4j 数据库失败: {e}"
-        )
+        logger.exception(f"[neo4j_repo_fixture] 测试前清理 Neo4j 数据库失败: {e}")
         pytest.fail(f"测试前清理 Neo4j 数据库失败: {e}")
 
     # --- 创建并提供仓库实例 ---
     repo = Neo4jRepository(driver=neo4j_driver)
     try:
-        yield repo # 将仓库实例提供给测试函数
+        yield repo  # 将仓库实例提供给测试函数
     finally:
         # 测试结束后可以添加清理逻辑，但通常清理在测试前进行
         logger.info("[neo4j_repo_fixture] Fixture 结束 (函数范围)")
@@ -985,21 +979,21 @@ def mock_faiss_repository() -> Generator[
     # 指定要 patch 的目标路径，这里是 lifespan 函数 (aigraphx.core.db) 中导入和使用的 FaissRepository
     with patch(
         "aigraphx.core.db.FaissRepository",
-        new_callable=MagicMock, # 使用 MagicMock 作为替代品
+        new_callable=MagicMock,  # 使用 MagicMock 作为替代品
     ) as mock_repo_class:
         # 创建模拟的论文仓库实例
-        mock_instance_papers = MagicMock(spec=FaissRepository) # spec 确保接口匹配
-        mock_instance_papers.index = MagicMock() # 模拟内部的 index 属性
-        mock_instance_papers.id_map = {} # 模拟 ID 映射
-        mock_instance_papers.is_ready.return_value = True # 默认配置为已就绪
-        mock_instance_papers.id_type = "int" # 设置论文 ID 类型
+        mock_instance_papers = MagicMock(spec=FaissRepository)  # spec 确保接口匹配
+        mock_instance_papers.index = MagicMock()  # 模拟内部的 index 属性
+        mock_instance_papers.id_map = {}  # 模拟 ID 映射
+        mock_instance_papers.is_ready.return_value = True  # 默认配置为已就绪
+        mock_instance_papers.id_type = "int"  # 设置论文 ID 类型
 
         # 创建模拟的模型仓库实例
         mock_instance_models = MagicMock(spec=FaissRepository)
         mock_instance_models.index = MagicMock()
         mock_instance_models.id_map = {}
         mock_instance_models.is_ready.return_value = True
-        mock_instance_models.id_type = "str" # 设置模型 ID 类型
+        mock_instance_models.id_type = "str"  # 设置模型 ID 类型
 
         # 配置模拟类对象的 side_effect，使其在被调用（实例化）时，
         # 根据传入的 id_type 参数返回对应的模拟实例。
@@ -1047,10 +1041,11 @@ def mock_embedder() -> MagicMock:
     """提供一个模拟的 TextEmbedder 实例。"""
     embedder = MagicMock(spec=TextEmbedder)
     # 配置 embed 方法返回一个 numpy 数组，模拟嵌入向量
-    embedder.embed.return_value = np.random.rand(
-        384
-    ).astype(np.float32) # 维度应匹配实际模型
+    embedder.embed.return_value = np.random.rand(384).astype(
+        np.float32
+    )  # 维度应匹配实际模型
     return embedder
+
 
 # --- 模拟 PostgresRepository 的 Fixture ---
 @pytest.fixture
@@ -1066,6 +1061,7 @@ def mock_pg_repo() -> MagicMock:
     repo.paper_details_map = {}
     return repo
 
+
 # --- 模拟 Neo4jRepository 的 Fixture ---
 @pytest.fixture
 def mock_neo4j_repo() -> Optional[MagicMock]:
@@ -1075,8 +1071,8 @@ def mock_neo4j_repo() -> Optional[MagicMock]:
     """
     # 检查是否配置了 Neo4j 连接，如果未配置，则此模拟可能不需要或无法有效模拟
     if not TEST_NEO4J_URI or not TEST_NEO4J_PASSWORD:
-         logger.warning("Neo4j 未配置，mock_neo4j_repo 返回 None。")
-         return None
+        logger.warning("Neo4j 未配置，mock_neo4j_repo 返回 None。")
+        return None
 
     repo = MagicMock(spec=Neo4jRepository)
     # 根据需要配置模拟方法的返回值
@@ -1084,6 +1080,7 @@ def mock_neo4j_repo() -> Optional[MagicMock]:
     repo.get_related_nodes = AsyncMock(return_value=[])
     # ... 其他需要模拟的方法
     return repo
+
 
 # --- 模拟 FaissRepository 实例的 Fixture ---
 # 提供单独的模拟实例，方便在测试中直接使用。
@@ -1095,8 +1092,9 @@ def mock_faiss_paper_repo() -> MagicMock:
     repo.id_type = "int"
     repo.index = MagicMock()
     repo.id_map = {}
-    repo.search_similar = AsyncMock(return_value=[]) # 默认返回空
+    repo.search_similar = AsyncMock(return_value=[])  # 默认返回空
     return repo
+
 
 @pytest.fixture
 def mock_faiss_model_repo() -> MagicMock:
@@ -1106,18 +1104,19 @@ def mock_faiss_model_repo() -> MagicMock:
     repo.id_type = "str"
     repo.index = MagicMock()
     repo.id_map = {}
-    repo.search_similar = AsyncMock(return_value=[]) # 默认返回空
+    repo.search_similar = AsyncMock(return_value=[])  # 默认返回空
     return repo
+
 
 # --- 模拟 SearchService 的 Fixture ---
 # 这个 fixture 创建一个 SearchService 实例，但其依赖项（仓库、嵌入器）都被替换为模拟对象。
 @pytest.fixture
 def search_service(
-    mock_embedder: Optional[TextEmbedder], # 可以是模拟对象或 None
+    mock_embedder: Optional[TextEmbedder],  # 可以是模拟对象或 None
     mock_faiss_paper_repo: FaissRepository,
     mock_faiss_model_repo: FaissRepository,
     mock_pg_repo: PostgresRepository,
-    mock_neo4j_repo: Optional[Neo4jRepository], # 可以是模拟对象或 None
+    mock_neo4j_repo: Optional[Neo4jRepository],  # 可以是模拟对象或 None
 ) -> SearchService:
     """
     提供一个 SearchService 实例，其所有依赖项都被替换为模拟对象。

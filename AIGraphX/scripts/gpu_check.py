@@ -19,10 +19,11 @@
 # - 依赖：PyTorch 库, Faiss 库, NumPy 库。
 # - 输出：打印 GPU 检测结果和 Faiss GPU 功能测试结果到控制台。
 
-import torch # 导入 PyTorch 库
-import faiss # type: ignore[import-untyped] # 导入 Faiss 库, 忽略 Faiss 的类型检查
+import torch  # 导入 PyTorch 库
+import faiss  # type: ignore[import-untyped] # 导入 Faiss 库, 忽略 Faiss 的类型检查
+
 #              # type: ignore[import-untyped] 忽略 Faiss 的类型检查
-import numpy as np # 导入 NumPy 库，用于创建测试数据
+import numpy as np  # 导入 NumPy 库，用于创建测试数据
 
 print("--- PyTorch GPU 检查 ---")
 # 检查 PyTorch 是否能够找到并使用 CUDA 加速的 GPU
@@ -53,10 +54,10 @@ try:
     if ngpu > 0 and is_available:
         print("尝试在 GPU 上创建并测试 Faiss 索引...")
         # --- 创建一个简单的 Faiss GPU 测试 ---
-        d = 64      # 定义向量维度 (dimension)
-        nb = 1000   # 定义数据库中的向量数量 (database size)
-        nq = 10     # 定义查询向量的数量 (number of queries)
-        np.random.seed(1234) # 设置随机种子以确保结果可复现
+        d = 64  # 定义向量维度 (dimension)
+        nb = 1000  # 定义数据库中的向量数量 (database size)
+        nq = 10  # 定义查询向量的数量 (number of queries)
+        np.random.seed(1234)  # 设置随机种子以确保结果可复现
         # 创建随机的数据库向量 (float32 类型，Faiss 通常需要这个类型)
         xb = np.random.random((nb, d)).astype("float32")
         # 创建随机的查询向量
@@ -87,7 +88,7 @@ try:
         print(f"向量添加完成。索引中的向量总数: {gpu_index_flat.ntotal}")
 
         # 在 GPU 索引上执行相似性搜索
-        k = 4 # 设置要查找的最近邻居数量
+        k = 4  # 设置要查找的最近邻居数量
         print(f"正在使用 {nq} 个查询向量在 GPU 索引上搜索最近的 {k} 个邻居...")
         # search 方法返回两个数组：
         # D: 距离数组 (shape: nq x k)，包含每个查询向量到其 k 个最近邻居的距离
@@ -104,13 +105,16 @@ try:
     elif ngpu == 0:
         # 如果 Faiss 未检测到 GPU
         print("Faiss 未检测到任何 GPU。无法执行 GPU 功能测试。")
-    else: # ngpu > 0 但是 is_available is False
+    else:  # ngpu > 0 但是 is_available is False
         # 如果 Faiss 检测到 GPU，但之前的 PyTorch 检查失败了
-        print("Faiss 检测到了 GPU，但之前的 PyTorch CUDA 检查失败。可能存在环境配置问题。")
+        print(
+            "Faiss 检测到了 GPU，但之前的 PyTorch CUDA 检查失败。可能存在环境配置问题。"
+        )
 
 # 捕获在 Faiss GPU 检查过程中可能发生的任何异常
 except Exception as e:
     print(f"Faiss GPU 功能检查失败，错误: {e}")
     # 导入 traceback 模块并打印详细的错误堆栈信息，帮助诊断问题
     import traceback
+
     traceback.print_exc()

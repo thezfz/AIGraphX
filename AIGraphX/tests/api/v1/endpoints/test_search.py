@@ -29,9 +29,15 @@
 """
 
 import pytest
-from fastapi import status, FastAPI  # 导入 status 用于 HTTP 状态码常量, FastAPI 类用于类型提示和依赖覆盖
+from fastapi import (
+    status,
+    FastAPI,
+)  # 导入 status 用于 HTTP 状态码常量, FastAPI 类用于类型提示和依赖覆盖
 from httpx import AsyncClient  # 导入异步 HTTP 客户端
-from unittest.mock import AsyncMock, patch  # 导入异步模拟 AsyncMock 和 patch (如果需要替换模块/类)
+from unittest.mock import (
+    AsyncMock,
+    patch,
+)  # 导入异步模拟 AsyncMock 和 patch (如果需要替换模块/类)
 from datetime import datetime, timezone  # 导入日期时间处理
 import logging  # 导入日志库 (虽然在此文件中未显式使用 logger)
 
@@ -52,6 +58,7 @@ from aigraphx.api.v1 import dependencies as deps
 
 
 # --- 测试用例 ---
+
 
 @pytest.mark.asyncio
 async def test_search_hf_models_success(
@@ -340,7 +347,9 @@ async def test_search_models_semantic_service_fails(
         # 验证响应体包含 "detail" 字段和指示错误的文本
         assert "detail" in response.json()
         # 检查错误消息是否指明了与模型搜索相关
-        assert "model search" in response.json()["detail"] # 或者更通用的 "Internal server error"
+        assert (
+            "model search" in response.json()["detail"]
+        )  # 或者更通用的 "Internal server error"
     finally:
         # --- 5. 恢复依赖覆盖 ---
         test_app.dependency_overrides = original_overrides
@@ -436,7 +445,12 @@ async def test_search_models_keyword_success(
         # 发送模型关键字搜索请求
         response = await client.get(
             "/api/v1/search/models/",
-            params={"q": "keyword model", "search_type": "keyword", "skip": 0, "limit": 10}
+            params={
+                "q": "keyword model",
+                "search_type": "keyword",
+                "skip": 0,
+                "limit": 10,
+            },
         )
 
         # --- 5. 断言响应 ---
@@ -457,14 +471,15 @@ async def test_search_models_keyword_success(
             page=expected_page,
             page_size=expected_limit,
             target="models",
-            sort_by="likes", # 假设模型关键字搜索默认按 likes 排序
-            sort_order="desc", # 默认降序
+            sort_by="likes",  # 假设模型关键字搜索默认按 likes 排序
+            sort_order="desc",  # 默认降序
             # 省略论文特有的过滤器参数断言
         )
 
     finally:
         # --- 7. 恢复依赖覆盖 ---
         test_app.dependency_overrides = original_overrides
+
 
 # --- 可以继续添加更多测试用例 ---
 # 例如：

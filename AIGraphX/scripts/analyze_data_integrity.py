@@ -26,14 +26,17 @@
 # - 配置：可以通过命令行参数指定输入、报告和日志文件的路径。
 
 # 导入标准库
-import json       # 用于解析 JSON 数据
-import os         # 用于文件和目录操作 (路径处理, 创建目录)
-import logging    # 用于日志记录
-from collections import Counter, defaultdict # Counter 用于计数，defaultdict 用于创建默认值的字典 (此处未使用，但常用)
-from typing import Dict, Set, List, Any, Optional # 类型提示
+import json  # 用于解析 JSON 数据
+import os  # 用于文件和目录操作 (路径处理, 创建目录)
+import logging  # 用于日志记录
+from collections import (
+    Counter,
+    defaultdict,
+)  # Counter 用于计数，defaultdict 用于创建默认值的字典 (此处未使用，但常用)
+from typing import Dict, Set, List, Any, Optional  # 类型提示
 import traceback  # 用于获取详细的错误堆栈信息
-from datetime import datetime # 用于在报告中添加时间戳
-import argparse   # 用于解析命令行参数，使脚本更灵活
+from datetime import datetime  # 用于在报告中添加时间戳
+import argparse  # 用于解析命令行参数，使脚本更灵活
 
 # --- 配置常量 ---
 # 默认的输入 JSONL 文件路径（假设是 enrich 脚本处理后的文件）
@@ -68,11 +71,13 @@ def setup_logging(log_filepath: str) -> logging.Logger:
 
     # 配置日志记录的基本设置
     logging.basicConfig(
-        level=logging.INFO, # 设置日志级别为 INFO (忽略 DEBUG)
-        format="%(asctime)s - %(levelname)s - [DataValidation] %(message)s", # 日志格式
-        handlers=[ # 日志处理器列表
-            logging.StreamHandler(), # 输出到控制台
-            logging.FileHandler(log_filepath, mode="w", encoding="utf-8"), # 输出到文件，模式为 'w' (覆盖)，编码为 utf-8
+        level=logging.INFO,  # 设置日志级别为 INFO (忽略 DEBUG)
+        format="%(asctime)s - %(levelname)s - [DataValidation] %(message)s",  # 日志格式
+        handlers=[  # 日志处理器列表
+            logging.StreamHandler(),  # 输出到控制台
+            logging.FileHandler(
+                log_filepath, mode="w", encoding="utf-8"
+            ),  # 输出到文件，模式为 'w' (覆盖)，编码为 utf-8
         ],
     )
     # 返回配置好的、名为当前模块 (__name__) 的日志记录器
@@ -93,54 +98,49 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
     # 初始化用于存储统计结果的字典
     stats: Dict[str, Any] = {
         # 文件整体统计
-        "input_filepath": jsonl_filepath, # 输入文件路径
-        "total_lines_read": 0,          # 读取的总行数
-        "json_parse_errors": 0,         # JSON 解析失败的行数
-        "records_valid_json": 0,        # 成功解析为 JSON 字典的记录数
-
+        "input_filepath": jsonl_filepath,  # 输入文件路径
+        "total_lines_read": 0,  # 读取的总行数
+        "json_parse_errors": 0,  # JSON 解析失败的行数
+        "records_valid_json": 0,  # 成功解析为 JSON 字典的记录数
         # Hugging Face 模型层面统计
-        "missing_hf_id": 0,             # 缺少 hf_model_id 的记录数
-        "unique_hf_model_ids": set(),   # 存储唯一的 hf_model_id (用于计数)
-        "missing_hf_author": 0,         # 缺少 hf_author 的记录数
-        "missing_hf_sha": 0,            # 缺少 hf_sha 的记录数
+        "missing_hf_id": 0,  # 缺少 hf_model_id 的记录数
+        "unique_hf_model_ids": set(),  # 存储唯一的 hf_model_id (用于计数)
+        "missing_hf_author": 0,  # 缺少 hf_author 的记录数
+        "missing_hf_sha": 0,  # 缺少 hf_sha 的记录数
         "missing_hf_last_modified": 0,  # 缺少 hf_last_modified 的记录数
-        "missing_hf_tags": 0,           # 缺少 hf_tags 的记录数 (检查键是否存在)
-        "missing_hf_downloads": 0,      # 缺少 hf_downloads 的记录数
-        "missing_hf_likes": 0,          # 缺少 hf_likes 的记录数
-
+        "missing_hf_tags": 0,  # 缺少 hf_tags 的记录数 (检查键是否存在)
+        "missing_hf_downloads": 0,  # 缺少 hf_downloads 的记录数
+        "missing_hf_likes": 0,  # 缺少 hf_likes 的记录数
         # README 内容统计
-        "missing_readme_key": 0,        # 记录中完全缺少 'hf_readme_content' 键的数量
-        "readme_is_null": 0,            # 'hf_readme_content' 键存在，但值为 null/None 或空字符串
-        "readme_is_present": 0,         # 'hf_readme_content' 键存在，且值为非空字符串
-
+        "missing_readme_key": 0,  # 记录中完全缺少 'hf_readme_content' 键的数量
+        "readme_is_null": 0,  # 'hf_readme_content' 键存在，但值为 null/None 或空字符串
+        "readme_is_present": 0,  # 'hf_readme_content' 键存在，且值为非空字符串
         # 数据集链接统计
-        "missing_dataset_links_key": 0, # 记录中完全缺少 'hf_dataset_links' 键的数量
-        "dataset_links_is_empty": 0,    # 'hf_dataset_links' 键存在，但值为空列表或无效类型
+        "missing_dataset_links_key": 0,  # 记录中完全缺少 'hf_dataset_links' 键的数量
+        "dataset_links_is_empty": 0,  # 'hf_dataset_links' 键存在，但值为空列表或无效类型
         "dataset_links_is_present": 0,  # 'hf_dataset_links' 键存在，且值为非空列表
-        "total_dataset_links_found": 0, # 所有记录中找到的数据集链接总数
+        "total_dataset_links_found": 0,  # 所有记录中找到的数据集链接总数
         "unique_dataset_links": set(),  # 存储唯一的数据集链接 URL (用于计数)
-
         # 关联论文和 PWC 统计
-        "models_with_linked_papers": set(), # 存储至少有一个有效关联论文的 hf_model_id
-        "total_papers_processed": 0,       # 处理的关联论文条目总数 (嵌套在模型记录中)
-        "papers_missing_arxiv_id": 0,      # 关联论文条目中缺少 'arxiv_id_base' 的数量
-        "unique_arxiv_ids": set(),         # 存储唯一的 arxiv_id_base (用于计数)
-        "papers_missing_pwc_entry": 0,     # 关联论文条目中缺少 'pwc_entry' 或其值无效 (非字典) 的数量
-        "pwc_entries_processed": 0,        # 成功处理的有效 'pwc_entry' 字典数量
-        "pwc_missing_conference": 0,       # PWC 条目中缺少 'conference' 键的数量
-        "pwc_missing_tasks": 0,            # PWC 条目中缺少 'tasks' 或其值为空列表的数量
-        "pwc_missing_datasets": 0,         # PWC 条目中缺少 'datasets' 或其值为空列表的数量
-        "pwc_missing_methods": 0,          # PWC 条目中缺少 'methods' 或其值为空列表的数量
-        "pwc_missing_repositories": 0,     # PWC 条目中缺少 'repositories' 或其值为空列表的数量
-
+        "models_with_linked_papers": set(),  # 存储至少有一个有效关联论文的 hf_model_id
+        "total_papers_processed": 0,  # 处理的关联论文条目总数 (嵌套在模型记录中)
+        "papers_missing_arxiv_id": 0,  # 关联论文条目中缺少 'arxiv_id_base' 的数量
+        "unique_arxiv_ids": set(),  # 存储唯一的 arxiv_id_base (用于计数)
+        "papers_missing_pwc_entry": 0,  # 关联论文条目中缺少 'pwc_entry' 或其值无效 (非字典) 的数量
+        "pwc_entries_processed": 0,  # 成功处理的有效 'pwc_entry' 字典数量
+        "pwc_missing_conference": 0,  # PWC 条目中缺少 'conference' 键的数量
+        "pwc_missing_tasks": 0,  # PWC 条目中缺少 'tasks' 或其值为空列表的数量
+        "pwc_missing_datasets": 0,  # PWC 条目中缺少 'datasets' 或其值为空列表的数量
+        "pwc_missing_methods": 0,  # PWC 条目中缺少 'methods' 或其值为空列表的数量
+        "pwc_missing_repositories": 0,  # PWC 条目中缺少 'repositories' 或其值为空列表的数量
         # GitHub 代码库统计 (嵌套在 PWC 条目中)
-        "total_repos_processed": 0,       # 处理的代码库条目总数
-        "repos_missing_url": 0,           # 代码库条目缺少 'url' 的数量
-        "repos_not_github": 0,            # 代码库 URL 不是 GitHub 链接的数量
-        "github_repos_processed": 0,      # 处理的 GitHub 代码库条目数量
+        "total_repos_processed": 0,  # 处理的代码库条目总数
+        "repos_missing_url": 0,  # 代码库条目缺少 'url' 的数量
+        "repos_not_github": 0,  # 代码库 URL 不是 GitHub 链接的数量
+        "github_repos_processed": 0,  # 处理的 GitHub 代码库条目数量
         "github_repos_missing_stars": 0,  # GitHub 代码库条目中 'stars' 值为 None 的数量
-        "github_repos_missing_license": 0, # GitHub 代码库条目中 'license' 值为 None 的数量
-        "github_repos_missing_language": 0,# GitHub 代码库条目中 'language' 值为 None 的数量
+        "github_repos_missing_license": 0,  # GitHub 代码库条目中 'license' 值为 None 的数量
+        "github_repos_missing_language": 0,  # GitHub 代码库条目中 'language' 值为 None 的数量
     }
 
     # 获取已配置的日志记录器
@@ -169,18 +169,22 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                     stats["records_valid_json"] += 1
                 except (json.JSONDecodeError, TypeError) as e:
                     # 如果解析失败或结果不是字典
-                    logger.warning(f"第 {line_num} 行: JSON 解析失败或结果非字典。错误: {e}")
+                    logger.warning(
+                        f"第 {line_num} 行: JSON 解析失败或结果非字典。错误: {e}"
+                    )
                     # 增加 JSON 解析错误计数器
                     stats["json_parse_errors"] += 1
-                    continue # 跳过此行，处理下一行
+                    continue  # 跳过此行，处理下一行
 
                 # 2. 检查核心的 Hugging Face 模型 ID
-                hf_model_id = data.get("hf_model_id") # 使用 .get() 安全获取
+                hf_model_id = data.get("hf_model_id")  # 使用 .get() 安全获取
                 # 检查 ID 是否存在、非空且为字符串
                 if not hf_model_id or not isinstance(hf_model_id, str):
-                    logger.warning(f"第 {line_num} 行: 记录缺少有效的 'hf_model_id'。值为: {hf_model_id}")
+                    logger.warning(
+                        f"第 {line_num} 行: 记录缺少有效的 'hf_model_id'。值为: {hf_model_id}"
+                    )
                     stats["missing_hf_id"] += 1
-                    continue # 没有有效 ID，无法继续处理此记录
+                    continue  # 没有有效 ID，无法继续处理此记录
 
                 # 将有效的模型 ID 添加到集合中，用于后续计算唯一模型数量
                 stats["unique_hf_model_ids"].add(hf_model_id)
@@ -192,7 +196,7 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                     stats["missing_hf_sha"] += 1
                 if data.get("hf_last_modified") is None:
                     stats["missing_hf_last_modified"] += 1
-                if data.get("hf_tags") is None: # 检查键是否存在 (或值为 None)
+                if data.get("hf_tags") is None:  # 检查键是否存在 (或值为 None)
                     stats["missing_hf_tags"] += 1
                 if data.get("hf_downloads") is None:
                     stats["missing_hf_downloads"] += 1
@@ -205,23 +209,27 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                 if readme_value == "KEY_MISSING":
                     # 如果键完全不存在
                     stats["missing_readme_key"] += 1
-                elif readme_value is None: # 如果键存在但值为 null
+                elif readme_value is None:  # 如果键存在但值为 null
                     stats["readme_is_null"] += 1
-                elif isinstance(readme_value, str) and readme_value: # 如果是字符串且非空
+                elif (
+                    isinstance(readme_value, str) and readme_value
+                ):  # 如果是字符串且非空
                     stats["readme_is_present"] += 1
-                else: # 包括空字符串 "" 或其他非预期类型
+                else:  # 包括空字符串 "" 或其他非预期类型
                     # 将空字符串视为与 null/None 等同（无有效内容）
                     stats["readme_is_null"] += 1
-                    logger.debug(f"第 {line_num} 行, ID {hf_model_id}: README 内容存在但为空或类型无效。")
+                    logger.debug(
+                        f"第 {line_num} 行, ID {hf_model_id}: README 内容存在但为空或类型无效。"
+                    )
 
                 # 5. 检查数据集链接字段 ('hf_dataset_links')
                 links_value = data.get("hf_dataset_links", "KEY_MISSING")
                 if links_value == "KEY_MISSING":
                     stats["missing_dataset_links_key"] += 1
-                elif isinstance(links_value, list): # 检查是否为列表
-                    if not links_value: # 如果是空列表 []
+                elif isinstance(links_value, list):  # 检查是否为列表
+                    if not links_value:  # 如果是空列表 []
                         stats["dataset_links_is_empty"] += 1
-                    else: # 如果是非空列表
+                    else:  # 如果是非空列表
                         stats["dataset_links_is_present"] += 1
                         # 累加找到的链接总数
                         stats["total_dataset_links_found"] += len(links_value)
@@ -231,14 +239,18 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                             if isinstance(link, str) and link.startswith("http"):
                                 stats["unique_dataset_links"].add(link)
                             else:
-                                logger.warning(f"第 {line_num} 行, ID {hf_model_id}: 发现无效的数据集链接: {link}")
-                else: # 如果值不是列表 (可能是 None 或其他类型)
-                    logger.warning(f"第 {line_num} 行, ID {hf_model_id}: 'hf_dataset_links' 字段类型非预期: {type(links_value)}")
+                                logger.warning(
+                                    f"第 {line_num} 行, ID {hf_model_id}: 发现无效的数据集链接: {link}"
+                                )
+                else:  # 如果值不是列表 (可能是 None 或其他类型)
+                    logger.warning(
+                        f"第 {line_num} 行, ID {hf_model_id}: 'hf_dataset_links' 字段类型非预期: {type(links_value)}"
+                    )
                     # 将非列表或 None 的情况视为无效/空
                     stats["dataset_links_is_empty"] += 1
 
                 # 6. 分析关联的论文 ('linked_papers')
-                linked_papers = data.get("linked_papers", []) # 安全获取，默认为空列表
+                linked_papers = data.get("linked_papers", [])  # 安全获取，默认为空列表
                 # 检查是否为列表且非空
                 if isinstance(linked_papers, list) and linked_papers:
                     # 如果包含有效的论文列表，将模型 ID 加入到 "有论文的模型" 集合中
@@ -248,8 +260,10 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                     for paper_num, paper in enumerate(linked_papers, 1):
                         # 确保论文条目本身是字典
                         if not isinstance(paper, dict):
-                            logger.warning(f"第 {line_num} 行, ID {hf_model_id}: linked_papers 列表中的第 {paper_num} 项无效 (非字典)。")
-                            continue # 跳过格式错误的论文条目
+                            logger.warning(
+                                f"第 {line_num} 行, ID {hf_model_id}: linked_papers 列表中的第 {paper_num} 项无效 (非字典)。"
+                            )
+                            continue  # 跳过格式错误的论文条目
 
                         # 增加处理的论文总数计数器
                         stats["total_papers_processed"] += 1
@@ -273,24 +287,32 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                             if pwc_entry.get("conference") is None:
                                 stats["pwc_missing_conference"] += 1
                             # 检查列表字段是否存在且非空
-                            if not pwc_entry.get("tasks"): # .get() 返回 None 或空列表 [] 都会评估为 False
+                            if not pwc_entry.get(
+                                "tasks"
+                            ):  # .get() 返回 None 或空列表 [] 都会评估为 False
                                 stats["pwc_missing_tasks"] += 1
-                            if not pwc_entry.get("datasets"): # PWC 数据中的字段名可能是 datasets_used 或 datasets
+                            if not pwc_entry.get(
+                                "datasets"
+                            ):  # PWC 数据中的字段名可能是 datasets_used 或 datasets
                                 stats["pwc_missing_datasets"] += 1
                             if not pwc_entry.get("methods"):
                                 stats["pwc_missing_methods"] += 1
 
                             # 分析 PWC 条目中的代码库 ('repositories')
-                            repositories = pwc_entry.get("repositories", []) # 安全获取，默认为空列表
-                            if not repositories: # 检查是否为 None 或空列表
+                            repositories = pwc_entry.get(
+                                "repositories", []
+                            )  # 安全获取，默认为空列表
+                            if not repositories:  # 检查是否为 None 或空列表
                                 stats["pwc_missing_repositories"] += 1
-                            elif isinstance(repositories, list): # 确保是列表
+                            elif isinstance(repositories, list):  # 确保是列表
                                 # 遍历代码库列表
                                 for repo_num, repo in enumerate(repositories, 1):
                                     # 确保每个代码库条目是字典
                                     if not isinstance(repo, dict):
-                                        logger.warning(f"第 {line_num} 行, ID {hf_model_id}, 论文 {paper_num}: repositories 列表中的第 {repo_num} 项无效 (非字典)。")
-                                        continue # 跳过格式错误的代码库条目
+                                        logger.warning(
+                                            f"第 {line_num} 行, ID {hf_model_id}, 论文 {paper_num}: repositories 列表中的第 {repo_num} 项无效 (非字典)。"
+                                        )
+                                        continue  # 跳过格式错误的代码库条目
 
                                     # 增加处理的代码库总数计数器
                                     stats["total_repos_processed"] += 1
@@ -298,7 +320,7 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                                     url = repo.get("url")
                                     if not url or not isinstance(url, str):
                                         stats["repos_missing_url"] += 1
-                                        continue # 没有 URL 无法进一步检查
+                                        continue  # 没有 URL 无法进一步检查
 
                                     # 检查是否为 GitHub 链接 (不区分大小写)
                                     if "github.com" in url.lower():
@@ -316,21 +338,23 @@ def analyze_data_integrity_v2(jsonl_filepath: str) -> Optional[Dict[str, Any]]:
                                         stats["repos_not_github"] += 1
                             else:
                                 # 如果 repositories 字段不是列表
-                                logger.warning(f"第 {line_num} 行, ID {hf_model_id}, 论文 {paper_num}: 'repositories' 字段类型非预期: {type(repositories)}")
-                                stats["pwc_missing_repositories"] += 1 # 视为无效/缺失
+                                logger.warning(
+                                    f"第 {line_num} 行, ID {hf_model_id}, 论文 {paper_num}: 'repositories' 字段类型非预期: {type(repositories)}"
+                                )
+                                stats["pwc_missing_repositories"] += 1  # 视为无效/缺失
 
     # --- 文件处理结束或发生错误 ---
     except FileNotFoundError:
         logger.error(f"错误：输入文件未找到: {jsonl_filepath}")
-        return None # 返回 None 表示失败
+        return None  # 返回 None 表示失败
     except IOError as e:
         logger.error(f"读取文件 {jsonl_filepath} 时发生 I/O 错误: {e}")
         return None
     except Exception as e:
         # 捕获其他所有未预料的严重错误
         logger.critical(f"分析过程中发生意外严重错误: {e}")
-        logger.critical(traceback.format_exc()) # 打印详细的堆栈跟踪
-        return None # 返回 None 表示失败
+        logger.critical(traceback.format_exc())  # 打印详细的堆栈跟踪
+        return None  # 返回 None 表示失败
 
     # 分析完成，记录结束信息
     logger.info(f"完成分析 {stats['total_lines_read']} 行。")
@@ -358,11 +382,13 @@ def format_and_log_results_v2(
         return
 
     # --- 计算衍生统计数据 ---
-    total_valid_records = stats["records_valid_json"] # 有效 JSON 记录总数
-    total_unique_models = len(stats["unique_hf_model_ids"]) # 唯一模型 ID 数量
-    total_models_with_papers = len(stats["models_with_linked_papers"]) # 至少有一篇关联论文的模型数量
-    total_unique_arxiv = len(stats["unique_arxiv_ids"]) # 唯一 ArXiv ID 数量
-    total_unique_datasets = len(stats["unique_dataset_links"]) # 唯一数据集链接数量
+    total_valid_records = stats["records_valid_json"]  # 有效 JSON 记录总数
+    total_unique_models = len(stats["unique_hf_model_ids"])  # 唯一模型 ID 数量
+    total_models_with_papers = len(
+        stats["models_with_linked_papers"]
+    )  # 至少有一篇关联论文的模型数量
+    total_unique_arxiv = len(stats["unique_arxiv_ids"])  # 唯一 ArXiv ID 数量
+    total_unique_datasets = len(stats["unique_dataset_links"])  # 唯一数据集链接数量
 
     # 定义一个计算百分比的辅助函数 (处理分母为零的情况)
     perc = lambda count, total: (count / total * 100) if total > 0 else 0
@@ -373,27 +399,46 @@ def format_and_log_results_v2(
     perc_readme_key_missing = perc(stats["missing_readme_key"], total_valid_records)
 
     perc_dslinks_present = perc(stats["dataset_links_is_present"], total_valid_records)
-    perc_dslinks_key_missing = perc(stats["missing_dataset_links_key"], total_valid_records)
+    perc_dslinks_key_missing = perc(
+        stats["missing_dataset_links_key"], total_valid_records
+    )
 
-    perc_papers_missing_pwc = perc(stats["papers_missing_pwc_entry"], stats["total_papers_processed"])
-    perc_pwc_missing_conf = perc(stats["pwc_missing_conference"], stats["pwc_entries_processed"])
-    perc_pwc_missing_methods = perc(stats["pwc_missing_methods"], stats["pwc_entries_processed"])
-    perc_pwc_missing_tasks = perc(stats["pwc_missing_tasks"], stats["pwc_entries_processed"])
-    perc_pwc_missing_datasets = perc(stats["pwc_missing_datasets"], stats["pwc_entries_processed"])
-    perc_pwc_missing_repos = perc(stats["pwc_missing_repositories"], stats["pwc_entries_processed"])
+    perc_papers_missing_pwc = perc(
+        stats["papers_missing_pwc_entry"], stats["total_papers_processed"]
+    )
+    perc_pwc_missing_conf = perc(
+        stats["pwc_missing_conference"], stats["pwc_entries_processed"]
+    )
+    perc_pwc_missing_methods = perc(
+        stats["pwc_missing_methods"], stats["pwc_entries_processed"]
+    )
+    perc_pwc_missing_tasks = perc(
+        stats["pwc_missing_tasks"], stats["pwc_entries_processed"]
+    )
+    perc_pwc_missing_datasets = perc(
+        stats["pwc_missing_datasets"], stats["pwc_entries_processed"]
+    )
+    perc_pwc_missing_repos = perc(
+        stats["pwc_missing_repositories"], stats["pwc_entries_processed"]
+    )
 
-
-    perc_gh_missing_stars = perc(stats["github_repos_missing_stars"], stats["github_repos_processed"])
-    perc_gh_missing_license = perc(stats["github_repos_missing_license"], stats["github_repos_processed"])
-    perc_gh_missing_language = perc(stats["github_repos_missing_language"], stats["github_repos_processed"])
+    perc_gh_missing_stars = perc(
+        stats["github_repos_missing_stars"], stats["github_repos_processed"]
+    )
+    perc_gh_missing_license = perc(
+        stats["github_repos_missing_license"], stats["github_repos_processed"]
+    )
+    perc_gh_missing_language = perc(
+        stats["github_repos_missing_language"], stats["github_repos_processed"]
+    )
 
     # --- 准备报告文本内容 ---
     # 使用一个列表存储报告的每一行
     report_lines = [
         "--- 数据完整性验证报告 ---",
         f"分析文件: {stats['input_filepath']}",
-        f"生成时间: {datetime.now().isoformat()}", # 添加当前时间戳
-        "=" * 40, # 分隔线
+        f"生成时间: {datetime.now().isoformat()}",  # 添加当前时间戳
+        "=" * 40,  # 分隔线
         f"文件摘要:",
         f"  - 总读取行数: {stats['total_lines_read']}",
         f"  - JSON 解析错误行数: {stats['json_parse_errors']}",
@@ -430,9 +475,9 @@ def format_and_log_results_v2(
         f"  - 处理的有效 PWC 条目总数: {stats['pwc_entries_processed']}",
         f"  - PWC 条目缺少 'conference' 的数量: {stats['pwc_missing_conference']} ({perc_pwc_missing_conf:.1f}%)",
         f"  - PWC 条目缺少 'methods' (或列表为空) 的数量: {stats['pwc_missing_methods']} ({perc_pwc_missing_methods:.1f}%)",
-        f"  - PWC 条目缺少 'tasks' (或列表为空) 的数量: {stats['pwc_missing_tasks']} ({perc_pwc_missing_tasks:.1f}%)", # 添加 tasks 百分比
-        f"  - PWC 条目缺少 'datasets' (或列表为空) 的数量: {stats['pwc_missing_datasets']} ({perc_pwc_missing_datasets:.1f}%)", # 添加 datasets 百分比
-        f"  - PWC 条目缺少 'repositories' (或列表为空) 的数量: {stats['pwc_missing_repositories']} ({perc_pwc_missing_repos:.1f}%)", # 添加 repos 百分比
+        f"  - PWC 条目缺少 'tasks' (或列表为空) 的数量: {stats['pwc_missing_tasks']} ({perc_pwc_missing_tasks:.1f}%)",  # 添加 tasks 百分比
+        f"  - PWC 条目缺少 'datasets' (或列表为空) 的数量: {stats['pwc_missing_datasets']} ({perc_pwc_missing_datasets:.1f}%)",  # 添加 datasets 百分比
+        f"  - PWC 条目缺少 'repositories' (或列表为空) 的数量: {stats['pwc_missing_repositories']} ({perc_pwc_missing_repos:.1f}%)",  # 添加 repos 百分比
         "=" * 40,
         f"GitHub 代码库 (在 PWC 条目内):",
         f"  - 处理的代码库条目总数: {stats['total_repos_processed']}",
@@ -480,21 +525,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input",
         type=str,
-        default=DEFAULT_INPUT_JSONL, # 使用常量作为默认值
+        default=DEFAULT_INPUT_JSONL,  # 使用常量作为默认值
         help=f"输入的 JSONL 数据文件路径 (默认: {DEFAULT_INPUT_JSONL})",
     )
     # 添加 --report 参数，用于指定报告文件路径
     parser.add_argument(
         "--report",
         type=str,
-        default=DEFAULT_REPORT_FILE, # 使用常量作为默认值
+        default=DEFAULT_REPORT_FILE,  # 使用常量作为默认值
         help=f"输出的验证报告文件路径 (默认: {DEFAULT_REPORT_FILE})",
     )
     # 添加 --log 参数，用于指定日志文件路径
     parser.add_argument(
         "--log",
         type=str,
-        default=DEFAULT_LOG_FILE, # 使用常量作为默认值
+        default=DEFAULT_LOG_FILE,  # 使用常量作为默认值
         help=f"详细日志文件的路径 (默认: {DEFAULT_LOG_FILE})",
     )
     # 解析命令行传入的参数

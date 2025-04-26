@@ -30,21 +30,22 @@
 这些测试对于确保 API 返回给前端或其他客户端的搜索结果数据结构是正确、一致且有效的至关重要。
 """
 
-import pytest # 导入 pytest 测试框架
-from pydantic import ValidationError # 从 Pydantic 导入验证错误异常类
-from typing import List, Optional, cast, Any, Dict, Union # 导入类型提示工具
-from datetime import date, datetime, timezone # 导入日期和时间相关类型
+import pytest  # 导入 pytest 测试框架
+from pydantic import ValidationError  # 从 Pydantic 导入验证错误异常类
+from typing import List, Optional, cast, Any, Dict, Union  # 导入类型提示工具
+from datetime import date, datetime, timezone  # 导入日期和时间相关类型
 
 # 导入需要测试的模型
 from aigraphx.models.search import (
-    SearchResultItem, # 单个论文/通用搜索结果项模型
-    HFSearchResultItem, # 单个 Hugging Face 模型搜索结果项模型
-    SearchType, # 搜索类型枚举 (虽然这里没直接测枚举，但模型可能用到)
-    PaginatedPaperSearchResult, # 论文搜索结果的分页模型
+    SearchResultItem,  # 单个论文/通用搜索结果项模型
+    HFSearchResultItem,  # 单个 Hugging Face 模型搜索结果项模型
+    SearchType,  # 搜索类型枚举 (虽然这里没直接测枚举，但模型可能用到)
+    PaginatedPaperSearchResult,  # 论文搜索结果的分页模型
 )
 
 
 # --- 测试 SearchResultItem 模型 ---
+
 
 def test_searchresultitem_creation_minimal() -> None:
     """测试 SearchResultItem 模型的最小化创建。"""
@@ -86,7 +87,7 @@ def test_searchresultitem_creation_full() -> None:
 def test_searchresultitem_missing_required() -> None:
     """测试当缺少必需字段时，SearchResultItem 创建是否失败。"""
     # 目前模型定义中，只有 pwc_id 是严格必需的 (score 有默认值 None)
-    with pytest.raises(ValidationError) as excinfo: # 捕获预期的验证错误
+    with pytest.raises(ValidationError) as excinfo:  # 捕获预期的验证错误
         # 尝试创建实例，但不提供 pwc_id 参数
         # 使用 # type: ignore 告诉 mypy 忽略此处的参数缺失错误，因为这是测试目的
         SearchResultItem(title="T", score=0.5)  # type: ignore[call-arg]
@@ -97,6 +98,7 @@ def test_searchresultitem_missing_required() -> None:
 
 
 # --- 测试 HFSearchResultItem 模型 ---
+
 
 def test_hfsearchresultitem_creation_minimal() -> None:
     """测试 HFSearchResultItem 模型的最小化创建。"""
@@ -167,14 +169,14 @@ def test_hfsearchresultitem_missing_required() -> None:
     with pytest.raises(ValidationError) as excinfo_model:
         HFSearchResultItem(  # type: ignore[call-arg] # 故意不提供 model_id
             # model_id 参数被故意删除
-            score=0.6, # 提供 score
+            score=0.6,  # 提供 score
             author=None,
             pipeline_tag=None,
             library_name=None,
             tags=None,
             likes=None,
             downloads=None,
-            last_modified=None, # 提供 None
+            last_modified=None,  # 提供 None
         )
     errors_model = excinfo_model.value.errors()
     # 断言错误是关于 model_id 缺失
@@ -185,7 +187,7 @@ def test_hfsearchresultitem_missing_required() -> None:
     # --- 测试缺少 score ---
     with pytest.raises(ValidationError) as excinfo_score:
         HFSearchResultItem(  # type: ignore[call-arg] # 故意不提供 score
-            model_id="org/model3", # 提供 model_id
+            model_id="org/model3",  # 提供 model_id
             # score 参数被故意删除
             author=None,
             pipeline_tag=None,
@@ -193,7 +195,7 @@ def test_hfsearchresultitem_missing_required() -> None:
             tags=None,
             likes=None,
             downloads=None,
-            last_modified=None, # 提供 None
+            last_modified=None,  # 提供 None
         )
     errors_score = excinfo_score.value.errors()
     # 断言错误是关于 score 缺失
@@ -203,6 +205,7 @@ def test_hfsearchresultitem_missing_required() -> None:
 
 
 # --- 测试 PaginatedPaperSearchResult 模型 ---
+
 
 def test_paginated_paper_search_result_creation_success() -> None:
     """测试 PaginatedPaperSearchResult 模型的成功创建。"""
@@ -241,7 +244,7 @@ def test_paginated_paper_search_result_missing_required() -> None:
     item1 = SearchResultItem(pwc_id="p1", score=0.9)
 
     # --- 测试缺少 items ---
-    with pytest.raises(ValidationError, match="items"): # 预期错误消息包含 "items"
+    with pytest.raises(ValidationError, match="items"):  # 预期错误消息包含 "items"
         # 使用 cast(Any, None) 来绕过类型检查，模拟传入 None
         PaginatedPaperSearchResult(items=cast(Any, None), total=1, skip=0, limit=1)
 

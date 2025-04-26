@@ -35,16 +35,16 @@
 
 # 导入标准库
 import logging  # 日志记录
-import argparse # 解析命令行参数
+import argparse  # 解析命令行参数
 import asyncio  # 异步编程
-import os       # 操作系统交互 (路径, 环境变量)
-import json     # 处理 JSON (ID 映射)
-import time     # 计时
-import numpy as np # 处理数值数组 (向量)
-import faiss    # Faiss 库，用于相似性搜索
-import psycopg_pool # 异步 PostgreSQL 连接池
-from typing import List, Optional, Dict # 类型提示
-import psycopg # <--- 添加 psycopg 导入
+import os  # 操作系统交互 (路径, 环境变量)
+import json  # 处理 JSON (ID 映射)
+import time  # 计时
+import numpy as np  # 处理数值数组 (向量)
+import faiss  # Faiss 库，用于相似性搜索
+import psycopg_pool  # 异步 PostgreSQL 连接池
+from typing import List, Optional, Dict  # 类型提示
+import psycopg  # <--- 添加 psycopg 导入
 from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.errors import OperationalError as PsycopgOperationalError
@@ -54,35 +54,38 @@ from dotenv import load_dotenv
 # --- 项目内部导入 ---
 # 确保可以正确导入项目根目录下的模块
 import sys
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # 从项目中导入配置和依赖类
 from aigraphx.core.config import settings  # 导入 Pydantic Settings 对象
-from aigraphx.repositories.postgres_repo import PostgresRepository # 导入 PG 仓库
-from aigraphx.vectorization.embedder import TextEmbedder # 导入文本嵌入器
+from aigraphx.repositories.postgres_repo import PostgresRepository  # 导入 PG 仓库
+from aigraphx.vectorization.embedder import TextEmbedder  # 导入文本嵌入器
 
 # --- 日志设置 ---
 # 配置日志记录器，使用 settings 中的日志级别
 logging.basicConfig(
-    level=settings.log_level.upper(), # 从配置读取日志级别
-    format="%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s" # 日志格式
+    level=settings.log_level.upper(),  # 从配置读取日志级别
+    format="%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s",  # 日志格式
 )
-logger = logging.getLogger(__name__) # 获取当前模块的日志记录器
+logger = logging.getLogger(__name__)  # 获取当前模块的日志记录器
 
 # --- 常量 ---
 # 从 settings 对象获取配置常量
 EMBEDDING_BATCH_SIZE = settings.build_faiss_batch_size  # 嵌入时每批处理的模型数量
-PG_FETCH_BATCH_SIZE = 1000 # 从 PostgreSQL 一次性获取多少模型数据 (仓库方法内部使用，此脚本不直接用)
+PG_FETCH_BATCH_SIZE = (
+    1000  # 从 PostgreSQL 一次性获取多少模型数据 (仓库方法内部使用，此脚本不直接用)
+)
 # 注意：PG_FETCH_BATCH_SIZE 可能应该移到 Repository 或 settings 中
 
 
 async def build_index(
-    pg_repo: PostgresRepository, # PG 仓库实例
-    embedder: TextEmbedder,     # 文本嵌入器实例
-    index_path: str,            # 模型 Faiss 索引保存路径
-    id_map_path: str,           # 模型 ID 映射保存路径
+    pg_repo: PostgresRepository,  # PG 仓库实例
+    embedder: TextEmbedder,  # 文本嵌入器实例
+    index_path: str,  # 模型 Faiss 索引保存路径
+    id_map_path: str,  # 模型 ID 映射保存路径
     reset_index: bool = False,  # 是否重置索引
 ) -> None:
     """
@@ -103,7 +106,9 @@ async def build_index(
 
     # --- 重置逻辑 ---
     if reset_index:
-        logger.info(f"正在删除现有索引文件（如果存在）于 {index_path} 和 {id_map_path}...")
+        logger.info(
+            f"正在删除现有索引文件（如果存在）于 {index_path} 和 {id_map_path}..."
+        )
         try:
             # 删除旧的索引文件
             if os.path.exists(index_path):
@@ -129,14 +134,14 @@ async def build_index(
 
     # --- 开始计时和初始化 ---
     start_time = time.time()
-    all_model_ids: List[str] = []           # 存储所有成功处理的模型 ID
-    all_embeddings_list: List[np.ndarray] = [] # 存储每个批次生成的 NumPy 向量数组
-    total_models_processed = 0              # 从数据库获取并尝试处理的总模型数
+    all_model_ids: List[str] = []  # 存储所有成功处理的模型 ID
+    all_embeddings_list: List[np.ndarray] = []  # 存储每个批次生成的 NumPy 向量数组
+    total_models_processed = 0  # 从数据库获取并尝试处理的总模型数
 
     logger.info("开始从数据库获取模型数据并生成嵌入向量...")
     try:
-        texts_batch: List[str] = [] # 当前批次的文本列表 (用于嵌入)
-        ids_batch: List[str] = []   # 当前批次的模型 ID 列表
+        texts_batch: List[str] = []  # 当前批次的文本列表 (用于嵌入)
+        ids_batch: List[str] = []  # 当前批次的模型 ID 列表
 
         # 使用 PG 仓库提供的异步生成器获取所有模型的 ID 和用于嵌入的文本
         # get_all_models_for_indexing 方法应返回 (model_id, text_to_embed)
@@ -148,8 +153,10 @@ async def build_index(
 
             # 当批次大小达到阈值时，处理该批次
             if len(texts_batch) >= EMBEDDING_BATCH_SIZE:
-                batch_num = (total_models_processed // EMBEDDING_BATCH_SIZE)
-                logger.info(f"正在处理模型批次 {batch_num} (大小: {len(texts_batch)})...")
+                batch_num = total_models_processed // EMBEDDING_BATCH_SIZE
+                logger.info(
+                    f"正在处理模型批次 {batch_num} (大小: {len(texts_batch)})..."
+                )
                 # 调用嵌入器的批量嵌入方法
                 embeddings = embedder.embed_batch(texts_batch)
                 # 检查返回的嵌入向量是否有效
@@ -171,7 +178,7 @@ async def build_index(
                 logger.info(f"已处理模型总数: {total_models_processed}")
 
         # --- 处理最后一个未满的批次 ---
-        if texts_batch: # 如果循环结束后仍有剩余数据
+        if texts_batch:  # 如果循环结束后仍有剩余数据
             logger.info(f"正在处理最后一个模型批次 (大小: {len(texts_batch)})...")
             embeddings = embedder.embed_batch(texts_batch)
             if embeddings is not None and embeddings.shape[0] > 0:
@@ -185,7 +192,7 @@ async def build_index(
     except Exception as e:
         # 捕获在获取数据或生成嵌入过程中的任何异常
         logger.exception(f"获取模型或生成嵌入时出错: {e}")
-        return # 中断构建过程
+        return  # 中断构建过程
 
     # --- 检查是否有嵌入向量生成 ---
     if not all_embeddings_list:
@@ -215,7 +222,6 @@ async def build_index(
     except Exception as e:
         logger.error(f"处理嵌入向量时发生未知错误: {e}", exc_info=True)
         return
-
 
     # --- 构建 Faiss 索引 ---
     # 获取嵌入向量的维度
@@ -261,7 +267,7 @@ async def build_index(
         # 确保存储目录存在
         os.makedirs(os.path.dirname(id_map_path), exist_ok=True)
         # 将 ID 映射字典写入 JSON 文件
-        with open(id_map_path, "w", encoding='utf-8') as f:
+        with open(id_map_path, "w", encoding="utf-8") as f:
             json.dump(id_map, f, ensure_ascii=False, indent=4)
         logger.info("模型 ID 映射保存成功。")
     except Exception as e:
@@ -269,9 +275,7 @@ async def build_index(
 
     # --- 结束计时和日志 ---
     end_time = time.time()
-    logger.info(
-        f"模型 Faiss 索引构建完成，总耗时: {end_time - start_time:.2f} 秒。"
-    )
+    logger.info(f"模型 Faiss 索引构建完成，总耗时: {end_time - start_time:.2f} 秒。")
     logger.info(f"最终索引包含 {index.ntotal} 个模型向量。")
 
 
@@ -309,15 +313,15 @@ async def main() -> None:
             min_size=settings.pg_pool_min_size,
             max_size=settings.pg_pool_max_size,
         )
-        await pool.wait() # 等待连接池就绪
-        pg_repo = PostgresRepository(pool=pool) # 实例化仓库，传入连接池
+        await pool.wait()  # 等待连接池就绪
+        pg_repo = PostgresRepository(pool=pool)  # 实例化仓库，传入连接池
         logger.info("PostgreSQL 连接池初始化成功。")
 
         # --- 初始化嵌入器 ---
         logger.info("正在初始化文本嵌入器...")
         embedder = TextEmbedder(
-            model_name=settings.sentence_transformer_model, # 从 settings 获取模型名
-            device=settings.embedder_device, # 从 settings 获取设备
+            model_name=settings.sentence_transformer_model,  # 从 settings 获取模型名
+            device=settings.embedder_device,  # 从 settings 获取设备
         )
         # 检查嵌入器是否就绪
         # if not await embedder.is_ready(): # <--- 移除此行
@@ -330,16 +334,19 @@ async def main() -> None:
         await build_index(
             pg_repo=pg_repo,
             embedder=embedder,
-            index_path=settings.models_faiss_index_path, # 使用 settings 中的模型索引路径
-            id_map_path=settings.models_faiss_mapping_path, # 使用 settings 中的模型映射路径
-            reset_index=args.reset, # 使用命令行参数
+            index_path=settings.models_faiss_index_path,  # 使用 settings 中的模型索引路径
+            id_map_path=settings.models_faiss_mapping_path,  # 使用 settings 中的模型映射路径
+            reset_index=args.reset,  # 使用命令行参数
         )
 
     except psycopg_pool.PoolTimeout:
         logger.exception("数据库连接池操作超时。")
     except psycopg_pool.PoolClosed:
         logger.exception("尝试在已关闭的数据库连接池上操作。")
-    except (PsycopgOperationalError, psycopg.Error) as db_err: # <--- 确保 psycopg.Error 可用
+    except (
+        PsycopgOperationalError,
+        psycopg.Error,
+    ) as db_err:  # <--- 确保 psycopg.Error 可用
         logger.exception(f"数据库操作失败: {db_err}", exc_info=True)
     except Exception as e:
         logger.exception(f"主流程执行过程中发生意外错误: {e}")

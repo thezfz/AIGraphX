@@ -33,7 +33,10 @@
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch  # 导入 AsyncMock 用于异步模拟，patch 用于可能的猴子补丁（此文件未使用）
+from unittest.mock import (
+    AsyncMock,
+    patch,
+)  # 导入 AsyncMock 用于异步模拟，patch 用于可能的猴子补丁（此文件未使用）
 from httpx import AsyncClient  # 导入用于发送异步 HTTP 请求的客户端
 from unittest.mock import (
     AsyncMock,

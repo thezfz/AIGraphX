@@ -343,7 +343,7 @@ async def enrich_papers_with_relations(
     for paper_data in paper_map.values():
         paper_data.setdefault("tasks", [])
         paper_data.setdefault("datasets", [])
-        paper_data.setdefault("methods", []) # PWC论文可能有关联的方法，需要初始化
+        paper_data.setdefault("methods", [])  # PWC论文可能有关联的方法，需要初始化
         paper_data.setdefault("repositories", [])
 
     # --- 获取关系数据 ---
@@ -364,25 +364,25 @@ async def enrich_papers_with_relations(
         # 方法关系 (假设存在 get_methods_for_papers)
         # 如果没有这个方法，mypy可能还会报错，或者这里会抛出AttributeError
         try:
-             methods_map = await pg_repo.get_methods_for_papers(paper_ids)
-             for paper_id, methods_list in methods_map.items():
-                 if paper_id in paper_map:
-                     paper_map[paper_id]["methods"] = methods_list
+            methods_map = await pg_repo.get_methods_for_papers(paper_ids)
+            for paper_id, methods_list in methods_map.items():
+                if paper_id in paper_map:
+                    paper_map[paper_id]["methods"] = methods_list
         except AttributeError:
-             logger.warning("PostgresRepository does not have 'get_methods_for_papers'. Methods not enriched.")
+            logger.warning(
+                "PostgresRepository does not have 'get_methods_for_papers'. Methods not enriched."
+            )
         except Exception as e_meth:
             logger.error(f"Error fetching methods relations: {e_meth}", exc_info=True)
-
 
         # 代码库关系 (假设存在 get_repositories_for_papers)
         repos_map = await pg_repo.get_repositories_for_papers(paper_ids)
         for paper_id, repo_urls in repos_map.items():
-             if paper_id in paper_map:
-                 # 保持与之前代码相似的结构，包含 url 键
-                 paper_map[paper_id]["repositories"] = [
-                     {"url": url} for url in repo_urls if url
-                 ]
-
+            if paper_id in paper_map:
+                # 保持与之前代码相似的结构，包含 url 键
+                paper_map[paper_id]["repositories"] = [
+                    {"url": url} for url in repo_urls if url
+                ]
 
     except Exception as e:
         logger.error(f"获取论文关系数据时出错: {e}")
@@ -393,8 +393,10 @@ async def enrich_papers_with_relations(
     # 返回丰富后的论文列表
     enriched_papers = list(paper_map.values())
     if enriched_papers:
-        first_id = enriched_papers[0].get('paper_id', 'N/A')
-        logger.debug(f"Enriched paper batch. Example paper ID {first_id} tasks: {enriched_papers[0].get('tasks')}")
+        first_id = enriched_papers[0].get("paper_id", "N/A")
+        logger.debug(
+            f"Enriched paper batch. Example paper ID {first_id} tasks: {enriched_papers[0].get('tasks')}"
+        )
     return enriched_papers
 
 
@@ -586,7 +588,9 @@ async def main(reset_neo4j: bool) -> None:
         # 添加断言确保URI, USER, PASSWORD不是None
         assert NEO4J_URI is not None, "NEO4J_URI environment variable must be set"
         assert NEO4J_USER is not None, "NEO4J_USER environment variable must be set"
-        assert NEO4J_PASSWORD is not None, "NEO4J_PASSWORD environment variable must be set"
+        assert NEO4J_PASSWORD is not None, (
+            "NEO4J_PASSWORD environment variable must be set"
+        )
         neo4j_driver = AsyncGraphDatabase.driver(
             NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
         )

@@ -10,15 +10,15 @@ Revises: 23d0b64741be (此迁移基于上一个创建初始表的迁移)
 Create Date: 2025-04-23 01:22:27.675560 (注意：这个日期看起来是未来的，可能是笔误)
 """
 
-from typing import Sequence, Union # 导入类型提示
+from typing import Sequence, Union  # 导入类型提示
 
-from alembic import op # 导入 Alembic 操作对象
-import sqlalchemy as sa # 导入 SQLAlchemy，用于定义列类型 (例如 sa.TEXT(), sa.VARCHAR(), sa.ARRAY())
+from alembic import op  # 导入 Alembic 操作对象
+import sqlalchemy as sa  # 导入 SQLAlchemy，用于定义列类型 (例如 sa.TEXT(), sa.VARCHAR(), sa.ARRAY())
 
 
 # revision identifiers, used by Alembic.
-revision: str = "8a6d489340fe" # 当前迁移的 ID
-down_revision: Union[str, None] = "23d0b64741be" # 指向它所基于的前一个迁移 ID
+revision: str = "8a6d489340fe"  # 当前迁移的 ID
+down_revision: Union[str, None] = "23d0b64741be"  # 指向它所基于的前一个迁移 ID
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -30,7 +30,7 @@ def upgrade() -> None:
     主要是添加新的列。
     """
     # ### 手动编写的 Alembic 命令 ###
-    print( # 在 Alembic 运行时输出信息，告知正在进行的操作
+    print(  # 在 Alembic 运行时输出信息，告知正在进行的操作
         "正在应用升级：为 readme, datasets, conference, repo details, abstracts 添加字段"
     )
 
@@ -84,7 +84,7 @@ def downgrade() -> None:
     主要是删除在 `upgrade` 中添加的列。
     """
     # ### 手动编写的 Alembic 命令 ###
-    print( # 输出降级信息
+    print(  # 输出降级信息
         "正在应用降级：移除 readme, datasets, conference, repo details, abstracts 的字段"
     )
 

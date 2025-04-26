@@ -24,24 +24,41 @@
 这些测试确保 `TextEmbedder` 类能够正确加载模型、处理各种输入、生成符合预期的向量，并能优雅地处理初始化和编码过程中的错误。
 """
 
-import pytest # 导入 pytest 测试框架
-import numpy as np # 导入 numpy 用于处理数值数组（嵌入向量）
-import os # 导入 os 模块（虽然在此文件中可能未直接使用）
-from unittest.mock import patch, MagicMock, call, AsyncMock # 从 unittest.mock 导入模拟工具
-from typing import Generator, Union, Optional, List, Any, Dict, Type, Callable # 导入类型提示
-import torch # 导入 torch (SentenceTransformer 可能依赖它)
-from typing import cast # 导入 cast 用于类型转换（主要用于告知类型检查器）
+import pytest  # 导入 pytest 测试框架
+import numpy as np  # 导入 numpy 用于处理数值数组（嵌入向量）
+import os  # 导入 os 模块（虽然在此文件中可能未直接使用）
+from unittest.mock import (
+    patch,
+    MagicMock,
+    call,
+    AsyncMock,
+)  # 从 unittest.mock 导入模拟工具
+from typing import (
+    Generator,
+    Union,
+    Optional,
+    List,
+    Any,
+    Dict,
+    Type,
+    Callable,
+)  # 导入类型提示
+import torch  # 导入 torch (SentenceTransformer 可能依赖它)
+from typing import cast  # 导入 cast 用于类型转换（主要用于告知类型检查器）
 import importlib  # 导入 importlib，可能用于重新加载模块（例如配置）
 
 # 假设测试是从项目根目录运行的
-from aigraphx.vectorization.embedder import TextEmbedder # 导入被测试的 TextEmbedder 类
+from aigraphx.vectorization.embedder import TextEmbedder  # 导入被测试的 TextEmbedder 类
 from aigraphx.core import config  # 导入配置模块，可能用于获取默认设置或重新加载
 
 
 # --- Fixtures ---
 # Pytest fixtures 用于创建可重用的测试设置和资源。
 
-@pytest.fixture(scope="module") # scope="module" 表示此 fixture 在整个测试模块中只执行一次
+
+@pytest.fixture(
+    scope="module"
+)  # scope="module" 表示此 fixture 在整个测试模块中只执行一次
 def MockSentenceTransformer() -> Type:
     """
     Pytest Fixture: 提供一个模拟的 SentenceTransformer 类本身。
@@ -54,16 +71,16 @@ def MockSentenceTransformer() -> Type:
         Type: 一个模拟 SentenceTransformer 行为的类。
     """
 
-    class MockST: # 定义一个内部类来模拟 SentenceTransformer
+    class MockST:  # 定义一个内部类来模拟 SentenceTransformer
         def __init__(
             self,
-            model_name: str, # 模拟构造函数接收模型名称
-            device: Optional[str] = None, # 模拟接收设备参数
-            trust_remote_code: bool = False, # 模拟接收信任远程代码参数
+            model_name: str,  # 模拟构造函数接收模型名称
+            device: Optional[str] = None,  # 模拟接收设备参数
+            trust_remote_code: bool = False,  # 模拟接收信任远程代码参数
         ) -> None:
             """模拟 SentenceTransformer 的构造函数。"""
-            self.model_name = model_name # 存储模型名称
-            self.device = device or "cpu" # 存储设备，默认为 "cpu"
+            self.model_name = model_name  # 存储模型名称
+            self.device = device or "cpu"  # 存储设备，默认为 "cpu"
             self._dimension = 384  # 设置一个默认的模拟嵌入维度
             # print(f"模拟 SentenceTransformer 使用模型 '{model_name}' 在设备 '{self.device}' 上初始化") # 调试打印
 
@@ -73,34 +90,34 @@ def MockSentenceTransformer() -> Type:
 
         def encode(
             self,
-            sentences: Union[str, List[str]], # 输入可以是单个字符串或字符串列表
-            convert_to_numpy: bool = True, # 模拟其他参数
+            sentences: Union[str, List[str]],  # 输入可以是单个字符串或字符串列表
+            convert_to_numpy: bool = True,  # 模拟其他参数
             normalize_embeddings: bool = False,
             show_progress_bar: bool = False,
         ) -> np.ndarray:
             """模拟编码（嵌入）方法。"""
             # print(f"模拟 encode 被调用: {sentences}") # 调试打印
-            if isinstance(sentences, str): # 如果输入是单个字符串
+            if isinstance(sentences, str):  # 如果输入是单个字符串
                 # 返回一个形状为 (dimension,) 的全 1 numpy 数组
                 return np.ones(self._dimension, dtype=np.float32)
-            elif isinstance(sentences, list): # 如果输入是列表
+            elif isinstance(sentences, list):  # 如果输入是列表
                 # 返回一个形状为 (len(sentences), dimension) 的全 1 numpy 数组
                 return np.ones((len(sentences), self._dimension), dtype=np.float32)
             else:
                 raise TypeError("模拟 encode 期望输入是 str 或 list")
 
-    return MockST # 返回这个模拟类
+    return MockST  # 返回这个模拟类
 
 
 @pytest.fixture
 def mock_st_model() -> Generator[MagicMock, None, None]:
     """Pytest Fixture: 提供一个*能正常工作*的 SentenceTransformer 模拟*实例*。"""
-    mock_model = MagicMock() # 创建一个通用的模拟对象
+    mock_model = MagicMock()  # 创建一个通用的模拟对象
     # 配置 encode 方法的返回值（一个简单的 numpy 数组）
     mock_model.encode.return_value = np.array([0.1, 0.2, 0.3])
     # 配置 get_sentence_embedding_dimension 方法的返回值
     mock_model.get_sentence_embedding_dimension.return_value = 3
-    yield mock_model # 使用 yield 返回模拟对象，测试结束后会自动清理
+    yield mock_model  # 使用 yield 返回模拟对象，测试结束后会自动清理
 
 
 @pytest.fixture
@@ -126,7 +143,7 @@ def mock_st_model_bad_dimension() -> Generator[MagicMock, None, None]:
 
 @pytest.fixture
 def embedder_instance(
-    MockSentenceTransformer: Type, # 请求模拟的 SentenceTransformer 类 fixture
+    MockSentenceTransformer: Type,  # 请求模拟的 SentenceTransformer 类 fixture
 ) -> Generator[TextEmbedder, None, None]:
     """
     Pytest Fixture: 提供一个使用*能正常工作*的模拟模型初始化的 TextEmbedder 实例。
@@ -135,16 +152,16 @@ def embedder_instance(
     # 使用 patch 上下文管理器，在执行期间将真实的 SentenceTransformer 类替换为我们的模拟类
     with patch(
         "aigraphx.vectorization.embedder.SentenceTransformer", MockSentenceTransformer
-    ) as MockSTClass: # MockSTClass 是被 patch 后的模拟类
+    ) as MockSTClass:  # MockSTClass 是被 patch 后的模拟类
         # 在 patch 的作用域内实例化 TextEmbedder
         # 它会调用被 patch 后的 SentenceTransformer (即 MockSentenceTransformer)
-        instance = TextEmbedder(model_name="mock-model", device="cpu") # 显式传入参数
-        yield instance # 返回创建的实例，测试结束后 patch 会自动撤销
+        instance = TextEmbedder(model_name="mock-model", device="cpu")  # 显式传入参数
+        yield instance  # 返回创建的实例，测试结束后 patch 会自动撤销
 
 
 @pytest.fixture
 def embedder_instance_default(
-    MockSentenceTransformer: Type, # 请求模拟类
+    MockSentenceTransformer: Type,  # 请求模拟类
 ) -> Generator[TextEmbedder, None, None]:
     """
     Pytest Fixture: 提供一个使用*默认*模型名称初始化的 TextEmbedder 实例。
@@ -163,20 +180,21 @@ def embedder_instance_default(
 # --- 以下 fixtures (mock_model, mock_settings, embedder) 是另一种模拟方式， ---
 # --- 可能与上面的 embedder_instance* fixtures 有重叠，选择一种方式即可 ---
 
+
 @pytest.fixture
 def mock_model() -> MagicMock:
     """Pytest Fixture: 提供一个配置好的 SentenceTransformer 模拟模型实例。"""
-    model = MagicMock() # 创建模拟对象
+    model = MagicMock()  # 创建模拟对象
 
     # 定义一个更复杂的 mock encode 方法，可以处理单个字符串和列表
     def mock_encode(
         sentences: Union[str, List[str]],
-        batch_size: int = 32, # 模拟接收 batch_size 参数
-        show_progress_bar: bool = False, # 模拟接收进度条参数
-        **kwargs: Any, # 接收其他可能的关键字参数
+        batch_size: int = 32,  # 模拟接收 batch_size 参数
+        show_progress_bar: bool = False,  # 模拟接收进度条参数
+        **kwargs: Any,  # 接收其他可能的关键字参数
     ) -> np.ndarray:
         if isinstance(sentences, str):
-            return np.array([0.1, 0.2, 0.3]) # 单个文本返回 1D 数组
+            return np.array([0.1, 0.2, 0.3])  # 单个文本返回 1D 数组
         elif isinstance(sentences, list):
             # 列表返回 2D 数组，行数等于列表长度
             return np.array([[0.1, 0.2, 0.3]] * len(sentences))
@@ -197,16 +215,16 @@ def mock_settings() -> MagicMock:
     """Pytest Fixture: 提供一个模拟的 settings 对象。"""
     settings = MagicMock()
     # 设置模拟的配置项值
-    settings.EMBEDDING_MODEL_NAME = "mock-model" # 模拟模型名称
+    settings.EMBEDDING_MODEL_NAME = "mock-model"  # 模拟模型名称
     settings.EMBEDDING_BATCH_SIZE = 2  # 使用较小的批次大小进行测试
-    settings.EMBEDDING_DEVICE = "cpu" # 模拟设备
+    settings.EMBEDDING_DEVICE = "cpu"  # 模拟设备
     return settings
 
 
 @pytest.fixture
 def embedder(
-    mock_model: MagicMock, # 请求上面定义的模拟模型实例 fixture
-    mock_settings: MagicMock # 请求上面定义的模拟 settings fixture
+    mock_model: MagicMock,  # 请求上面定义的模拟模型实例 fixture
+    mock_settings: MagicMock,  # 请求上面定义的模拟 settings fixture
 ) -> Generator[TextEmbedder, None, None]:
     """
     Pytest Fixture: 使用模拟的模型和设置来创建 TextEmbedder 实例。
@@ -217,19 +235,19 @@ def embedder(
         patch(
             # 目标是 embedder 模块中的 SentenceTransformer
             "aigraphx.vectorization.embedder.SentenceTransformer",
-            return_value=mock_model, # 配置 patch 后的类返回我们准备好的 mock_model 实例
-        ) as _, # 不需要使用 patch 后的模拟类本身
+            return_value=mock_model,  # 配置 patch 后的类返回我们准备好的 mock_model 实例
+        ) as _,  # 不需要使用 patch 后的模拟类本身
         patch(
             # 目标是 embedder 模块中的 settings 对象
             "aigraphx.vectorization.embedder.settings",
-            mock_settings # 替换为我们准备好的 mock_settings 实例
+            mock_settings,  # 替换为我们准备好的 mock_settings 实例
         ) as _,
     ):
         # 在 patch 的作用域内实例化 TextEmbedder
         # 它会使用被 patch 的 settings 和 SentenceTransformer
         embedder = TextEmbedder(
-            model_name=mock_settings.EMBEDDING_MODEL_NAME, # 从模拟设置获取名称
-            device=mock_settings.EMBEDDING_DEVICE, # 从模拟设置获取设备
+            model_name=mock_settings.EMBEDDING_MODEL_NAME,  # 从模拟设置获取名称
+            device=mock_settings.EMBEDDING_DEVICE,  # 从模拟设置获取设备
         )
         # 以前的代码可能直接在实例上设置属性，但现在 TextEmbedder 内部处理
         # yield embedder 返回实例供测试使用
@@ -238,27 +256,30 @@ def embedder(
 
 # --- 测试用例 ---
 
+
 def test_embedder_init_explicit(
-    embedder_instance: TextEmbedder, # 请求使用模拟类初始化的实例
-    MockSentenceTransformer: Type # 请求模拟类本身用于类型检查
+    embedder_instance: TextEmbedder,  # 请求使用模拟类初始化的实例
+    MockSentenceTransformer: Type,  # 请求模拟类本身用于类型检查
 ) -> None:
     """测试：使用显式传入的参数初始化 TextEmbedder。"""
     assert embedder_instance.model_name == "mock-model", "模型名称不匹配"
     assert embedder_instance.device == "cpu", "设备名称不匹配"
     assert embedder_instance.model is not None, "模型实例不应为 None"
     # 验证加载的模型确实是我们的模拟类的实例
-    assert isinstance(embedder_instance.model, MockSentenceTransformer), "加载的模型类型不正确"
+    assert isinstance(embedder_instance.model, MockSentenceTransformer), (
+        "加载的模型类型不正确"
+    )
 
 
 def test_embedder_init_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """测试：TextEmbedder 能否从（模拟的）配置/环境变量中读取模型名称进行初始化。"""
     # --- 准备 ---
-    expected_model_name = "mock-model-from-env" # 预期的模型名称
+    expected_model_name = "mock-model-from-env"  # 预期的模型名称
 
     # 创建一个临时的模拟 settings 对象
     mock_settings = MagicMock()
-    mock_settings.sentence_transformer_model = expected_model_name # 设置模型名称
-    mock_settings.embedder_device = "cpu" # 设置设备
+    mock_settings.sentence_transformer_model = expected_model_name  # 设置模型名称
+    mock_settings.embedder_device = "cpu"  # 设置设备
 
     # 创建一个模拟的 SentenceTransformer 类（返回一个模拟实例）
     mock_st_class = MagicMock()
@@ -268,8 +289,12 @@ def test_embedder_init_env(monkeypatch: pytest.MonkeyPatch) -> None:
     # --- 执行与 Patch ---
     # 使用 patch 同时替换 embedder 模块中的 settings 和 SentenceTransformer
     with (
-        patch("aigraphx.vectorization.embedder.settings", mock_settings), # 替换 settings
-        patch("aigraphx.vectorization.embedder.SentenceTransformer", mock_st_class), # 替换类
+        patch(
+            "aigraphx.vectorization.embedder.settings", mock_settings
+        ),  # 替换 settings
+        patch(
+            "aigraphx.vectorization.embedder.SentenceTransformer", mock_st_class
+        ),  # 替换类
     ):
         # 在 patch 生效期间实例化 TextEmbedder，不传入 model_name
         embedder = TextEmbedder()
@@ -278,33 +303,37 @@ def test_embedder_init_env(monkeypatch: pytest.MonkeyPatch) -> None:
         # 验证实例属性是否从模拟 settings 中获取
         assert embedder.model_name == expected_model_name
         assert embedder.device == "cpu"
-        assert embedder.model is not None # 验证模型已加载（是模拟实例）
+        assert embedder.model is not None  # 验证模型已加载（是模拟实例）
 
         # 验证模拟的 SentenceTransformer 类是否以正确的参数被调用
         mock_st_class.assert_called_once_with(
-            expected_model_name, # 应该使用模拟 settings 中的模型名称
-            device="cpu", # 设备
-            trust_remote_code=True # 验证默认参数
+            expected_model_name,  # 应该使用模拟 settings 中的模型名称
+            device="cpu",  # 设备
+            trust_remote_code=True,  # 验证默认参数
         )
 
 
 def test_embedder_init_default(
-    embedder_instance_default: TextEmbedder, # 请求使用默认配置初始化的实例
-    MockSentenceTransformer: Type # 请求模拟类用于类型检查
+    embedder_instance_default: TextEmbedder,  # 请求使用默认配置初始化的实例
+    MockSentenceTransformer: Type,  # 请求模拟类用于类型检查
 ) -> None:
     """测试：使用默认配置初始化 TextEmbedder。"""
     # 获取实际的默认模型名称（可能来自 .env 文件或 config.py 的默认值）
     expected_default_model = config.settings.sentence_transformer_model
     # 验证实例属性
-    assert embedder_instance_default.model_name == expected_default_model, "默认模型名称不匹配"
+    assert embedder_instance_default.model_name == expected_default_model, (
+        "默认模型名称不匹配"
+    )
     assert embedder_instance_default.device == "cpu", "默认设备不匹配"
     assert embedder_instance_default.model is not None, "默认初始化时模型不应为 None"
     # 验证模型类型
-    assert isinstance(embedder_instance_default.model, MockSentenceTransformer), "默认加载的模型类型不正确"
+    assert isinstance(embedder_instance_default.model, MockSentenceTransformer), (
+        "默认加载的模型类型不正确"
+    )
 
 
 # 测试初始化失败的情况
-@patch("aigraphx.vectorization.embedder.SentenceTransformer") # Patch 掉真实的类
+@patch("aigraphx.vectorization.embedder.SentenceTransformer")  # Patch 掉真实的类
 def test_text_embedder_init_load_error(MockSentenceTransformer: MagicMock) -> None:
     """测试场景：当 SentenceTransformer 类在初始化时抛出异常。
     预期行为：TextEmbedder 应捕获异常并将 self.model 设置为 None。
@@ -312,7 +341,7 @@ def test_text_embedder_init_load_error(MockSentenceTransformer: MagicMock) -> No
     # --- 准备 ---
     # 配置 patch 后的模拟类，使其在被调用时抛出异常
     MockSentenceTransformer.side_effect = Exception("Model loading failed")
-    model_name = "bad-model" # 使用一个假设的坏模型名称
+    model_name = "bad-model"  # 使用一个假设的坏模型名称
 
     # --- 执行 ---
     # 实例化 TextEmbedder，预期它会调用模拟类并捕获异常
@@ -355,10 +384,10 @@ def test_get_embedding_dimension_model_init_failed(
     assert dimension == 0, "模型为 None 时，维度应返回 0"
 
 
-@patch("aigraphx.vectorization.embedder.SentenceTransformer") # Patch 掉真实类
+@patch("aigraphx.vectorization.embedder.SentenceTransformer")  # Patch 掉真实类
 def test_get_embedding_dimension_model_returns_none(
-    MockSentenceTransformer: MagicMock, # 注入模拟类
-    mock_st_model_bad_dimension: MagicMock # 注入维度返回 None 的模拟实例 fixture
+    MockSentenceTransformer: MagicMock,  # 注入模拟类
+    mock_st_model_bad_dimension: MagicMock,  # 注入维度返回 None 的模拟实例 fixture
 ) -> None:
     """测试场景：当模型实例的 get_sentence_embedding_dimension 方法返回 None 时。
     预期行为：TextEmbedder 的 get_embedding_dimension 应返回 0。
@@ -393,7 +422,7 @@ def test_embed_single_text(embedder_instance: TextEmbedder) -> None:
     # 这避免了全局 patch，更精确
     with patch.object(
         embedder_instance.model, "encode", return_value=expected_embedding
-    ) as mock_encode: # mock_encode 是 model.encode 的模拟方法
+    ) as mock_encode:  # mock_encode 是 model.encode 的模拟方法
         # 调用 embedder 的 embed 方法
         embedding = embedder_instance.embed(text)
 
@@ -404,9 +433,9 @@ def test_embed_single_text(embedder_instance: TextEmbedder) -> None:
         assert embedding.dtype == np.float32, "嵌入向量数据类型应为 float32"
         # 断言我们 patch 的模拟 encode 方法被以正确的参数调用了一次
         mock_encode.assert_called_once_with(
-            text, # 原始文本
-            convert_to_numpy=True, # 默认参数
-            normalize_embeddings=True, # 默认参数 (TextEmbedder 内部设置)
+            text,  # 原始文本
+            convert_to_numpy=True,  # 默认参数
+            normalize_embeddings=True,  # 默认参数 (TextEmbedder 内部设置)
         )
 
 
@@ -416,7 +445,9 @@ def test_embed_invalid_text(embedder_instance: TextEmbedder) -> None:
     """
     # 使用 patch 来 mock 底层模型的 encode 方法，以便检查它是否被调用
     with patch.object(
-        embedder_instance.model, "encode", return_value=None # 返回值不重要，主要是检查调用
+        embedder_instance.model,
+        "encode",
+        return_value=None,  # 返回值不重要，主要是检查调用
     ) as mock_encode:
         # 测试输入为 None
         assert embedder_instance.embed(None) is None, "输入为 None 时应返回 None"
@@ -448,10 +479,10 @@ def test_embed_single_model_init_failed(MockSentenceTransformer: MagicMock) -> N
     assert embedding is None, "模型为 None 时，embed 应返回 None"
 
 
-@patch("aigraphx.vectorization.embedder.SentenceTransformer") # Patch 真实类
+@patch("aigraphx.vectorization.embedder.SentenceTransformer")  # Patch 真实类
 def test_embed_encode_error(
-    MockSentenceTransformer: MagicMock, # 注入模拟类
-    mock_st_model_encode_error: MagicMock # 注入 encode 会出错的模拟实例
+    MockSentenceTransformer: MagicMock,  # 注入模拟类
+    mock_st_model_encode_error: MagicMock,  # 注入 encode 会出错的模拟实例
 ) -> None:
     """测试场景：当底层模型的 encode 方法抛出异常时，调用 embed 方法。
     预期行为：应捕获异常并返回 None。
@@ -462,7 +493,7 @@ def test_embed_encode_error(
     # 实例化 Embedder
     embedder = TextEmbedder(model_name="test-model")
     text = "hello world"
-    assert embedder.model is not None # 确认模型已加载
+    assert embedder.model is not None  # 确认模型已加载
 
     # --- 执行 ---
     embedding = embedder.embed(text)
@@ -481,10 +512,10 @@ def test_embed_encode_error(
 def test_embed_batch(embedder_instance: TextEmbedder) -> None:
     """测试：成功批量嵌入多个有效文本。"""
     # --- 准备 ---
-    texts = ["Text 1", "Text 2", "Text 3"] # 输入的文本列表
+    texts = ["Text 1", "Text 2", "Text 3"]  # 输入的文本列表
     # 预期的返回结果（根据模拟模型的行为）
     expected_embeddings = np.ones((3, 384), dtype=np.float32)
-    assert embedder_instance.model is not None # 确保模型存在
+    assert embedder_instance.model is not None  # 确保模型存在
 
     # --- 执行与 Patch ---
     # Patch 实例的 model 的 encode 方法
@@ -503,7 +534,7 @@ def test_embed_batch(embedder_instance: TextEmbedder) -> None:
         np.testing.assert_array_equal(embeddings, expected_embeddings)
         # 验证底层 encode 方法被调用
         mock_encode.assert_called_once_with(
-            texts, # 传入原始列表
+            texts,  # 传入原始列表
             convert_to_numpy=True,
             normalize_embeddings=True,
             show_progress_bar=False,  # 假设批次大小未达到显示进度条的阈值
@@ -515,12 +546,12 @@ def test_embed_batch_with_invalid(embedder_instance: TextEmbedder) -> None:
     预期行为：应过滤掉无效条目，只对有效条目调用 encode，并返回有效条目的嵌入结果。
     """
     # --- 准备 ---
-    texts: List[Optional[str]] = [ # 包含无效条目的列表
+    texts: List[Optional[str]] = [  # 包含无效条目的列表
         "Valid 1",
         None,
         "Valid 2",
         "",
-        "  ", # 包含空格的字符串（通常被视为空或无效，取决于具体实现）
+        "  ",  # 包含空格的字符串（通常被视为空或无效，取决于具体实现）
     ]
     # 预期实际传递给底层 encode 方法的有效文本列表
     # (假设 TextEmbedder 会过滤掉 None 和空字符串，但保留空格字符串)
@@ -546,7 +577,7 @@ def test_embed_batch_with_invalid(embedder_instance: TextEmbedder) -> None:
         np.testing.assert_array_equal(embeddings, expected_embeddings)
         # 验证底层 encode 方法是否只用过滤后的有效文本列表调用
         mock_encode.assert_called_once_with(
-            valid_texts_expected_by_encode, # 验证传入的是过滤后的列表
+            valid_texts_expected_by_encode,  # 验证传入的是过滤后的列表
             convert_to_numpy=True,
             normalize_embeddings=True,
             show_progress_bar=False,
@@ -557,12 +588,12 @@ def test_embed_batch_empty(embedder_instance: TextEmbedder) -> None:
     """测试：批量嵌入空列表，或只包含无效条目的列表。
     预期行为：应返回一个形状为 (0, dimension) 的空 numpy 数组，不调用 encode。
     """
-    assert embedder_instance.model is not None # 确保模型存在
+    assert embedder_instance.model is not None  # 确保模型存在
 
     # Patch encode 方法以检查调用情况
     with patch.object(embedder_instance.model, "encode") as mock_encode:
         # 获取嵌入维度
-        embedder_dim = embedder_instance.get_embedding_dimension() # 预期为 384
+        embedder_dim = embedder_instance.get_embedding_dimension()  # 预期为 384
         assert embedder_dim == 384, "测试前获取的维度不正确"
 
         # 测试空列表输入
@@ -570,16 +601,22 @@ def test_embed_batch_empty(embedder_instance: TextEmbedder) -> None:
         assert embeddings_empty is not None, "空列表输入时不应返回 None"
         assert isinstance(embeddings_empty, np.ndarray), "空列表输入时应返回 ndarray"
         # 验证返回数组的形状是 (0, dimension)
-        assert embeddings_empty.shape == (0, embedder_dim), f"空列表结果形状应为 (0, {embedder_dim})"
+        assert embeddings_empty.shape == (0, embedder_dim), (
+            f"空列表结果形状应为 (0, {embedder_dim})"
+        )
         # 验证 encode 未被调用
         mock_encode.assert_not_called()
 
         # 测试只包含无效条目的列表
         embeddings_all_invalid = embedder_instance.embed_batch([None, "", None])
         assert embeddings_all_invalid is not None, "全无效列表输入时不应返回 None"
-        assert isinstance(embeddings_all_invalid, np.ndarray), "全无效列表输入时应返回 ndarray"
+        assert isinstance(embeddings_all_invalid, np.ndarray), (
+            "全无效列表输入时应返回 ndarray"
+        )
         # 验证返回数组的形状也是 (0, dimension)
-        assert embeddings_all_invalid.shape == (0, embedder_dim), f"全无效列表结果形状应为 (0, {embedder_dim})"
+        assert embeddings_all_invalid.shape == (0, embedder_dim), (
+            f"全无效列表结果形状应为 (0, {embedder_dim})"
+        )
         # 验证 encode 仍然未被调用
         mock_encode.assert_not_called()
 
@@ -598,13 +635,15 @@ def test_embed_batch_model_init_failed(MockSentenceTransformer: MagicMock) -> No
     assert embedder.model is None, "首先确认模型为 None"
 
     # --- 执行与断言 ---
-    assert embedder.embed_batch(["test1", "test2"]) is None, "模型为 None 时，embed_batch 应返回 None"
+    assert embedder.embed_batch(["test1", "test2"]) is None, (
+        "模型为 None 时，embed_batch 应返回 None"
+    )
 
 
-@patch("aigraphx.vectorization.embedder.SentenceTransformer") # Patch 真实类
+@patch("aigraphx.vectorization.embedder.SentenceTransformer")  # Patch 真实类
 def test_embed_batch_encode_error(
-    MockSentenceTransformer: MagicMock, # 注入模拟类
-    mock_st_model_encode_error: MagicMock # 注入 encode 会出错的模拟实例
+    MockSentenceTransformer: MagicMock,  # 注入模拟类
+    mock_st_model_encode_error: MagicMock,  # 注入 encode 会出错的模拟实例
 ) -> None:
     """测试场景：当底层模型的 encode 方法抛出异常时，调用 embed_batch 方法。
     预期行为：应捕获异常并返回 None。
@@ -614,8 +653,8 @@ def test_embed_batch_encode_error(
     MockSentenceTransformer.return_value = mock_st_model_encode_error
     # 实例化 Embedder
     embedder = TextEmbedder(model_name="test-model")
-    texts = ["hello", "world"] # 准备输入列表
-    assert embedder.model is not None # 确认模型已加载
+    texts = ["hello", "world"]  # 准备输入列表
+    assert embedder.model is not None  # 确认模型已加载
 
     # --- 执行 ---
     # 调用 embed_batch，使用 cast 辅助类型检查
@@ -629,7 +668,7 @@ def test_embed_batch_encode_error(
         texts,
         convert_to_numpy=True,
         normalize_embeddings=True,
-        show_progress_bar=False # 假设未达到进度条阈值
+        show_progress_bar=False,  # 假设未达到进度条阈值
     )
 
 
@@ -640,6 +679,7 @@ def test_embed_batch_encode_error(
 # (例如，TextEmbedder 可能没有名为 `encode` 或 `batch_size` 的公共属性或方法)
 # 这里我们假设实际的 TextEmbedder 类没有这些属性或方法，因此注释掉。
 
+
 def test_embedder_initialization(
     embedder: TextEmbedder, mock_model: MagicMock, mock_settings: MagicMock
 ) -> None:
@@ -649,12 +689,12 @@ def test_embedder_initialization(
     """
     # 验证 SentenceTransformer 是否用正确的模型名称和设备调用
     assert embedder.model_name == mock_settings.EMBEDDING_MODEL_NAME
-    assert embedder.model is mock_model # 验证内部模型实例
+    assert embedder.model is mock_model  # 验证内部模型实例
     assert embedder.device == mock_settings.EMBEDDING_DEVICE
     # 验证内部属性是否存在（如果 TextEmbedder 有这些属性）
     # assert hasattr(embedder, "_batch_size")
     # assert hasattr(embedder, "_dimension")
-    pass # 替换为 pass 或删除，因为行为已在其他测试中验证
+    pass  # 替换为 pass 或删除，因为行为已在其他测试中验证
 
 
 """

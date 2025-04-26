@@ -31,9 +31,15 @@
 """
 
 import pytest
-from fastapi.testclient import TestClient  # 导入 FastAPI 的同步测试客户端（在此文件中未直接使用，推荐使用 AsyncClient）
+from fastapi.testclient import (
+    TestClient,
+)  # 导入 FastAPI 的同步测试客户端（在此文件中未直接使用，推荐使用 AsyncClient）
 from httpx import AsyncClient  # 导入异步 HTTP 客户端，用于发送测试请求
-from unittest.mock import AsyncMock, MagicMock, patch  # 导入模拟工具：AsyncMock (异步模拟), MagicMock (通用模拟), patch (修补/替换对象)
+from unittest.mock import (
+    AsyncMock,
+    MagicMock,
+    patch,
+)  # 导入模拟工具：AsyncMock (异步模拟), MagicMock (通用模拟), patch (修补/替换对象)
 import numpy as np  # 导入 numpy，通常用于数值计算，这里可能用于创建模拟的向量嵌入（如果需要）
 from fastapi import FastAPI  # 导入 FastAPI 应用类，主要用于类型提示和依赖覆盖
 from typing import List, Dict, Optional, Union, Any  # 导入类型提示工具
@@ -276,7 +282,9 @@ async def test_search_papers_with_all_filters_sort(
             page=expected_page,
             page_size=expected_limit,
             target="papers",
-            date_from=date.fromisoformat(test_after),  # API 端点应将日期字符串解析为 date 对象
+            date_from=date.fromisoformat(
+                test_after
+            ),  # API 端点应将日期字符串解析为 date 对象
             date_to=date.fromisoformat(test_before),
             area=test_area,
             sort_by=test_sort_by,
@@ -550,9 +558,7 @@ async def test_search_models_invalid_search_type(
     try:
         # --- 2. 执行 API 调用 ---
         # hybrid 对于模型搜索是无效的
-        response = await client.get(
-            "/api/v1/search/models/?q=any&search_type=hybrid"
-        )
+        response = await client.get("/api/v1/search/models/?q=any&search_type=hybrid")
         # --- 3. 断言 ---
         assert response.status_code == 422
     finally:
@@ -572,7 +578,10 @@ async def test_search_models_invalid_search_type(
         ("date_from", "invalid-date"),  # 无效日期格式
         ("date_to", "2023/01/01"),  # 无效日期格式 (示例)
         ("sort_order", "descending"),  # 无效的排序顺序枚举值
-        ("sort_by", "title"),  # 假设 'title' 不是有效的论文排序字段 (根据 PaperSortBy Enum)
+        (
+            "sort_by",
+            "title",
+        ),  # 假设 'title' 不是有效的论文排序字段 (根据 PaperSortBy Enum)
         ("search_type", "fuzzy"),  # 无效的搜索类型枚举值 (根据 PapersSearchType Enum)
     ],
 )
@@ -610,7 +619,10 @@ async def test_search_papers_invalid_query_params(
     [
         ("skip", -5),  # skip 不能为负
         ("limit", 0),  # limit 必须 >= 1
-        ("search_type", "hybrid"),  # 'hybrid' 对模型搜索无效 (根据 ModelsSearchType Enum)
+        (
+            "search_type",
+            "hybrid",
+        ),  # 'hybrid' 对模型搜索无效 (根据 ModelsSearchType Enum)
         # 可以添加其他模型特有的无效参数测试，例如无效的 sort_by for models
     ],
 )

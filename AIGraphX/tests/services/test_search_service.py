@@ -32,25 +32,35 @@
 这些测试确保 `SearchService` 能够正确地协调其依赖项，执行不同类型的搜索，处理各种参数和边界情况，并返回格式正确、内容符合预期的分页结果。
 """
 
-import pytest # 导入 pytest 测试框架
-import asyncio # 导入 asyncio 模块
-from unittest.mock import AsyncMock, MagicMock, patch # 导入模拟工具
-import numpy as np # 导入 numpy 用于向量操作（如果需要）
-from typing import List, Tuple, Dict, Optional, Set, Literal, Union, cast, Any # 导入类型提示
-import json # 导入 json 模块
-from datetime import date # 导入 date 类型
+import pytest  # 导入 pytest 测试框架
+import asyncio  # 导入 asyncio 模块
+from unittest.mock import AsyncMock, MagicMock, patch  # 导入模拟工具
+import numpy as np  # 导入 numpy 用于向量操作（如果需要）
+from typing import (
+    List,
+    Tuple,
+    Dict,
+    Optional,
+    Set,
+    Literal,
+    Union,
+    cast,
+    Any,
+)  # 导入类型提示
+import json  # 导入 json 模块
+from datetime import date  # 导入 date 类型
 
 # Fixtures 现在定义在 conftest.py 文件中
 # 模拟数据现在定义在 conftest.py 文件中
 
 # 导入被测试的服务类和相关类型
 from aigraphx.services.search_service import (
-    SearchService, # 被测试的服务类
-    SearchTarget, # 搜索目标类型 (Literal["papers", "models"])
-    PaperSortByLiteral, # 论文排序字段类型
-    ModelSortByLiteral, # 模型排序字段类型
-    SortOrderLiteral, # 排序顺序类型 (Literal["asc", "desc"])
-    ResultItem as ServiceResultItem, # 服务内部使用的 ResultItem 类型别名 (如果存在)
+    SearchService,  # 被测试的服务类
+    SearchTarget,  # 搜索目标类型 (Literal["papers", "models"])
+    PaperSortByLiteral,  # 论文排序字段类型
+    ModelSortByLiteral,  # 模型排序字段类型
+    SortOrderLiteral,  # 排序顺序类型 (Literal["asc", "desc"])
+    ResultItem as ServiceResultItem,  # 服务内部使用的 ResultItem 类型别名 (如果存在)
 )
 
 # 移除 TextEmbedder, FaissRepository, PostgresRepository 的导入，因为它们仅在 conftest.py 的 fixtures 中需要
@@ -60,12 +70,12 @@ from aigraphx.services.search_service import (
 
 # 导入搜索服务使用的 Pydantic 模型
 from aigraphx.models.search import (
-    SearchResultItem, # 论文搜索结果项模型
-    HFSearchResultItem, # Hugging Face 模型搜索结果项模型
-    PaginatedPaperSearchResult, # 论文搜索分页结果模型
-    PaginatedSemanticSearchResult, # (可能已弃用或内部使用) 语义搜索分页结果模型
-    PaginatedHFModelSearchResult, # 模型搜索分页结果模型
-    AnySearchResultItem, # (可能已弃用或内部使用) 任意搜索结果项的联合类型
+    SearchResultItem,  # 论文搜索结果项模型
+    HFSearchResultItem,  # Hugging Face 模型搜索结果项模型
+    PaginatedPaperSearchResult,  # 论文搜索分页结果模型
+    PaginatedSemanticSearchResult,  # (可能已弃用或内部使用) 语义搜索分页结果模型
+    PaginatedHFModelSearchResult,  # 模型搜索分页结果模型
+    AnySearchResultItem,  # (可能已弃用或内部使用) 任意搜索结果项的联合类型
 )
 
 # --- 已移除: Mock 数据定义 ---
@@ -77,12 +87,12 @@ from aigraphx.models.search import (
 
 
 # --- 语义搜索测试 ---
-@pytest.mark.asyncio # 标记为异步测试
+@pytest.mark.asyncio  # 标记为异步测试
 async def test_perform_semantic_search_success(
-    search_service: SearchService, # 请求 conftest.py 提供的 search_service fixture
-    mock_embedder, # 请求 conftest.py 提供的 mock_embedder fixture
-    mock_faiss_paper_repo, # 请求 conftest.py 提供的 mock_faiss_paper_repo fixture
-    mock_pg_repo, # 请求 conftest.py 提供的 mock_pg_repo fixture
+    search_service: SearchService,  # 请求 conftest.py 提供的 search_service fixture
+    mock_embedder,  # 请求 conftest.py 提供的 mock_embedder fixture
+    mock_faiss_paper_repo,  # 请求 conftest.py 提供的 mock_faiss_paper_repo fixture
+    mock_pg_repo,  # 请求 conftest.py 提供的 mock_pg_repo fixture
 ):
     """
     测试场景：成功执行论文的语义搜索。
@@ -95,12 +105,12 @@ async def test_perform_semantic_search_success(
     6. 返回正确格式的 PaginatedPaperSearchResult。
     """
     # --- 准备 ---
-    query = "test query" # 测试查询语句
-    page = 2 # 请求第二页
-    page_size = 1 # 每页大小为 1
-    target = cast(SearchTarget, "papers") # 明确指定搜索目标为论文
+    query = "test query"  # 测试查询语句
+    page = 2  # 请求第二页
+    page_size = 1  # 每页大小为 1
+    target = cast(SearchTarget, "papers")  # 明确指定搜索目标为论文
     # 模拟 Faiss 仓库返回的相似度结果 (paper_id, distance) 列表
-    mock_faiss_return = [(1, 0.1), (3, 0.3), (2, 0.5)] # 注意顺序，距离越小越相似
+    mock_faiss_return = [(1, 0.1), (3, 0.3), (2, 0.5)]  # 注意顺序，距离越小越相似
     mock_faiss_paper_repo.search_similar.return_value = mock_faiss_return
     # 模拟 embedder 返回的查询向量
     mock_embedding = mock_embedder.embed.return_value
@@ -115,17 +125,22 @@ async def test_perform_semantic_search_success(
     # 1. 验证 embedder 被调用
     mock_embedder.embed.assert_called_once_with(query)
     # 2. 验证 Faiss 仓库被调用
-    expected_faiss_k = SearchService.DEFAULT_TOP_N_SEMANTIC # 获取服务中定义的默认 k 值
+    expected_faiss_k = SearchService.DEFAULT_TOP_N_SEMANTIC  # 获取服务中定义的默认 k 值
     mock_faiss_paper_repo.search_similar.assert_called_once_with(
-        mock_embedding, k=expected_faiss_k # 验证调用参数
+        mock_embedding,
+        k=expected_faiss_k,  # 验证调用参数
     )
     # 3. 验证 PG 仓库被调用
     #    获取 Faiss 返回的 ID 列表
     expected_pg_ids = [item[0] for item in mock_faiss_return]
     mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with(expected_pg_ids)
     # 4. 验证返回结果类型和分页信息
-    assert isinstance(results, PaginatedPaperSearchResult), "返回类型应为 PaginatedPaperSearchResult"
-    assert results.total == 3, "总数应为 3 (基于 PG 返回的有效结果)" # total 来自 PG 返回的有效结果数
+    assert isinstance(results, PaginatedPaperSearchResult), (
+        "返回类型应为 PaginatedPaperSearchResult"
+    )
+    assert results.total == 3, (
+        "总数应为 3 (基于 PG 返回的有效结果)"
+    )  # total 来自 PG 返回的有效结果数
     assert results.skip == (page - 1) * page_size, "跳过的数量不正确"
     assert results.limit == page_size, "限制数量不正确"
     assert len(results.items) == page_size, "返回的项目数量不正确"
@@ -243,7 +258,7 @@ async def test_perform_semantic_search_partial_pg_results(
     mock_faiss_paper_repo.search_similar.return_value = [(1, 0.1), (99, 0.2), (2, 0.3)]
     # mock_pg_repo 的默认 side_effect (在 conftest.py 定义) 会模拟只找到 ID 1 和 2 的情况
     page = 1
-    page_size = 1 # 请求第一页，大小为 1
+    page_size = 1  # 请求第一页，大小为 1
     target = cast(SearchTarget, "papers")
 
     # --- 执行 ---
@@ -301,7 +316,7 @@ async def test_perform_semantic_search_no_faiss_results(
 @pytest.mark.asyncio
 async def test_perform_semantic_search_pagination_skip_exceeds_total(
     search_service: SearchService,
-    mock_embedder: MagicMock, # 需要 embedder 来返回值
+    mock_embedder: MagicMock,  # 需要 embedder 来返回值
     mock_faiss_paper_repo,
     mock_pg_repo,
 ):
@@ -311,11 +326,11 @@ async def test_perform_semantic_search_pagination_skip_exceeds_total(
     """
     # --- 准备 ---
     query = "query"
-    mock_faiss_return = [(1, 0.1), (3, 0.3), (2, 0.5)] # Faiss 返回 3 个结果
+    mock_faiss_return = [(1, 0.1), (3, 0.3), (2, 0.5)]  # Faiss 返回 3 个结果
     mock_faiss_paper_repo.search_similar.return_value = mock_faiss_return
     mock_embedding = mock_embedder.embed.return_value
-    page = 2 # 请求第 2 页
-    page_size = 3 # 每页大小为 3
+    page = 2  # 请求第 2 页
+    page_size = 3  # 每页大小为 3
     # (page - 1) * page_size = 1 * 3 = 3. skip 为 3。
     # 由于总结果只有 3 个（索引 0, 1, 2），跳过 3 个后，没有结果了。
     target = cast(SearchTarget, "papers")
@@ -360,7 +375,7 @@ async def test_perform_semantic_search_pagination_limit_zero(
     mock_faiss_paper_repo.search_similar.return_value = mock_faiss_return
     mock_embedding = mock_embedder.embed.return_value
     page = 1
-    page_size = 0 # 请求大小为 0
+    page_size = 0  # 请求大小为 0
     target = cast(SearchTarget, "papers")
 
     # --- 执行 ---
@@ -383,7 +398,7 @@ async def test_perform_semantic_search_pagination_limit_zero(
     assert results.total == 3
     # skip 和 limit 应反映请求的参数
     assert results.skip == (page - 1) * page_size
-    assert results.limit == page_size # limit 为 0
+    assert results.limit == page_size  # limit 为 0
 
 
 @pytest.mark.asyncio
@@ -411,7 +426,7 @@ async def test_perform_semantic_search_with_filters(
     page_size = 5
     target = cast(SearchTarget, "papers")
     # 设置日期过滤条件
-    date_from = date(2023, 1, 10) # conftest 模拟数据中 ID 1 和 2 的日期在此之后
+    date_from = date(2023, 1, 10)  # conftest 模拟数据中 ID 1 和 2 的日期在此之后
     date_to = None
 
     # --- 执行 ---
@@ -420,7 +435,7 @@ async def test_perform_semantic_search_with_filters(
         target=target,
         page=page,
         page_size=page_size,
-        date_from=date_from, # 传入过滤条件
+        date_from=date_from,  # 传入过滤条件
         date_to=date_to,
     )
 
@@ -448,6 +463,7 @@ async def test_perform_semantic_search_with_filters(
 # SearchService 现在直接调用 PG 仓库的 search_papers_by_keyword 方法，
 # 该方法预期直接返回包含详情的字典列表和总数，不再需要额外的 get_details 调用。
 
+
 @pytest.mark.asyncio
 async def test_perform_keyword_search_papers_success(
     search_service: SearchService, mock_pg_repo
@@ -466,15 +482,19 @@ async def test_perform_keyword_search_papers_success(
     page_size = 2
 
     # 通过 fixture 访问 conftest.py 中定义的模拟数据
-    MOCK_PAPER_KEY_1 = mock_pg_repo.paper_details_map[101] # 假设 PG 仓库 fixture 中有此映射
+    MOCK_PAPER_KEY_1 = mock_pg_repo.paper_details_map[
+        101
+    ]  # 假设 PG 仓库 fixture 中有此映射
     MOCK_PAPER_3 = mock_pg_repo.paper_details_map[3]
 
     # --- 模拟设置 ---
     # 配置模拟 PG 仓库的 search_papers_by_keyword 方法
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # 清除可能存在的默认 side_effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = (
+        None  # 清除可能存在的默认 side_effect
+    )
     # 让它返回包含完整详情的字典列表和总数
     mock_pg_repo.search_papers_by_keyword.return_value = (
-        [MOCK_PAPER_KEY_1, MOCK_PAPER_3], # 返回的字典列表
+        [MOCK_PAPER_KEY_1, MOCK_PAPER_3],  # 返回的字典列表
         3,  # 假设总共有 3 个匹配项
     )
 
@@ -492,21 +512,23 @@ async def test_perform_keyword_search_papers_success(
     assert result.limit == page_size
 
     # 验证返回的 items 类型和内容
-    assert all(isinstance(item, SearchResultItem) for item in result.items), "所有项目应为 SearchResultItem 类型"
+    assert all(isinstance(item, SearchResultItem) for item in result.items), (
+        "所有项目应为 SearchResultItem 类型"
+    )
     # 使用 pwc_id (或其他唯一标识) 验证返回了正确的论文
     assert result.items[0].pwc_id == MOCK_PAPER_KEY_1["pwc_id"]
     assert result.items[1].pwc_id == MOCK_PAPER_3["pwc_id"]
 
     # 验证 PG 仓库的 search_papers_by_keyword 方法是否以正确的参数被调用
     mock_pg_repo.search_papers_by_keyword.assert_awaited_once_with(
-        query=query, # 验证查询词
-        skip=(page - 1) * page_size, # 验证 skip 值
-        limit=page_size, # 验证 limit 值
-        sort_by="published_date", # 验证默认排序字段
-        sort_order="desc", # 验证默认排序顺序
-        published_after=None, # 验证默认日期过滤
+        query=query,  # 验证查询词
+        skip=(page - 1) * page_size,  # 验证 skip 值
+        limit=page_size,  # 验证 limit 值
+        sort_by="published_date",  # 验证默认排序字段
+        sort_order="desc",  # 验证默认排序顺序
+        published_after=None,  # 验证默认日期过滤
         published_before=None,
-        filter_area=None, # 验证默认区域过滤
+        filter_area=None,  # 验证默认区域过滤
     )
     # 移除对 get_papers_details_by_ids 的断言，因为它不再被调用
     # mock_pg_repo.get_papers_details_by_ids.assert_not_awaited()
@@ -529,9 +551,9 @@ async def test_perform_keyword_search_papers_filter_sort(
     page_size = 10
     date_from = date(2023, 1, 10)
     date_to = date(2023, 2, 1)
-    area = ["NLP"] # 区域过滤（列表）
-    sort_by = cast(PaperSortByLiteral, "title") # 按标题排序
-    sort_order = cast(SortOrderLiteral, "asc") # 升序
+    area = ["NLP"]  # 区域过滤（列表）
+    sort_by = cast(PaperSortByLiteral, "title")  # 按标题排序
+    sort_order = cast(SortOrderLiteral, "asc")  # 升序
 
     # 访问 conftest.py 中的模拟数据
     MOCK_PAPER_KEY_1 = mock_pg_repo.paper_details_map[101]
@@ -575,7 +597,7 @@ async def test_perform_keyword_search_papers_filter_sort(
         sort_order=sort_order,
         published_after=date_from,
         published_before=date_to,
-        filter_area=area, # 验证 area 参数被传递
+        filter_area=area,  # 验证 area 参数被传递
     )
     # 移除对 get_papers_details_by_ids 的断言
     # mock_pg_repo.get_papers_details_by_ids.assert_not_awaited()
@@ -591,15 +613,15 @@ async def test_perform_keyword_search_papers_pagination_skip_exceeds(
     """
     # --- 准备 ---
     query = "skip test"
-    page = 5 # 请求第 5 页
-    page_size = 10 # 每页 10 条，skip = (5-1)*10 = 40
+    page = 5  # 请求第 5 页
+    page_size = 10  # 每页 10 条，skip = (5-1)*10 = 40
 
     # --- 模拟设置 ---
     # 模拟 PG 仓库对于这个高的 skip 值返回空列表，但告知总数是 40
     mock_pg_repo.search_papers_by_keyword.side_effect = None
     mock_pg_repo.search_papers_by_keyword.return_value = (
-        [], # 当前页无结果
-        40, # 总共有 40 条匹配
+        [],  # 当前页无结果
+        40,  # 总共有 40 条匹配
     )
 
     # --- 执行 ---
@@ -610,10 +632,10 @@ async def test_perform_keyword_search_papers_pagination_skip_exceeds(
     # --- 断言 ---
     # 验证返回结果
     assert isinstance(result, PaginatedPaperSearchResult)
-    assert result.total == 40 # total 反映总数
-    assert len(result.items) == 0 # items 为空
-    assert result.skip == (page - 1) * page_size # skip 反映请求
-    assert result.limit == page_size # limit 反映请求
+    assert result.total == 40  # total 反映总数
+    assert len(result.items) == 0  # items 为空
+    assert result.skip == (page - 1) * page_size  # skip 反映请求
+    assert result.limit == page_size  # limit 反映请求
 
     # 验证 PG 仓库方法被正确调用
     mock_pg_repo.search_papers_by_keyword.assert_awaited_once_with(
@@ -641,13 +663,13 @@ async def test_perform_keyword_search_papers_pagination_limit_zero(
     # --- 准备 ---
     query = "limit zero"
     page = 1
-    page_size = 0 # 请求 0 条
+    page_size = 0  # 请求 0 条
 
     # --- 模拟设置 ---
     # 模拟 PG 仓库对于 limit=0 返回空列表，但告知总数
     mock_pg_repo.search_papers_by_keyword.side_effect = None
     mock_pg_repo.search_papers_by_keyword.return_value = (
-        [], # 当前页无结果 (因为 limit=0)
+        [],  # 当前页无结果 (因为 limit=0)
         5,  # 假设总共有 5 条匹配
     )
 
@@ -659,16 +681,16 @@ async def test_perform_keyword_search_papers_pagination_limit_zero(
     # --- 断言 ---
     # 验证返回结果
     assert isinstance(result, PaginatedPaperSearchResult)
-    assert result.total == 5 # total 反映总数
-    assert len(result.items) == 0 # items 为空
+    assert result.total == 5  # total 反映总数
+    assert len(result.items) == 0  # items 为空
     assert result.skip == (page - 1) * page_size
-    assert result.limit == page_size # limit 为 0
+    assert result.limit == page_size  # limit 为 0
 
     # 验证 PG 仓库方法被正确调用，limit=0
     mock_pg_repo.search_papers_by_keyword.assert_awaited_once_with(
         query=query,
         skip=(page - 1) * page_size,
-        limit=page_size, # limit 参数为 0
+        limit=page_size,  # limit 参数为 0
         sort_by="published_date",  # Default
         sort_order="desc",  # Default
         published_after=None,
@@ -677,6 +699,7 @@ async def test_perform_keyword_search_papers_pagination_limit_zero(
     )
     # 移除对 get_papers_details_by_ids 的断言
     # mock_pg_repo.get_papers_details_by_ids.assert_not_awaited()
+
 
 # 注意：此测试用例与 test_perform_keyword_search_papers_filter_sort 非常相似，
 # 可能是冗余的，或者用于测试特定组合。保留注释。
@@ -729,8 +752,8 @@ async def test_perform_keyword_search_papers_filter_sort_duplicate(
     mock_pg_repo.search_papers_by_keyword.side_effect = None
     # 模拟 PG 返回符合条件的字典列表和总数
     mock_pg_repo.search_papers_by_keyword.return_value = (
-        [MOCK_PAPER_4, MOCK_PAPER_5], # 返回两个模拟结果
-        2, # 总数为 2
+        [MOCK_PAPER_4, MOCK_PAPER_5],  # 返回两个模拟结果
+        2,  # 总数为 2
     )
 
     # --- 执行 ---
@@ -778,7 +801,7 @@ async def test_perform_semantic_search_models_success(
     query = "test model query"
     page = 1
     page_size = 2
-    target = cast(SearchTarget, "models") # 目标为模型
+    target = cast(SearchTarget, "models")  # 目标为模型
     # 模拟模型 Faiss 仓库返回 (model_id, distance) 列表
     mock_faiss_return = [("org/model1", 0.1), ("user/model3", 0.2), ("org/model2", 0.3)]
     mock_faiss_model_repo.search_similar.return_value = mock_faiss_return
@@ -786,7 +809,11 @@ async def test_perform_semantic_search_models_success(
 
     # --- 执行 ---
     results = await search_service.perform_semantic_search(
-        query=query, target=target, page=page, page_size=page_size, sort_order="desc" # 按得分降序
+        query=query,
+        target=target,
+        page=page,
+        page_size=page_size,
+        sort_order="desc",  # 按得分降序
     )
 
     # --- 断言 ---
@@ -798,16 +825,18 @@ async def test_perform_semantic_search_models_success(
         mock_embedding, k=expected_faiss_k
     )
     # 3. 验证 PG 获取模型详情的方法被调用
-    expected_pg_ids = [item[0] for item in mock_faiss_return] # 获取模型 ID 列表
+    expected_pg_ids = [item[0] for item in mock_faiss_return]  # 获取模型 ID 列表
     mock_pg_repo.get_hf_models_by_ids.assert_awaited_once_with(expected_pg_ids)
     # 4. 验证返回结果类型和分页
-    assert isinstance(results, PaginatedHFModelSearchResult), "返回类型应为 PaginatedHFModelSearchResult"
+    assert isinstance(results, PaginatedHFModelSearchResult), (
+        "返回类型应为 PaginatedHFModelSearchResult"
+    )
     # conftest 中的模拟 PG 只会返回 ID org/model1, org/model2, user/model3 的详情
     assert results.total == 3, "总数应为 PG 找到的模型数"
     assert len(results.items) == page_size, "返回项目数不正确"
     # 5. 验证返回内容和顺序（按分数降序，距离升序）
-    assert results.items[0].model_id == "org/model1" # 距离 0.1，分数最高
-    assert results.items[1].model_id == "user/model3" # 距离 0.2
+    assert results.items[0].model_id == "org/model1"  # 距离 0.1，分数最高
+    assert results.items[1].model_id == "user/model3"  # 距离 0.2
     # 验证得分计算
     assert results.items[0].score == pytest.approx(1.0 / (1.0 + 0.1))
     assert results.items[1].score == pytest.approx(1.0 / (1.0 + 0.2))
@@ -815,7 +844,8 @@ async def test_perform_semantic_search_models_success(
 
 @pytest.mark.asyncio
 async def test_perform_semantic_search_models_faiss_repo_not_ready(
-    search_service: SearchService, mock_faiss_model_repo #只需要模型的Faiss模拟仓库
+    search_service: SearchService,
+    mock_faiss_model_repo,  # 只需要模型的Faiss模拟仓库
 ):
     """
     测试场景：模型 Faiss 仓库未准备就绪 (is_ready() 返回 False)。

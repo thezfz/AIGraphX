@@ -42,6 +42,7 @@ from typing import (
 
 # 导入第三方库
 # from dotenv import load_dotenv # 不再需要手动调用 load_dotenv，Pydantic Settings 会处理
+# Pydantic Settings内置了加载 .env 文件的功能，因此不再需要手动调用 load_dotenv，load_dotenv 函数通常用于手动读取 .env 文件并将其中的键值对加载到环境变量中
 from loguru import logger  # 用于记录日志信息，比标准 logging 库更方便易用
 
 # 从 Pydantic 导入用于数据验证和类型提示的工具
@@ -73,10 +74,10 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 # 默认情况下，.env 文件应该放在项目根目录下
 dotenv_path = os.path.join(project_root, ".env")
 
-# 记录计算出的 .env 文件路径和文件是否存在的信息，用于调试
-logger.info(f"Calculated project root path: {project_root}")
-logger.info(f"Calculated .env path for Pydantic Settings: {dotenv_path}")
-logger.info(f"Does .env file exist at calculated path? {os.path.exists(dotenv_path)}")
+# 记录计算出的 .env 文件路径和文件是否存在的信息，用于调试。日志打印以下信息
+logger.info(f"Calculated project root path: {project_root}") # 项目根目录的绝对路径
+logger.info(f"Calculated .env path for Pydantic Settings: {dotenv_path}") #  .env 文件的绝对路径
+logger.info(f"Does .env file exist at calculated path? {os.path.exists(dotenv_path)}") #  .env 文件是否存在
 
 # --- 配置模型定义 ---
 

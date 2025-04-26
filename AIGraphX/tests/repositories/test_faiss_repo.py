@@ -21,13 +21,19 @@
 - 导入被测试的类 `aigraphx.repositories.faiss_repo.FaissRepository`。
 - 通过 `tmp_path` 读写文件系统中的临时文件。
 """
+
 import pytest
 import os  # 导入 os 模块，虽然在此文件中 pathlib 更常用
 import json  # 导入 json 模块，用于读写 ID 映射文件
 import numpy as np  # 导入 numpy 用于创建和操作数值数组（向量）
 import faiss  # 导入 faiss 库，用于创建和操作向量索引。注意：需要单独安装。类型提示标记为忽略未类型化的导入。
-from unittest.mock import patch, MagicMock  # 导入 patch 用于模拟对象方法，MagicMock 用于创建模拟对象
-from pathlib import Path  # 导入 Path 对象，用于处理文件路径，特别是 pytest 的 tmp_path fixture
+from unittest.mock import (
+    patch,
+    MagicMock,
+)  # 导入 patch 用于模拟对象方法，MagicMock 用于创建模拟对象
+from pathlib import (
+    Path,
+)  # 导入 Path 对象，用于处理文件路径，特别是 pytest 的 tmp_path fixture
 from typing import Dict, List, Tuple, Any, Optional, Generator  # 导入类型提示
 
 # 导入被测试的类
@@ -50,6 +56,7 @@ TEST_ID_MAP = {i: id_ for i, id_ in enumerate(TEST_IDS)}
 TEST_EXPECTED_NUM_VECTORS = len(TEST_IDS)
 
 # --- Fixtures ---
+
 
 # 使用 pytest.fixture 定义一个 fixture，名为 'repository'
 # scope="function" 表示这个 fixture 会为每个测试函数单独执行一次，确保隔离性
@@ -111,7 +118,9 @@ def test_load_and_properties(repository: FaissRepository) -> None:
     """
     assert repository.index is not None  # 确保索引对象已加载
     assert repository.index.d == TEST_DIMENSION  # 验证索引维度是否正确
-    assert repository.index.ntotal == TEST_EXPECTED_NUM_VECTORS  # 验证索引中的向量数量是否正确
+    assert (
+        repository.index.ntotal == TEST_EXPECTED_NUM_VECTORS
+    )  # 验证索引中的向量数量是否正确
     # 验证加载后的 ID 映射字典内容是否与原始测试数据一致
     # 注意：从 JSON 加载后，键可能需要是整数类型，FaissRepository 内部应处理好类型转换
     assert repository.id_map == TEST_ID_MAP

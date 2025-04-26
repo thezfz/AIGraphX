@@ -61,41 +61,52 @@ from typing import (
     TypedDict,
     Union,
 )  # 从 typing 模块导入类型提示相关的类，用于增强代码可读性和健壮性，方便静态类型检查。
-    # List: 列表类型
-    # Dict: 字典类型
-    # Any: 任意类型
-    # Optional: 表示类型可以是指定类型或 None
-    # Tuple: 元组类型
-    # Set: 集合类型
-    # TypedDict: 定义具有固定键和类型的字典结构
-    # Union: 表示类型可以是多种指定类型中的一种
-from datetime import datetime, timezone, timedelta  # 从 datetime 模块导入日期和时间相关的类。
-    # datetime: 表示日期和时间的对象。
-    # timezone: 表示时区信息，如此处使用 UTC。
-    # timedelta: 表示两个日期或时间之间的时间差。
+
+# List: 列表类型
+# Dict: 字典类型
+# Any: 任意类型
+# Optional: 表示类型可以是指定类型或 None
+# Tuple: 元组类型
+# Set: 集合类型
+# TypedDict: 定义具有固定键和类型的字典结构
+# Union: 表示类型可以是多种指定类型中的一种
+from datetime import (
+    datetime,
+    timezone,
+    timedelta,
+)  # 从 datetime 模块导入日期和时间相关的类。
+# datetime: 表示日期和时间的对象。
+# timezone: 表示时区信息，如此处使用 UTC。
+# timedelta: 表示两个日期或时间之间的时间差。
 
 # --- 第三方库导入 ---
-from dotenv import load_dotenv  # 从 python-dotenv 库导入 load_dotenv 函数，用于从 .env 文件加载环境变量。
+from dotenv import (
+    load_dotenv,
+)  # 从 python-dotenv 库导入 load_dotenv 函数，用于从 .env 文件加载环境变量。
 import httpx  # 导入 httpx 库，一个现代化的、支持异步的 HTTP 客户端，用于发送网络请求。
 import tenacity  # 导入 tenacity 库，提供强大的重试机制，用于在函数调用失败时自动重试。
-from aiolimiter import AsyncLimiter  # 从 aiolimiter 库导入 AsyncLimiter 类，用于异步环境下的速率限制。
+from aiolimiter import (
+    AsyncLimiter,
+)  # 从 aiolimiter 库导入 AsyncLimiter 类，用于异步环境下的速率限制。
 import arxiv  # 导入 arxiv 库，一个用于访问 ArXiv API 的 Python 封装库。 # type: ignore[import-untyped] 忽略类型检查警告，因为 arxiv 库可能没有提供类型存根。
 from huggingface_hub import (
     HfApi,
     ModelInfo,
     hf_hub_download,
 )  # 从 huggingface_hub 库导入与 Hugging Face Hub 交互的类和函数。
-    # HfApi: 用于与 HF Hub API 交互的主要客户端类。
-    # ModelInfo: 用于表示 HF Hub 上模型信息的类。
-    # hf_hub_download: 用于从 HF Hub 下载文件的函数。
+
+# HfApi: 用于与 HF Hub API 交互的主要客户端类。
+# ModelInfo: 用于表示 HF Hub 上模型信息的类。
+# hf_hub_download: 用于从 HF Hub 下载文件的函数。
 from huggingface_hub.utils import (
     RepositoryNotFoundError,
     GatedRepoError,
     HfHubHTTPError,
 )  # 从 huggingface_hub.utils 导入特定的异常类，用于更精确地处理 API 错误。
-    # RepositoryNotFoundError: 当尝试访问不存在的仓库时抛出。
-    # GatedRepoError: 当尝试访问需要授权的仓库但未提供足够权限时抛出。
-    # HfHubHTTPError: HF Hub API 请求返回 HTTP 错误时抛出。
+
+# RepositoryNotFoundError: 当尝试访问不存在的仓库时抛出。
+# GatedRepoError: 当尝试访问需要授权的仓库但未提供足够权限时抛出。
+# HfHubHTTPError: HF Hub API 请求返回 HTTP 错误时抛出。
 import aiohttp  # 导入 aiohttp 库，另一个支持异步的 HTTP 客户端库 (在本脚本当前版本中似乎未使用，可能是早期版本遗留或备用)。
 import bs4  # 导入 bs4 (Beautiful Soup 4) 库，用于解析 HTML 和 XML 文档，提取数据。 # type: ignore[import-untyped] 忽略类型检查警告。 (在本脚本当前版本中似乎未使用)
 
@@ -131,9 +142,7 @@ OUTPUT_JSONL_FILE = "data/aigraphx_knowledge_data.jsonl"
 # CHECKPOINT_INTERVAL = 50 # 旧的检查点保存间隔，已被 PROCESSED_IDS_FILE 的逻辑替代。
 # --- 添加 ID 跟踪文件 ---
 # 定义用于存储已成功处理的 Hugging Face 模型 ID 的文件路径。
-PROCESSED_IDS_FILE = (
-    "data/processed_hf_model_ids.txt"  # 存储成功处理的模型 ID
-)
+PROCESSED_IDS_FILE = "data/processed_hf_model_ids.txt"  # 存储成功处理的模型 ID
 # 定义每处理多少个 *新* 模型后，就将当前已处理的 ID 集合保存到文件的间隔。
 SAVE_PROCESSED_IDS_INTERVAL = 100  # 每处理 100 个新模型保存一次已处理 ID 集合
 
@@ -200,9 +209,7 @@ logger.addHandler(stream_handler)
 # 配置文件处理器 (File Handler)，用于将日志写入文件。
 try:
     # 创建文件处理器，指定日志文件路径、写入模式 ('a' 表示追加) 和编码 ('utf-8')。
-    file_handler = logging.FileHandler(
-        LOG_FILE, mode="a", encoding="utf-8"
-    )
+    file_handler = logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8")
     # 设置文件处理器的日志级别为 DEBUG。所有级别的日志都会写入文件。
     file_handler.setLevel(logging.DEBUG)
     # 为文件处理器创建一个格式化器，定义文件输出的日志格式 (包含更详细的信息，如模块名和行号)。
@@ -230,7 +237,7 @@ logger.info("日志记录已配置。控制台级别: INFO, 文件级别: DEBUG"
 RETRYABLE_NETWORK_ERRORS = (
     httpx.TimeoutException,  # 请求超时异常。
     httpx.NetworkError,  # 网络连接相关的通用异常 (包括 ConnectError, ReadError 等)。
-    httpx.RemoteProtocolError, # 远程服务器协议错误。
+    httpx.RemoteProtocolError,  # 远程服务器协议错误。
 )
 # 定义一组值得重试的 HTTP 状态码。这些通常表示服务器暂时过载或不可用。
 RETRYABLE_STATUS_CODES = {
@@ -264,9 +271,7 @@ retry_config_http = dict(
         )
     ),
     # before_sleep: 在每次重试等待之前执行的操作。这里配置为记录一条警告日志。
-    before_sleep=tenacity.before_sleep_log(
-        logger, logging.WARNING
-    ),
+    before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
     # reraise: 如果所有重试都失败了，是否重新抛出最后一次捕获的异常。设置为 True 表示重新抛出。
     reraise=True,
 )
@@ -279,9 +284,7 @@ retry_config_sync = dict(
     # wait: 每次重试固定等待 2 秒。
     wait=tenacity.wait_fixed(2),
     # retry: 如果抛出任何 Exception 类型的异常，都进行重试。
-    retry=tenacity.retry_if_exception_type(
-        Exception
-    ),
+    retry=tenacity.retry_if_exception_type(Exception),
     # before_sleep: 重试前记录警告日志。
     before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
     # reraise: 重试失败后重新抛出异常。
@@ -294,40 +297,51 @@ retry_config_sync = dict(
 # total=False 表示字典中的键不是必须全部存在的。
 class PwcEntryData(TypedDict, total=False):
     """定义从 Papers with Code (PWC) API 获取的单个条目数据的结构。"""
-    pwc_id: str                 # PWC 平台上的论文/条目 ID
-    pwc_url: str                # PWC 平台上的论文/条目 URL
-    title: Optional[str]        # 论文标题 (可能不存在)
-    conference: Optional[str]   # 论文发表的会议或期刊 (可能不存在)
-    tasks: List[str]            # 与论文相关的任务列表
-    datasets: List[str]         # 与论文相关的数据集列表
-    methods: List[str]          # 与论文相关的方法列表 (如果之前添加过)
-    repositories: List[Dict[str, Any]] # 相关的代码库列表，每个代码库是一个字典，包含 url, stars 等信息
-    error: str                  # 如果在获取 PWC 数据时发生错误，记录错误信息
+
+    pwc_id: str  # PWC 平台上的论文/条目 ID
+    pwc_url: str  # PWC 平台上的论文/条目 URL
+    title: Optional[str]  # 论文标题 (可能不存在)
+    conference: Optional[str]  # 论文发表的会议或期刊 (可能不存在)
+    tasks: List[str]  # 与论文相关的任务列表
+    datasets: List[str]  # 与论文相关的数据集列表
+    methods: List[str]  # 与论文相关的方法列表 (如果之前添加过)
+    repositories: List[
+        Dict[str, Any]
+    ]  # 相关的代码库列表，每个代码库是一个字典，包含 url, stars 等信息
+    error: str  # 如果在获取 PWC 数据时发生错误，记录错误信息
 
 
 class PaperData(TypedDict, total=False):
     """定义与单个论文相关的数据结构，整合了 ArXiv 和 PWC 的信息。"""
-    arxiv_id_base: str          # ArXiv ID 的基础部分 (去掉版本号)
-    arxiv_id_versioned: Optional[str] # 带版本号的 ArXiv ID (可能不存在)
-    arxiv_metadata: Optional[Dict[str, Any]] # 从 ArXiv API 获取的元数据字典 (可能不存在)
-    pwc_entry: Optional[Union[PwcEntryData, Dict[str, Any]]] # 关联的 PWC 条目数据，可以是定义的 PwcEntryData 类型或包含错误信息的字典 (可能不存在)
+
+    arxiv_id_base: str  # ArXiv ID 的基础部分 (去掉版本号)
+    arxiv_id_versioned: Optional[str]  # 带版本号的 ArXiv ID (可能不存在)
+    arxiv_metadata: Optional[
+        Dict[str, Any]
+    ]  # 从 ArXiv API 获取的元数据字典 (可能不存在)
+    pwc_entry: Optional[
+        Union[PwcEntryData, Dict[str, Any]]
+    ]  # 关联的 PWC 条目数据，可以是定义的 PwcEntryData 类型或包含错误信息的字典 (可能不存在)
 
 
 class ModelOutputData(TypedDict, total=False):
     """定义最终输出的单个模型及其关联信息的完整数据结构。"""
-    hf_model_id: str            # Hugging Face 模型的 ID (例如 "bert-base-uncased")
-    hf_author: Optional[str]    #模型的作者/组织 (例如 "google-bert")
-    hf_sha: Optional[str]       # 模型仓库最后一次提交的 SHA 哈希值
-    hf_last_modified: Optional[str] # 模型最后修改时间的 ISO 格式字符串
-    hf_downloads: Optional[int] # 模型下载次数
-    hf_likes: Optional[int]     # 模型点赞次数
-    hf_tags: Optional[List[str]] # 模型的标签列表 (例如 "pytorch", "bert", "arxiv:xxxx.xxxxx")
-    hf_pipeline_tag: Optional[str] # 模型的主要任务类型 (例如 "text-classification")
-    hf_library_name: Optional[str] # 模型使用的主要库 (例如 "transformers")
-    hf_readme_content: Optional[str] # 模型仓库中的 README.md 文件内容
-    hf_dataset_links: List[str] # 从模型标签中提取的 Hugging Face 数据集链接列表
-    processing_timestamp_utc: str # 开始处理该模型的时间戳 (UTC, ISO 格式)
-    linked_papers: List[PaperData] # 与该模型关联的论文数据列表 (PaperData 结构)
+
+    hf_model_id: str  # Hugging Face 模型的 ID (例如 "bert-base-uncased")
+    hf_author: Optional[str]  # 模型的作者/组织 (例如 "google-bert")
+    hf_sha: Optional[str]  # 模型仓库最后一次提交的 SHA 哈希值
+    hf_last_modified: Optional[str]  # 模型最后修改时间的 ISO 格式字符串
+    hf_downloads: Optional[int]  # 模型下载次数
+    hf_likes: Optional[int]  # 模型点赞次数
+    hf_tags: Optional[
+        List[str]
+    ]  # 模型的标签列表 (例如 "pytorch", "bert", "arxiv:xxxx.xxxxx")
+    hf_pipeline_tag: Optional[str]  # 模型的主要任务类型 (例如 "text-classification")
+    hf_library_name: Optional[str]  # 模型使用的主要库 (例如 "transformers")
+    hf_readme_content: Optional[str]  # 模型仓库中的 README.md 文件内容
+    hf_dataset_links: List[str]  # 从模型标签中提取的 Hugging Face 数据集链接列表
+    processing_timestamp_utc: str  # 开始处理该模型的时间戳 (UTC, ISO 格式)
+    linked_papers: List[PaperData]  # 与该模型关联的论文数据列表 (PaperData 结构)
 
 
 # --- 基于 ID 的跟踪 ---
@@ -339,13 +353,11 @@ def _load_processed_ids() -> Set[str]:
     Returns:
         一个包含已处理模型 ID 字符串的集合 (Set)。
     """
-    processed_ids: Set[str] = set() # 初始化一个空集合
+    processed_ids: Set[str] = set()  # 初始化一个空集合
     # 检查记录已处理 ID 的文件是否存在
     if not os.path.exists(PROCESSED_IDS_FILE):
-        logger.info(
-            f"未找到已处理 ID 文件 ('{PROCESSED_IDS_FILE}')。将从头开始。"
-        )
-        return processed_ids # 文件不存在，返回空集
+        logger.info(f"未找到已处理 ID 文件 ('{PROCESSED_IDS_FILE}')。将从头开始。")
+        return processed_ids  # 文件不存在，返回空集
     try:
         # 如果文件存在，尝试以只读模式 ('r') 和 utf-8 编码打开文件
         with open(PROCESSED_IDS_FILE, "r", encoding="utf-8") as f:
@@ -362,9 +374,7 @@ def _load_processed_ids() -> Set[str]:
         )
     except IOError as e:
         # 如果在读取文件过程中发生 I/O 错误，记录错误日志并返回空集
-        logger.error(
-            f"从 {PROCESSED_IDS_FILE} 加载已处理 ID 失败: {e}。将从头开始。"
-        )
+        logger.error(f"从 {PROCESSED_IDS_FILE} 加载已处理 ID 失败: {e}。将从头开始。")
         return set()
     # 返回加载到的 ID 集合
     return processed_ids
@@ -406,8 +416,8 @@ github_headers = {}
 # 如果 GitHub Token 存在，则将其添加到请求头中，用于认证。
 if GITHUB_TOKEN:
     github_headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}", # Bearer 认证方式
-        "Accept": "application/vnd.github.v3+json", # 指定接受 GitHub API v3 版本的 JSON 响应
+        "Authorization": f"Bearer {GITHUB_TOKEN}",  # Bearer 认证方式
+        "Accept": "application/vnd.github.v3+json",  # 指定接受 GitHub API v3 版本的 JSON 响应
     }
 else:
     # 即使没有 Token (匿名请求)，也设置 Accept 头。
@@ -431,13 +441,14 @@ http_client = httpx.AsyncClient(
 
 # --- 辅助函数 (异步) ---
 
+
 # 使用 tenacity 装饰器为函数添加重试逻辑。这里使用了更简单的 `retry_config_sync` 配置。
 @tenacity.retry(
-    stop=tenacity.stop_after_attempt(3), # 最多尝试 3 次
-    wait=tenacity.wait_fixed(2),        # 每次重试等待 2 秒
-    retry=tenacity.retry_if_exception_type(Exception), # 捕获任何异常时重试
-    before_sleep=tenacity.before_sleep_log(logger, logging.WARNING), # 重试前记录日志
-    reraise=True, # 重试失败后重新抛出异常
+    stop=tenacity.stop_after_attempt(3),  # 最多尝试 3 次
+    wait=tenacity.wait_fixed(2),  # 每次重试等待 2 秒
+    retry=tenacity.retry_if_exception_type(Exception),  # 捕获任何异常时重试
+    before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),  # 重试前记录日志
+    reraise=True,  # 重试失败后重新抛出异常
 )
 async def fetch_hf_model_details(model_id: str) -> Optional[ModelInfo]:
     """
@@ -467,7 +478,7 @@ async def fetch_hf_model_details(model_id: str) -> Optional[ModelInfo]:
         # 捕获特定的 HF Hub 异常：仓库未找到。
         except RepositoryNotFoundError:
             logger.warning(f"未找到 HF 模型仓库: {model_id}")
-            return None # 模型不存在，返回 None
+            return None  # 模型不存在，返回 None
         # 捕获 HF Hub 的 HTTP 错误。
         except HfHubHTTPError as e:
             # --- 更新的 HfHubHTTPError 处理 ---
@@ -483,9 +494,7 @@ async def fetch_hf_model_details(model_id: str) -> Optional[ModelInfo]:
 
             # 如果是 401 未授权错误，通常是 Token 问题，记录关键错误并直接返回 None (不重试)。
             if status_code == 401:
-                logger.critical(
-                    f"HF API 认证错误 (401)。请检查 HUGGINGFACE_API_KEY。"
-                )
+                logger.critical(f"HF API 认证错误 (401)。请检查 HUGGINGFACE_API_KEY。")
                 return None
 
             # 定义应该由 tenacity 处理的可重试 HF 特定状态码。
@@ -556,9 +565,7 @@ def extract_arxiv_ids(tags: Optional[List[str]]) -> List[str]:
                 arxiv_ids.add(arxiv_id_base)
             else:
                 # 如果格式看起来不像有效的 ArXiv ID，记录一条调试信息。
-                logger.debug(
-                    f"跳过标签中可能无效的 ArXiv ID 格式: {tag}"
-                )
+                logger.debug(f"跳过标签中可能无效的 ArXiv ID 格式: {tag}")
 
     # 将集合转换为列表，并按字母顺序排序后返回。
     return sorted(list(arxiv_ids))
@@ -567,11 +574,13 @@ def extract_arxiv_ids(tags: Optional[List[str]]) -> List[str]:
 # 使用 tenacity 装饰器应用 HTTP 请求的重试逻辑 (`retry_config_http`)。
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(4),
-    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20) + tenacity.wait_random(0, 2),
+    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20)
+    + tenacity.wait_random(0, 2),
     retry=(
-        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS) |
-        tenacity.retry_if_exception(
-            lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code in RETRYABLE_STATUS_CODES
+        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS)
+        | tenacity.retry_if_exception(
+            lambda e: isinstance(e, httpx.HTTPStatusError)
+            and e.response.status_code in RETRYABLE_STATUS_CODES
         )
     ),
     before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
@@ -601,7 +610,8 @@ async def fetch_arxiv_metadata(arxiv_id: str) -> Optional[Dict[str, Any]]:
             # `asyncio.to_thread(list, ...)` 将这个生成器在后台线程中转换为列表。
             # 这是因为 `arxiv.py` 库本身可能包含阻塞 I/O 操作。
             results = await asyncio.to_thread(
-                list, arxiv_client.results(search) # 使用 client.results(search)
+                list,
+                arxiv_client.results(search),  # 使用 client.results(search)
             )
 
             # 检查是否找到了结果。
@@ -612,24 +622,32 @@ async def fetch_arxiv_metadata(arxiv_id: str) -> Optional[Dict[str, Any]]:
                 return {
                     # 从 entry_id (形如 'http://arxiv.org/abs/2303.08774v1') 中提取带版本的 ID。
                     "arxiv_id_versioned": paper.entry_id.split("/")[-1],
-                    "title": paper.title, # 标题
-                    "authors": [str(a) for a in paper.authors], # 作者列表 (转换为字符串)
-                    "summary": paper.summary.replace("\n", " "), # 摘要 (替换换行符为空格)
+                    "title": paper.title,  # 标题
+                    "authors": [
+                        str(a) for a in paper.authors
+                    ],  # 作者列表 (转换为字符串)
+                    "summary": paper.summary.replace(
+                        "\n", " "
+                    ),  # 摘要 (替换换行符为空格)
                     # 发表日期 (如果存在，转换为 ISO 格式字符串)
-                    "published_date": paper.published.isoformat() if paper.published else None,
+                    "published_date": paper.published.isoformat()
+                    if paper.published
+                    else None,
                     # 更新日期 (如果存在，转换为 ISO 格式字符串)
-                    "updated_date": paper.updated.isoformat() if paper.updated else None,
-                    "pdf_url": paper.pdf_url, # PDF 链接
-                    "doi": paper.doi, # DOI 号 (可能不存在)
-                    "primary_category": paper.primary_category, # 主要分类
-                    "categories": paper.categories, # 所有分类列表
+                    "updated_date": paper.updated.isoformat()
+                    if paper.updated
+                    else None,
+                    "pdf_url": paper.pdf_url,  # PDF 链接
+                    "doi": paper.doi,  # DOI 号 (可能不存在)
+                    "primary_category": paper.primary_category,  # 主要分类
+                    "categories": paper.categories,  # 所有分类列表
                 }
             else:
                 # 如果没有找到结果，记录警告。
                 logger.warning(
                     f"通过 arxiv.py API (Client.results) 未找到 ArXiv ID {arxiv_id}。"
                 )
-                return None # 返回 None
+                return None  # 返回 None
         except Exception as e:
             # 捕获在执行 arxiv.py 代码或线程转换过程中可能发生的任何异常。
             logger.error(
@@ -641,17 +659,19 @@ async def fetch_arxiv_metadata(arxiv_id: str) -> Optional[Dict[str, Any]]:
             # Tenacity 的重试是基于 fetch_arxiv_metadata 函数本身的调用失败，
             # 而不是基于这里捕获的内部异常（除非内部异常导致函数提前返回 None 之外的值）。
             # 如果 tenacity 因为网络错误等原因重试后仍然失败，它会重新抛出异常，由上层调用者 (process_single_model) 处理。
-            return None # 在重试或非重试错误后返回 None
+            return None  # 在重试或非重试错误后返回 None
 
 
 # 应用 HTTP 请求的重试逻辑。
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(4),
-    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20) + tenacity.wait_random(0, 2),
+    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20)
+    + tenacity.wait_random(0, 2),
     retry=(
-        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS) |
-        tenacity.retry_if_exception(
-            lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code in RETRYABLE_STATUS_CODES
+        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS)
+        | tenacity.retry_if_exception(
+            lambda e: isinstance(e, httpx.HTTPStatusError)
+            and e.response.status_code in RETRYABLE_STATUS_CODES
         )
     ),
     before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
@@ -695,50 +715,50 @@ async def find_pwc_entry_by_arxiv_id(arxiv_id: str) -> Optional[Dict[str, Any]]:
                 result_entry = data["results"][0]
                 # 显式检查结果是否是一个字典。
                 if isinstance(result_entry, dict):
-                    return result_entry # 返回找到的条目字典
+                    return result_entry  # 返回找到的条目字典
                 else:
                     logger.warning(
                         f"ArXiv ID {arxiv_id_base} 的 PWC 条目不是字典类型: {type(result_entry)}"
                     )
-                    return None # 格式不符，返回 None
+                    return None  # 格式不符，返回 None
             # 如果找到 0 个结果。
             elif isinstance(count, int) and count == 0:
                 logger.info(f"未找到 ArXiv ID {arxiv_id_base} 的 PWC 条目")
-                return None # 未找到，返回 None
+                return None  # 未找到，返回 None
             # 其他情况：找到多个结果，或响应结构不符合预期。
             else:
                 logger.warning(
                     f"为 ArXiv ID {arxiv_id_base} 找到了 {count} 个 PWC 条目或响应异常。将跳过。"
                 )
-                return None # 结果不唯一或异常，返回 None
+                return None  # 结果不唯一或异常，返回 None
         # 捕获 HTTP 状态错误。
         except httpx.HTTPStatusError as e:
             # 如果是 404 Not Found 错误，可能是因为 ArXiv ID 格式错误或 PWC 未收录。
             if e.response.status_code == 404:
                 logger.info(f"PWC API 对 ArXiv ID 查询返回 404: {arxiv_id_base}")
-                return None # 404 通常不重试，直接返回 None
+                return None  # 404 通常不重试，直接返回 None
             # 其他 HTTP 错误（例如 429, 5xx）会由 tenacity 根据 retry_config_http 处理。
             logger.warning(
                 f"查询 PWC 出错 ({arxiv_id_base}): {e.response.status_code} - {e}"
             )
-            raise e # 重新抛出，让 tenacity 处理重试
+            raise e  # 重新抛出，让 tenacity 处理重试
         # 捕获 JSON 解析错误或其他异常。
         except (json.JSONDecodeError, Exception) as e:
-            logger.error(
-                f"查询 PWC 或解析响应时出错 ({arxiv_id_base}): {e}"
-            )
+            logger.error(f"查询 PWC 或解析响应时出错 ({arxiv_id_base}): {e}")
             logger.debug(traceback.format_exc())
-            raise e # 重新抛出，让 tenacity 处理重试
+            raise e  # 重新抛出，让 tenacity 处理重试
 
 
 # 应用 HTTP 请求的重试逻辑。
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(4),
-    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20) + tenacity.wait_random(0, 2),
+    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20)
+    + tenacity.wait_random(0, 2),
     retry=(
-        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS) |
-        tenacity.retry_if_exception(
-            lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code in RETRYABLE_STATUS_CODES
+        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS)
+        | tenacity.retry_if_exception(
+            lambda e: isinstance(e, httpx.HTTPStatusError)
+            and e.response.status_code in RETRYABLE_STATUS_CODES
         )
     ),
     before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
@@ -759,10 +779,10 @@ async def fetch_pwc_relation_list(
         一个包含关联项目字典的列表。如果获取失败或未找到，返回空列表。
         如果发生可重试错误且最终失败，会抛出异常。
     """
-    all_results: List[Dict[str, Any]] = [] # 初始化用于存储所有结果的列表
+    all_results: List[Dict[str, Any]] = []  # 初始化用于存储所有结果的列表
     # 构建初始请求的 URL
     current_url: Optional[str] = f"{PWC_BASE_URL}papers/{pwc_paper_id}/{relation}/"
-    page_num = 1 # 页码，用于日志记录
+    page_num = 1  # 页码，用于日志记录
 
     # 循环处理分页，只要 current_url 不是 None 就继续
     while current_url:
@@ -775,12 +795,12 @@ async def fetch_pwc_relation_list(
             try:
                 # 发送 GET 请求
                 response = await http_client.get(current_url)
-                response.raise_for_status() # 检查 HTTP 错误
-                data = response.json() # 解析 JSON 响应
+                response.raise_for_status()  # 检查 HTTP 错误
+                data = response.json()  # 解析 JSON 响应
 
                 # --- 新增: 处理列表和字典两种响应格式 ---
-                results: List[Dict[str, Any]] = [] # 当前页的结果
-                next_url: Optional[str] = None # 下一页的 URL
+                results: List[Dict[str, Any]] = []  # 当前页的结果
+                next_url: Optional[str] = None  # 下一页的 URL
 
                 # 情况 1: API 直接返回一个列表 (旧版或某些端点的行为)
                 if isinstance(data, list):
@@ -822,7 +842,7 @@ async def fetch_pwc_relation_list(
                 # 准备下一次迭代：将 current_url 更新为 next_url (如果为 None 则循环结束)
                 current_url = next_url
                 if current_url:
-                    page_num += 1 # 如果有下一页，页码加 1
+                    page_num += 1  # 如果有下一页，页码加 1
 
             # 捕获 HTTP 状态错误
             except httpx.HTTPStatusError as e:
@@ -830,7 +850,7 @@ async def fetch_pwc_relation_list(
                     f"获取 PWC {relation} 页面 (论文ID: {pwc_paper_id}) 时发生 HTTP 错误: {e.response.status_code}"
                 )
                 # 让 tenacity 根据状态码处理重试
-                raise e # 重新抛出
+                raise e  # 重新抛出
             # 捕获 JSON 解析错误或其他异常
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(
@@ -838,7 +858,7 @@ async def fetch_pwc_relation_list(
                 )
                 logger.debug(traceback.format_exc())
                 # 让 tenacity 根据异常类型处理重试
-                raise e # 重新抛出
+                raise e  # 重新抛出
 
     # 循环结束后 (正常结束或因错误中断)
     # 检查是否正常完成但没有结果
@@ -859,11 +879,13 @@ async def fetch_pwc_relation_list(
 # 应用 HTTP 请求的重试逻辑。
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(4),
-    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20) + tenacity.wait_random(0, 2),
+    wait=tenacity.wait_exponential(multiplier=1, min=2, max=20)
+    + tenacity.wait_random(0, 2),
     retry=(
-        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS) |
-        tenacity.retry_if_exception(
-            lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code in RETRYABLE_STATUS_CODES
+        tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS)
+        | tenacity.retry_if_exception(
+            lambda e: isinstance(e, httpx.HTTPStatusError)
+            and e.response.status_code in RETRYABLE_STATUS_CODES
         )
     ),
     before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
@@ -895,9 +917,9 @@ async def fetch_github_details(
     if not repo_url:
         return None
 
-    current_api_url_to_fetch: Optional[str] = None # 当前要请求的 GitHub API URL
-    original_url = repo_url # 保存原始 URL 用于日志记录
-    redirect_count = 0 # 重定向计数器
+    current_api_url_to_fetch: Optional[str] = None  # 当前要请求的 GitHub API URL
+    original_url = repo_url  # 保存原始 URL 用于日志记录
+    redirect_count = 0  # 重定向计数器
 
     # --- 初始 URL 解析 ---
     # 尝试从用户提供的各种格式的 URL 中提取 GitHub API 需要的 owner/repo 格式。
@@ -922,27 +944,23 @@ async def fetch_github_details(
                         f"{GITHUB_API_BASE_URL}repos/{owner}/{repo_name}"
                     )
                 else:
-                    logger.debug(
-                        f"无法从初始 URL 解析 owner/repo: {repo_url}"
-                    )
+                    logger.debug(f"无法从初始 URL 解析 owner/repo: {repo_url}")
                     return None
             else:
                 logger.debug(
                     f"初始 URL 格式无法识别为 github.com/owner/repo: {repo_url}"
                 )
-                return None # 格式不符
+                return None  # 格式不符
         # GitHub API URL (例如重定向后的 URL)
         elif "api.github.com/repositories/" in repo_url.lower():
-            current_api_url_to_fetch = repo_url # 直接使用
+            current_api_url_to_fetch = repo_url  # 直接使用
         # 其他无法识别的 URL
         else:
-            logger.debug(
-                f"URL 似乎不是标准的 GitHub 仓库 URL: {repo_url}"
-            )
+            logger.debug(f"URL 似乎不是标准的 GitHub 仓库 URL: {repo_url}")
             return None
     except Exception as parse_error:
         logger.warning(f"解析初始 GitHub URL {repo_url} 时出错: {parse_error}")
-        return None # 解析出错
+        return None  # 解析出错
 
     # --- 循环处理请求和重定向 ---
     # 只要当前有有效的 API URL 且未超过最大重定向次数，就继续循环
@@ -957,17 +975,17 @@ async def fetch_github_details(
                 # follow_redirects=False: 禁止 httpx 自动处理重定向，我们需要手动处理以跟踪 API URL 的变化
                 response = await http_client.get(
                     current_api_url_to_fetch,
-                    headers=github_headers, # 使用之前定义的包含 Token 的请求头
+                    headers=github_headers,  # 使用之前定义的包含 Token 的请求头
                     follow_redirects=False,
                 )
 
                 # 情况 1: 请求成功 (状态码 200 OK)
                 if response.status_code == 200:
-                    data = response.json() # 解析 JSON 响应
+                    data = response.json()  # 解析 JSON 响应
                     # 提取所需信息
-                    stars = data.get("stargazers_count") # 星标数
-                    language = data.get("language") # 主要语言
-                    license_info = data.get("license") # 许可证信息字典 (可能为 None)
+                    stars = data.get("stargazers_count")  # 星标数
+                    language = data.get("language")  # 主要语言
+                    license_info = data.get("license")  # 许可证信息字典 (可能为 None)
                     # 安全地访问许可证字典中的 spdx_id (许可证的标准标识符)
                     license_name = None
                     if license_info and isinstance(license_info, dict):
@@ -986,42 +1004,49 @@ async def fetch_github_details(
                     return {
                         "stars": stars if isinstance(stars, int) else None,
                         "language": language if isinstance(language, str) else None,
-                        "license": license_name if isinstance(license_name, str) else None,
+                        "license": license_name
+                        if isinstance(license_name, str)
+                        else None,
                     }
 
                 # 情况 2: 处理重定向 (状态码 301, 302, 307, 308)
                 elif (
-                    follow_redirects # 检查是否允许跟随重定向
-                    and response.status_code in (301, 302, 307, 308) # 检查是否是重定向状态码
-                    and "location" in response.headers # 检查响应头中是否有 Location 字段
+                    follow_redirects  # 检查是否允许跟随重定向
+                    and response.status_code
+                    in (301, 302, 307, 308)  # 检查是否是重定向状态码
+                    and "location"
+                    in response.headers  # 检查响应头中是否有 Location 字段
                 ):
-                    redirect_count += 1 # 增加重定向计数
-                    redirect_url = response.headers["location"] # 获取重定向的目标 URL
+                    redirect_count += 1  # 增加重定向计数
+                    redirect_url = response.headers["location"]  # 获取重定向的目标 URL
                     logger.info(
                         f"GitHub 请求 {current_api_url_to_fetch} 被重定向 ({response.status_code}) 到: {redirect_url}。"
                         f"正在跟随重定向 ({redirect_count}/{max_redirects})."
                     )
                     # 更新当前要请求的 API URL 为重定向后的 URL，进入下一次循环
                     current_api_url_to_fetch = redirect_url
-                    continue # 继续下一次 while 循环
+                    continue  # 继续下一次 while 循环
 
                 # 情况 3: 处理特定错误状态码
-                elif response.status_code == 404: # Not Found
+                elif response.status_code == 404:  # Not Found
                     logger.info(
                         f"GitHub API 对 URL 返回 404: {current_api_url_to_fetch}"
                     )
-                    return None # 仓库不存在，返回 None
-                elif response.status_code == 403: # Forbidden
+                    return None  # 仓库不存在，返回 None
+                elif response.status_code == 403:  # Forbidden
                     # 特别检查是否是速率限制导致的 403
                     if (
                         "X-RateLimit-Remaining" in response.headers
                         and response.headers["X-RateLimit-Remaining"] == "0"
                     ):
                         # 尝试获取速率限制重置时间
-                        reset_time_unix = int(response.headers.get("X-RateLimit-Reset", "0"))
+                        reset_time_unix = int(
+                            response.headers.get("X-RateLimit-Reset", "0")
+                        )
                         reset_time_dt = (
                             datetime.fromtimestamp(reset_time_unix, tz=timezone.utc)
-                            if reset_time_unix else "未知"
+                            if reset_time_unix
+                            else "未知"
                         )
                         logger.error(
                             f"GitHub API 速率限制超出 (403) URL: {current_api_url_to_fetch}。"
@@ -1033,13 +1058,13 @@ async def fetch_github_details(
                             f"GitHub API 禁止访问 (403) URL: {current_api_url_to_fetch}。"
                             f"请检查 Token 权限。停止对此仓库的重试。"
                         )
-                    return None # 403 错误通常不重试，返回 None
-                elif response.status_code == 401: # Unauthorized
+                    return None  # 403 错误通常不重试，返回 None
+                elif response.status_code == 401:  # Unauthorized
                     logger.error(
                         f"GitHub API 未授权 (401) URL: {current_api_url_to_fetch}。"
                         f"请检查 GITHUB_API_KEY。"
                     )
-                    return None # 认证失败，返回 None
+                    return None  # 认证失败，返回 None
                 # 情况 4: 其他 HTTP 错误 (例如 429, 5xx)
                 else:
                     logger.warning(
@@ -1059,9 +1084,7 @@ async def fetch_github_details(
 
     # 如果循环因为超过最大重定向次数而结束
     if redirect_count > max_redirects:
-        logger.warning(
-            f"原始 URL: {original_url} 超出最大重定向次数 ({max_redirects})"
-        )
+        logger.warning(f"原始 URL: {original_url} 超出最大重定向次数 ({max_redirects})")
 
     # 如果循环正常结束但没有成功返回，或者因为错误中断，最终返回 None
     return None
@@ -1090,13 +1113,11 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
         hf_model_info = await fetch_hf_model_details(model_id)
         # 如果无法获取到基础的 HF 模型信息，则认为无法继续处理，记录错误并返回 None
         if not hf_model_info:
-            logger.error(
-                f"未能获取模型 {model_id} 所需的 HF 详细信息。将跳过此模型。"
-            )
+            logger.error(f"未能获取模型 {model_id} 所需的 HF 详细信息。将跳过此模型。")
             return None
 
         # --- 1a. 获取 HF README 内容 ---
-        hf_readme_content: Optional[str] = None # 初始化 README 内容变量
+        hf_readme_content: Optional[str] = None  # 初始化 README 内容变量
         try:
             # 使用 huggingface_hub 提供的 hf_hub_download 函数下载 README.md 文件。
             # 这个函数是同步的，所以用 asyncio.to_thread 在后台线程执行。
@@ -1136,7 +1157,7 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
         # --- 结束 HF README 获取 ---
 
         # --- 1b. 提取 HF 数据集链接 ---
-        hf_dataset_links: List[str] = [] # 初始化数据集链接列表
+        hf_dataset_links: List[str] = []  # 初始化数据集链接列表
         # 检查模型信息中是否有标签
         if hf_model_info.tags:
             # 定义匹配 'dataset:<dataset_id>' 格式标签的正则表达式
@@ -1146,14 +1167,12 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                 match = dataset_pattern.match(tag)
                 # 如果标签匹配成功
                 if match:
-                    dataset_id = match.group(1) # 提取数据集 ID
+                    dataset_id = match.group(1)  # 提取数据集 ID
                     # 构建标准的 Hugging Face 数据集 URL
                     dataset_url = f"https://huggingface.co/datasets/{dataset_id}"
-                    hf_dataset_links.append(dataset_url) # 添加到列表中
+                    hf_dataset_links.append(dataset_url)  # 添加到列表中
             if hf_dataset_links:
-                logger.info(
-                    f"为模型 {model_id} 提取到数据集链接: {hf_dataset_links}"
-                )
+                logger.info(f"为模型 {model_id} 提取到数据集链接: {hf_dataset_links}")
         # --- 结束 HF 数据集链接提取 ---
 
         # 初始化输出字典，填入已获取的 Hugging Face 模型信息
@@ -1162,16 +1181,18 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
             "hf_author": hf_model_info.author,
             "hf_sha": hf_model_info.sha,
             # 将最后修改时间转换为 ISO 格式字符串 (如果存在)
-            "hf_last_modified": hf_model_info.lastModified.isoformat() if hf_model_info.lastModified else None,
+            "hf_last_modified": hf_model_info.lastModified.isoformat()
+            if hf_model_info.lastModified
+            else None,
             "hf_downloads": hf_model_info.downloads,
             "hf_likes": hf_model_info.likes,
             "hf_tags": hf_model_info.tags,
             "hf_pipeline_tag": hf_model_info.pipeline_tag,
             "hf_library_name": hf_model_info.library_name,
-            "processing_timestamp_utc": processing_start_time.isoformat(), # 记录处理开始时间
-            "hf_readme_content": hf_readme_content, # 添加 README 内容
-            "hf_dataset_links": hf_dataset_links, # 添加数据集链接
-            "linked_papers": [], # 初始化关联论文列表为空
+            "processing_timestamp_utc": processing_start_time.isoformat(),  # 记录处理开始时间
+            "hf_readme_content": hf_readme_content,  # 添加 README 内容
+            "hf_dataset_links": hf_dataset_links,  # 添加数据集链接
+            "linked_papers": [],  # 初始化关联论文列表为空
         }
 
         # 2. 从 HF 标签中提取 ArXiv ID
@@ -1179,7 +1200,7 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
         # 如果没有找到 ArXiv ID，记录信息并直接返回已有的 HF 数据
         if not arxiv_ids:
             logger.info(f"在模型 {model_id} 的标签中未找到有效的 ArXiv ID。")
-            return output_data # 即使没有论文，也返回模型数据
+            return output_data  # 即使没有论文，也返回模型数据
 
         logger.info(f"为模型 {model_id} 找到 {len(arxiv_ids)} 个 ArXiv ID: {arxiv_ids}")
 
@@ -1187,9 +1208,11 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
         for arxiv_id in arxiv_ids:
             # 初始化当前论文的数据结构
             paper_data: PaperData = {
-                "arxiv_id_base": re.sub(r"v\d+$", "", arxiv_id), # 存储基础 ID (去版本号)
-                "arxiv_metadata": None, # 初始化 ArXiv 元数据为 None
-                "pwc_entry": None, # 初始化 PWC 条目为 None
+                "arxiv_id_base": re.sub(
+                    r"v\d+$", "", arxiv_id
+                ),  # 存储基础 ID (去版本号)
+                "arxiv_metadata": None,  # 初始化 ArXiv 元数据为 None
+                "pwc_entry": None,  # 初始化 PWC 条目为 None
             }
 
             try:
@@ -1200,25 +1223,26 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                     paper_data["arxiv_metadata"] = arxiv_meta
                     # 同时更新带版本号的 ArXiv ID (如果元数据中有)
                     paper_data["arxiv_id_versioned"] = arxiv_meta.get(
-                        "arxiv_id_versioned", paper_data["arxiv_id_base"] # Fallback 到基础 ID
+                        "arxiv_id_versioned",
+                        paper_data["arxiv_id_base"],  # Fallback 到基础 ID
                     )
                 else:
                     # 如果获取 ArXiv 元数据失败，将当前不完整的 paper_data 添加到结果中，
                     # 并跳过后续的 PWC 查询，继续处理下一个 ArXiv ID。
-                    if output_data: # 确保 output_data 不是 None
+                    if output_data:  # 确保 output_data 不是 None
                         output_data["linked_papers"].append(paper_data)
-                    continue # 跳到下一个 arxiv_id
+                    continue  # 跳到下一个 arxiv_id
 
                 # 3b. 使用基础 ArXiv ID 查询 PWC 摘要信息
                 pwc_entry_summary = await find_pwc_entry_by_arxiv_id(
-                    paper_data["arxiv_id_base"] # 使用基础 ID 查询
+                    paper_data["arxiv_id_base"]  # 使用基础 ID 查询
                 )
                 # 如果没有找到对应的 PWC 条目
                 if not pwc_entry_summary:
                     # 将只包含 ArXiv 信息的 paper_data 添加到结果中
-                    if output_data: # 确保 output_data 不是 None
+                    if output_data:  # 确保 output_data 不是 None
                         output_data["linked_papers"].append(paper_data)
-                    continue # 跳到下一个 arxiv_id
+                    continue  # 跳到下一个 arxiv_id
 
                 # 从 PWC 摘要信息中获取 PWC 论文 ID
                 pwc_paper_id = pwc_entry_summary.get("id")
@@ -1230,14 +1254,16 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                         f"为 {paper_data['arxiv_id_base']} 找到的 PWC 条目缺少 'id' 字段。"
                     )
                     # 添加包含 ArXiv 信息和部分 PWC 摘要信息的 paper_data
-                    if output_data: # 确保 output_data 不是 None
+                    if output_data:  # 确保 output_data 不是 None
                         output_data["linked_papers"].append(paper_data)
-                    continue # 跳到下一个 arxiv_id
+                    continue  # 跳到下一个 arxiv_id
 
                 # 3c. 并发获取 PWC 详细信息 (代码库、任务、数据集、方法)
                 # 创建一个字典，键是关联类型，值是调用 fetch_pwc_relation_list 的协程对象
                 pwc_details_tasks = {
-                    "repositories": fetch_pwc_relation_list(pwc_paper_id, "repositories"),
+                    "repositories": fetch_pwc_relation_list(
+                        pwc_paper_id, "repositories"
+                    ),
                     "tasks": fetch_pwc_relation_list(pwc_paper_id, "tasks"),
                     "datasets": fetch_pwc_relation_list(pwc_paper_id, "datasets"),
                     "methods": fetch_pwc_relation_list(pwc_paper_id, "methods"),
@@ -1287,14 +1313,14 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                     )
 
                 # --- 3d. 并发获取 PWC 代码库的 GitHub 详细信息 ---
-                processed_repos = [] # 初始化处理后的代码库列表
+                processed_repos = []  # 初始化处理后的代码库列表
                 # 如果从 PWC 获取到了代码库列表
                 if fetched_repos:
-                    detail_fetch_tasks = [] # 存储获取 GitHub 详细信息的协程
-                    valid_repo_data = [] # 存储对应的原始 PWC 代码库字典，用于后续合并信息
+                    detail_fetch_tasks = []  # 存储获取 GitHub 详细信息的协程
+                    valid_repo_data = []  # 存储对应的原始 PWC 代码库字典，用于后续合并信息
                     # 遍历从 PWC 获取的每个代码库字典
                     for repo in fetched_repos:
-                        repo_url = repo.get("url") # 获取代码库 URL
+                        repo_url = repo.get("url")  # 获取代码库 URL
                         # 检查 URL 是否存在且看起来是 GitHub URL
                         if repo_url and "github.com" in repo_url.lower():
                             # 如果是 GitHub URL，创建获取其详细信息的协程任务
@@ -1308,8 +1334,12 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                                 {
                                     "url": repo_url,
                                     "stars": None,
-                                    "is_official": repo.get("is_official"), # 保留 PWC 的 is_official 字段
-                                    "framework": repo.get("framework"), # 保留 PWC 的 framework 字段
+                                    "is_official": repo.get(
+                                        "is_official"
+                                    ),  # 保留 PWC 的 is_official 字段
+                                    "framework": repo.get(
+                                        "framework"
+                                    ),  # 保留 PWC 的 framework 字段
                                     "license": None,
                                     "language": None,
                                 }
@@ -1354,35 +1384,39 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                             )
                 else:
                     # 如果 PWC 没有列出任何代码库
-                    logger.info(
-                        f"PWC 条目 (ID: {pwc_paper_id}) 未列出代码库"
-                    )
+                    logger.info(f"PWC 条目 (ID: {pwc_paper_id}) 未列出代码库")
                 # --- 结束 GitHub 详细信息获取 ---
 
                 # 组装完整的 PWC 条目数据 (包含之前获取的 conference 信息)
                 paper_data["pwc_entry"] = {
                     "pwc_id": pwc_paper_id,
-                    "pwc_url": f"https://paperswithcode.com/paper/{pwc_paper_id}", # 构建 PWC 页面 URL
-                    "title": pwc_entry_summary.get("title"), # PWC 上的标题
-                    "conference": pwc_conference, # PWC 上的会议信息
+                    "pwc_url": f"https://paperswithcode.com/paper/{pwc_paper_id}",  # 构建 PWC 页面 URL
+                    "title": pwc_entry_summary.get("title"),  # PWC 上的标题
+                    "conference": pwc_conference,  # PWC 上的会议信息
                     # 提取任务名称列表 (过滤掉 None 值)
                     "tasks": [
-                        str(task.get("name")) for task in fetched_tasks if task.get("name") is not None
+                        str(task.get("name"))
+                        for task in fetched_tasks
+                        if task.get("name") is not None
                     ],
                     # 提取数据集名称列表 (过滤掉 None 值)
                     "datasets": [
-                        str(dataset.get("name")) for dataset in fetched_datasets if dataset.get("name") is not None
+                        str(dataset.get("name"))
+                        for dataset in fetched_datasets
+                        if dataset.get("name") is not None
                     ],
                     # 提取方法名称列表 (过滤掉 None 值)
                     "methods": [
-                        str(method.get("name")) for method in fetched_methods if method.get("name") is not None
+                        str(method.get("name"))
+                        for method in fetched_methods
+                        if method.get("name") is not None
                     ],
                     # 添加处理后的代码库列表 (包含 GitHub 信息)
                     "repositories": processed_repos,
                 }
 
                 # 将完整填充的 paper_data 添加到模型的关联论文列表中
-                if output_data: # 确保 output_data 不是 None
+                if output_data:  # 确保 output_data 不是 None
                     output_data["linked_papers"].append(paper_data)
 
             # 捕获在处理单个 ArXiv ID 过程中发生的任何未预料异常
@@ -1390,16 +1424,16 @@ async def process_single_model(model_id: str) -> Optional[ModelOutputData]:
                 logger.error(
                     f"处理模型 {model_id} 的 ArXiv ID {arxiv_id} 时发生意外错误: {e}"
                 )
-                logger.error(traceback.format_exc()) # 记录完整堆栈
+                logger.error(traceback.format_exc())  # 记录完整堆栈
                 # 即使发生错误，也尝试将包含错误信息的 paper_data 添加到结果中
                 if "pwc_entry" not in paper_data:
                     # 如果 PWC 部分还没创建，则创建一个带 error 字段的字典
                     paper_data["pwc_entry"] = {"error": str(e)}
                 elif isinstance(paper_data["pwc_entry"], dict):
-                     # 如果 pwc_entry 已经是字典，添加或更新 error 字段
+                    # 如果 pwc_entry 已经是字典，添加或更新 error 字段
                     paper_data["pwc_entry"]["error"] = str(e)
 
-                if output_data: # 确保 output_data 不是 None
+                if output_data:  # 确保 output_data 不是 None
                     output_data["linked_papers"].append(paper_data)
                 # 继续处理下一个 ArXiv ID (不因为单个论文处理失败而中断整个模型处理)
 
@@ -1432,16 +1466,18 @@ async def fetch_target_model_ids(limit: int, sort_by: str) -> List[str]:
         一个包含模型 ID 字符串的列表。如果获取失败，返回空列表。
     """
     logger.info(f"正在从 HF Hub 获取前 {limit} 个模型 ID，按 {sort_by} 排序...")
-    target_ids: List[str] = [] # 初始化目标 ID 列表
+    target_ids: List[str] = []  # 初始化目标 ID 列表
     try:
         # 使用 tenacity 装饰器为内部的 API 调用函数添加重试逻辑
         @tenacity.retry(
             stop=tenacity.stop_after_attempt(4),
-            wait=tenacity.wait_exponential(multiplier=1, min=2, max=20) + tenacity.wait_random(0, 2),
+            wait=tenacity.wait_exponential(multiplier=1, min=2, max=20)
+            + tenacity.wait_random(0, 2),
             retry=(
-                tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS) |
-                tenacity.retry_if_exception(
-                    lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code in RETRYABLE_STATUS_CODES
+                tenacity.retry_if_exception_type(RETRYABLE_NETWORK_ERRORS)
+                | tenacity.retry_if_exception(
+                    lambda e: isinstance(e, httpx.HTTPStatusError)
+                    and e.response.status_code in RETRYABLE_STATUS_CODES
                 )
             ),
             before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
@@ -1450,14 +1486,14 @@ async def fetch_target_model_ids(limit: int, sort_by: str) -> List[str]:
         async def get_models_list() -> List[ModelInfo]:
             """内部异步函数，负责调用同步的 hf_api.list_models"""
             # 在后台线程中运行同步的 hf_api.list_models 方法
-            loop = asyncio.get_running_loop() # 获取当前事件循环
+            loop = asyncio.get_running_loop()  # 获取当前事件循环
             models_iterator = await loop.run_in_executor(
-                None, # 使用默认的线程池执行器
+                None,  # 使用默认的线程池执行器
                 lambda: hf_api.list_models(
-                    full=False,     # full=False 表示只需要模型的基本信息（主要是 ID），不需要完整配置
-                    sort=sort_by,   # 按指定的字段排序
-                    direction=-1,   # direction=-1 表示降序排列（最多下载/点赞的在前）
-                    limit=limit,    # 直接在 API 调用中应用数量限制
+                    full=False,  # full=False 表示只需要模型的基本信息（主要是 ID），不需要完整配置
+                    sort=sort_by,  # 按指定的字段排序
+                    direction=-1,  # direction=-1 表示降序排列（最多下载/点赞的在前）
+                    limit=limit,  # 直接在 API 调用中应用数量限制
                     # fetch_config=False 已移除，list_models 没有此参数
                 ),
             )
@@ -1472,15 +1508,11 @@ async def fetch_target_model_ids(limit: int, sort_by: str) -> List[str]:
 
     # 捕获 tenacity 重试多次后仍然失败的错误
     except tenacity.RetryError as e:
-        logger.error(
-            f"多次重试后仍无法从 HF Hub 获取模型列表: {e}。将返回空列表。"
-        )
+        logger.error(f"多次重试后仍无法从 HF Hub 获取模型列表: {e}。将返回空列表。")
     # 捕获其他 HF Hub HTTP 错误或意外异常
     except (HfHubHTTPError, Exception) as e:
-        logger.error(
-            f"从 HF Hub 获取模型列表时发生意外错误: {e}。将返回空列表。"
-        )
-        logger.debug(traceback.format_exc()) # 记录详细堆栈
+        logger.error(f"从 HF Hub 获取模型列表时发生意外错误: {e}。将返回空列表。")
+        logger.debug(traceback.format_exc())  # 记录详细堆栈
 
     # 返回获取到的（或空的）模型 ID 列表
     return target_ids
@@ -1492,24 +1524,24 @@ async def main() -> None:
     # --- 参数解析 ---
     # 创建 ArgumentParser 对象，用于定义和解析命令行参数。
     parser = argparse.ArgumentParser(
-        description="收集 Hugging Face 模型数据及其关联的论文和 GitHub 星标。", # 脚本描述
+        description="收集 Hugging Face 模型数据及其关联的论文和 GitHub 星标。",  # 脚本描述
         # formatter_class 指定如何显示帮助信息，ArgumentDefaultsHelpFormatter 会显示参数的默认值。
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     # 添加 '--sort-by' 参数
     parser.add_argument(
         "--sort-by",
-        type=str, # 参数类型为字符串
-        choices=["likes", "downloads"], # 允许的值为 'likes' 或 'downloads'
-        default="likes", # 默认值为 'likes' (按点赞量排序)
-        help="从 Hugging Face Hub 获取模型时按 'likes' 或 'downloads' 排序。", # 参数的帮助说明
+        type=str,  # 参数类型为字符串
+        choices=["likes", "downloads"],  # 允许的值为 'likes' 或 'downloads'
+        default="likes",  # 默认值为 'likes' (按点赞量排序)
+        help="从 Hugging Face Hub 获取模型时按 'likes' 或 'downloads' 排序。",  # 参数的帮助说明
     )
     # 添加 '--limit' 参数
     parser.add_argument(
         "--limit",
-        type=int, # 参数类型为整数
-        default=5000, # 默认获取前 5000 个模型
-        help="基于排序从 Hugging Face Hub 获取的最大模型数量。", # 参数的帮助说明
+        type=int,  # 参数类型为整数
+        default=5000,  # 默认获取前 5000 个模型
+        help="基于排序从 Hugging Face Hub 获取的最大模型数量。",  # 参数的帮助说明
     )
     # 解析命令行传入的参数
     args = parser.parse_args()
@@ -1535,10 +1567,8 @@ async def main() -> None:
         logger.info(f"已确保输出目录存在: {output_dir}")
     except OSError as e:
         # 如果创建目录失败，记录严重错误并退出脚本。
-        logger.critical(
-            f"创建输出目录 {output_dir} 失败: {e}。正在退出。"
-        )
-        sys.exit(1) # 退出码 1 表示异常退出
+        logger.critical(f"创建输出目录 {output_dir} 失败: {e}。正在退出。")
+        sys.exit(1)  # 退出码 1 表示异常退出
 
     # 决定文件写入模式。由于使用 ID 跟踪，总是以追加模式 ('a') 打开文件。
     # 可以选择性地添加一个命令行标志来强制覆盖文件并清空已处理 ID 列表。
@@ -1549,7 +1579,7 @@ async def main() -> None:
     # 获取本次运行的目标模型 ID 列表
     target_model_ids = await fetch_target_model_ids(
         limit,  # 使用命令行参数 limit
-        sort_by, # 使用命令行参数 sort_by
+        sort_by,  # 使用命令行参数 sort_by
     )
     # 如果无法获取目标 ID 列表（例如 HF Hub API 访问失败）
     if not target_model_ids:
@@ -1557,8 +1587,8 @@ async def main() -> None:
             # 更新日志，包含命令行参数信息
             f"无法获取目标模型 ID (按 {sort_by} 排序的前 {limit} 个)。正在退出。"
         )
-        await close_http_client_safely() # 确保关闭 HTTP 客户端
-        return # 结束 main 函数
+        await close_http_client_safely()  # 确保关闭 HTTP 客户端
+        return  # 结束 main 函数
 
     # 从目标列表中筛选出本次运行需要处理的新模型 ID
     # （即目标 ID 不在已处理 ID 集合中的那些）
@@ -1572,15 +1602,13 @@ async def main() -> None:
 
     # 如果没有需要处理的新模型，则记录信息并退出
     if not models_to_run:
-        logger.info(
-            "根据当前目标列表和已处理 ID 文件，没有需要处理的新模型。"
-        )
-        await close_http_client_safely() # 关闭 HTTP 客户端
-        return # 结束 main 函数
+        logger.info("根据当前目标列表和已处理 ID 文件，没有需要处理的新模型。")
+        await close_http_client_safely()  # 关闭 HTTP 客户端
+        return  # 结束 main 函数
 
     # 初始化计数器
-    attempted_this_run = 0 # 本次运行尝试处理的模型数量
-    successful_saves_this_run = 0 # 本次运行成功保存的模型数量
+    attempted_this_run = 0  # 本次运行尝试处理的模型数量
+    successful_saves_this_run = 0  # 本次运行成功保存的模型数量
 
     # 创建一个 asyncio.Semaphore，用于限制同时运行的 process_single_model 协程数量
     process_semaphore = asyncio.Semaphore(MAX_CONCURRENT_MODELS)
@@ -1588,7 +1616,6 @@ async def main() -> None:
     tasks = []
     # 遍历需要处理的新模型 ID 列表
     for model_id in models_to_run:
-
         # 定义一个内部的异步函数，用于包装 process_single_model 的调用
         # 这个函数会先获取信号量，然后执行处理，确保并发数受控
         async def process_with_semaphore(mid: str) -> Optional[ModelOutputData]:
@@ -1596,7 +1623,7 @@ async def main() -> None:
             nonlocal attempted_this_run
             # 异步获取信号量，如果信号量计数已满，则在此等待直到有空闲
             async with process_semaphore:
-                attempted_this_run += 1 # 增加尝试计数
+                attempted_this_run += 1  # 增加尝试计数
                 # 调用核心处理函数并返回结果
                 return await process_single_model(mid)
 
@@ -1661,19 +1688,15 @@ async def main() -> None:
                     logger.error(
                         f"等待或处理模型 future 时出错 (尝试 {attempted_this_run}): {e}"
                     )
-                    logger.error(traceback.format_exc()) # 记录完整堆栈
+                    logger.error(traceback.format_exc())  # 记录完整堆栈
                     # 如果处理失败，则不将 ID 添加到 processed_ids_set，也不保存
 
     # 捕获文件打开或写入时的 I/O 错误
     except IOError as e:
-        logger.critical(
-            f"严重错误: 打开或写入输出文件 {OUTPUT_JSONL_FILE} 失败: {e}"
-        )
+        logger.critical(f"严重错误: 打开或写入输出文件 {OUTPUT_JSONL_FILE} 失败: {e}")
     # 捕获主处理循环中其他未预料的异常
     except Exception as e:
-        logger.critical(
-            f"严重错误: 主处理循环中发生意外错误: {e}"
-        )
+        logger.critical(f"严重错误: 主处理循环中发生意外错误: {e}")
         logger.critical(traceback.format_exc())
     finally:
         # --- 最终保存与清理 ---
@@ -1689,12 +1712,8 @@ async def main() -> None:
 
         # 记录最终的总结信息
         logger.info("--- 数据收集运行结束 ---")
-        logger.info(
-            f"本次运行尝试处理了 {attempted_this_run} 个新模型。"
-        )
-        logger.info(
-            f"成功收集并保存了 {successful_saves_this_run} 个新模型的数据。"
-        )
+        logger.info(f"本次运行尝试处理了 {attempted_this_run} 个新模型。")
+        logger.info(f"成功收集并保存了 {successful_saves_this_run} 个新模型的数据。")
         logger.info(
             f"所有运行累计处理的唯一模型总数 (记录在 {PROCESSED_IDS_FILE}): {len(processed_ids_set)}"
         )
@@ -1705,9 +1724,9 @@ async def close_http_client_safely() -> None:
     logger.info("正在关闭 HTTP 客户端...")
     # 检查全局变量中是否存在 http_client，它是否是 AsyncClient 实例，以及它是否尚未关闭
     if (
-        "http_client" in globals() # 检查变量是否存在
-        and isinstance(http_client, httpx.AsyncClient) # 检查类型
-        and not http_client.is_closed # 检查是否已关闭
+        "http_client" in globals()  # 检查变量是否存在
+        and isinstance(http_client, httpx.AsyncClient)  # 检查类型
+        and not http_client.is_closed  # 检查是否已关闭
     ):
         try:
             # 异步关闭客户端
@@ -1729,9 +1748,7 @@ if __name__ == "__main__":
         asyncio.run(main())
     # 捕获用户通过 Ctrl+C 发送的键盘中断信号
     except KeyboardInterrupt:
-        logger.info(
-            "用户中断了收集过程。正在尝试保存最终状态并关闭客户端。"
-        )
+        logger.info("用户中断了收集过程。正在尝试保存最终状态并关闭客户端。")
         # 在键盘中断时尝试进行优雅关闭
         # 状态保存现在主要在 main 函数的 finally 块中处理
         # 这里确保客户端被关闭

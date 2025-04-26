@@ -31,33 +31,45 @@
 - **关键依赖:** `tests/services/conftest.py` 中定义的 fixtures，特别是 `search_service`
   及其模拟依赖 (`mock_embedder`, `mock_faiss_paper_repo`, `mock_pg_repo`, etc.)。
 """
+
 # type: ignore # 可以在文件开头添加，忽略整个文件的类型检查错误，如果需要的话
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch # 导入模拟工具
-import numpy as np # 导入 numpy 用于处理向量
-from typing import List, Tuple, Dict, Optional, Set, Literal, Union, cast, Any # 导入类型提示
-import json # 导入 json
-from datetime import date # 导入 date 类型
+from unittest.mock import AsyncMock, MagicMock, patch  # 导入模拟工具
+import numpy as np  # 导入 numpy 用于处理向量
+from typing import (
+    List,
+    Tuple,
+    Dict,
+    Optional,
+    Set,
+    Literal,
+    Union,
+    cast,
+    Any,
+)  # 导入类型提示
+import json  # 导入 json
+from datetime import date  # 导入 date 类型
 
 # 导入被测试的服务类和相关类型
 from aigraphx.services.search_service import (
     SearchService,
-    SearchTarget, # 搜索目标类型 (papers/models)
-    PaperSortByLiteral, # 论文排序字段字面量类型
-    ModelSortByLiteral, # 模型排序字段字面量类型
-    SortOrderLiteral, # 排序顺序字面量类型 (asc/desc)
-    ResultItem as ServiceResultItem, # 服务内部可能使用的结果项类型别名
+    SearchTarget,  # 搜索目标类型 (papers/models)
+    PaperSortByLiteral,  # 论文排序字段字面量类型
+    ModelSortByLiteral,  # 模型排序字段字面量类型
+    SortOrderLiteral,  # 排序顺序字面量类型 (asc/desc)
+    ResultItem as ServiceResultItem,  # 服务内部可能使用的结果项类型别名
 )
+
 # 导入 API/服务层使用的 Pydantic 模型
 from aigraphx.models.search import (
-    SearchResultItem, # 论文搜索结果项
-    HFSearchResultItem, # HF 模型搜索结果项
-    PaginatedPaperSearchResult, # 分页的论文结果
-    PaginatedSemanticSearchResult, # 分页的语义结果
-    PaginatedHFModelSearchResult, # 分页的 HF 模型结果
-    AnySearchResultItem, # 论文或模型结果项的联合类型
-    SearchFilterModel, # 搜索过滤器模型
+    SearchResultItem,  # 论文搜索结果项
+    HFSearchResultItem,  # HF 模型搜索结果项
+    PaginatedPaperSearchResult,  # 分页的论文结果
+    PaginatedSemanticSearchResult,  # 分页的语义结果
+    PaginatedHFModelSearchResult,  # 分页的 HF 模型结果
+    AnySearchResultItem,  # 论文或模型结果项的联合类型
+    SearchFilterModel,  # 搜索过滤器模型
 )
 # 移除对其他测试文件中 MOCK 数据的直接导入，现在依赖 conftest 中的 fixture 提供模拟数据
 # from .test_search_service import (
@@ -71,18 +83,19 @@ pytestmark = pytest.mark.asyncio
 # --- 恢复的测试用例 ---
 # 这些测试用例之前可能存在于其他文件中，现在集中在这里测试混合搜索逻辑。
 
+
 async def test_perform_keyword_search_papers_empty_query(
-    search_service: SearchService, # 注入配置了模拟依赖的 SearchService 实例
-    mock_pg_repo: MagicMock # 注入模拟的 PostgresRepository 实例
+    search_service: SearchService,  # 注入配置了模拟依赖的 SearchService 实例
+    mock_pg_repo: MagicMock,  # 注入模拟的 PostgresRepository 实例
 ) -> None:
     """
     测试场景：执行关键字搜索，但提供的查询字符串为空。
     预期：服务应直接返回空结果，而不调用底层仓库的搜索方法。
     """
-    query = "" # 空查询字符串
+    query = ""  # 空查询字符串
     page = 1
     page_size = 10
-    target = cast(SearchTarget, "papers") # 明确目标类型
+    target = cast(SearchTarget, "papers")  # 明确目标类型
 
     # 调用关键字搜索方法
     result = await search_service.perform_keyword_search(
@@ -108,11 +121,12 @@ async def test_perform_keyword_search_papers_empty_query(
 # _fuse_results, _apply_filters_and_sort, _paginate_results 等辅助方法。
 # 如果实际实现不同，测试断言需要相应调整。
 
+
 async def test_perform_hybrid_search_success(
-    search_service: SearchService, # 注入 SearchService 实例
-    mock_embedder: MagicMock, # 注入模拟的 Embedder
-    mock_faiss_paper_repo: MagicMock, # 注入模拟的 Faiss 仓库 (论文)
-    mock_pg_repo: MagicMock # 注入模拟的 PG 仓库
+    search_service: SearchService,  # 注入 SearchService 实例
+    mock_embedder: MagicMock,  # 注入模拟的 Embedder
+    mock_faiss_paper_repo: MagicMock,  # 注入模拟的 Faiss 仓库 (论文)
+    mock_pg_repo: MagicMock,  # 注入模拟的 PG 仓库
 ) -> None:
     """
     测试场景：成功执行混合搜索，语义搜索和关键字搜索都返回结果。
@@ -137,10 +151,12 @@ async def test_perform_hybrid_search_success(
     MOCK_PAPER_KEY_1 = mock_pg_repo.paper_details_map[101]
     MOCK_PAPER_2 = mock_pg_repo.paper_details_map[2]
     # 配置 PG 仓库的关键字搜索返回包含 PK1 和 P2 的字典列表，总数为 2
-    mock_pg_repo.search_papers_by_keyword.side_effect = None # 清除 conftest 中可能存在的默认 side_effect
+    mock_pg_repo.search_papers_by_keyword.side_effect = (
+        None  # 清除 conftest 中可能存在的默认 side_effect
+    )
     mock_pg_repo.search_papers_by_keyword.return_value = (
-        [MOCK_PAPER_KEY_1, MOCK_PAPER_2], # 关键字结果列表
-        2, # 关键字结果总数
+        [MOCK_PAPER_KEY_1, MOCK_PAPER_2],  # 关键字结果列表
+        2,  # 关键字结果总数
     )
 
     # --- 调用混合搜索 ---
@@ -155,14 +171,14 @@ async def test_perform_hybrid_search_success(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query,
         target=target,
         page=page,
         page_size=page_size,
-        filters=filters # 传递过滤器对象
+        filters=filters,  # 传递过滤器对象
     )
 
     # --- 断言依赖调用 ---
@@ -175,10 +191,10 @@ async def test_perform_hybrid_search_success(
     mock_pg_repo.search_papers_by_keyword.assert_awaited_once_with(
         query=query,
         skip=0,
-        limit=30, # 内部用于获取融合前数据的限制值
-        sort_by="published_date", # 内部默认排序
+        limit=30,  # 内部用于获取融合前数据的限制值
+        sort_by="published_date",  # 内部默认排序
         sort_order="desc",
-        published_after=None, # 无过滤
+        published_after=None,  # 无过滤
         published_before=None,
         filter_area=None,
     )
@@ -188,28 +204,28 @@ async def test_perform_hybrid_search_success(
     #    获取调用时的参数 (即 ID 列表)
     call_args_list = mock_pg_repo.get_papers_details_by_ids.await_args[0][0]
     #    验证 ID 列表是否包含所有预期的 ID (来自语义: 1, 2, 3; 来自关键字: 101, 2)
-    assert set(call_args_list) == {1, 2, 3, 101} # 并集是 {1, 2, 3, 101}
+    assert set(call_args_list) == {1, 2, 3, 101}  # 并集是 {1, 2, 3, 101}
 
     # --- 断言返回结果 ---
-    assert isinstance(results, PaginatedPaperSearchResult) # 验证返回类型
+    assert isinstance(results, PaginatedPaperSearchResult)  # 验证返回类型
     # 总数应为融合后的唯一结果数 (语义={1,2,3}, 关键字={101,2}, 并集={1,2,3,101}, 总数=4)
     assert results.total == 4
-    assert len(results.items) == page_size # 返回项数应等于请求的 page_size
+    assert len(results.items) == page_size  # 返回项数应等于请求的 page_size
     assert results.skip == (page - 1) * page_size
     assert results.limit == page_size
 
     # 验证返回项的内容（由于融合算法不确定，只检查部分 ID 是否存在）
     result_ids = {item.paper_id for item in results.items}
-    assert 1 in result_ids # 语义结果 ID
-    assert 101 in result_ids # 关键字结果 ID
+    assert 1 in result_ids  # 语义结果 ID
+    assert 101 in result_ids  # 关键字结果 ID
     # 可能包含 2 或 3，取决于融合排序
 
 
 async def test_perform_hybrid_search_embedding_fails(
-    search_service: SearchService, 
-    mock_embedder: MagicMock, 
+    search_service: SearchService,
+    mock_embedder: MagicMock,
     mock_pg_repo: MagicMock,
-    mock_faiss_paper_repo: MagicMock # 添加缺少的 mock_faiss_paper_repo 参数
+    mock_faiss_paper_repo: MagicMock,  # 添加缺少的 mock_faiss_paper_repo 参数
 ) -> None:
     """
     测试场景：混合搜索时，文本嵌入失败 (语义搜索部分失败)。
@@ -229,7 +245,7 @@ async def test_perform_hybrid_search_embedding_fails(
     mock_pg_repo.search_papers_by_keyword.return_value = ([MOCK_PAPER_KEY_1], 1)
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -239,16 +255,16 @@ async def test_perform_hybrid_search_embedding_fails(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=1, page_size=10, filters=filters
     )
 
     # --- 断言依赖调用 ---
-    mock_embedder.embed.assert_called_once() # 嵌入被尝试
-    mock_faiss_paper_repo.search_similar.assert_not_called() # Faiss 搜索因嵌入失败未执行
-    mock_pg_repo.search_papers_by_keyword.assert_awaited_once() # 关键字搜索执行
+    mock_embedder.embed.assert_called_once()  # 嵌入被尝试
+    mock_faiss_paper_repo.search_similar.assert_not_called()  # Faiss 搜索因嵌入失败未执行
+    mock_pg_repo.search_papers_by_keyword.assert_awaited_once()  # 关键字搜索执行
 
     # --- 断言返回结果 ---
     # 结果应只包含关键字搜索的部分
@@ -260,9 +276,9 @@ async def test_perform_hybrid_search_embedding_fails(
 
 
 async def test_perform_hybrid_search_one_fails(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
 ) -> None:
     """
     测试场景：混合搜索时，关键字搜索失败，但语义搜索成功。
@@ -274,7 +290,7 @@ async def test_perform_hybrid_search_one_fails(
     target = cast(SearchTarget, "papers")
 
     # --- 模拟语义搜索成功 ---
-    mock_faiss_return = [(1, 0.1)] # 语义找到 paper 1
+    mock_faiss_return = [(1, 0.1)]  # 语义找到 paper 1
     mock_faiss_paper_repo.search_similar.return_value = mock_faiss_return
     # PG 的 get_papers_details_by_ids 会被调用获取 paper 1 的详情
 
@@ -282,7 +298,7 @@ async def test_perform_hybrid_search_one_fails(
     mock_pg_repo.search_papers_by_keyword.side_effect = Exception("Keyword DB Error")
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -292,17 +308,19 @@ async def test_perform_hybrid_search_one_fails(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=1, page_size=10, filters=filters
     )
 
     # --- 断言依赖调用 ---
-    mock_faiss_paper_repo.search_similar.assert_called_once() # 语义搜索执行
-    mock_pg_repo.search_papers_by_keyword.assert_awaited_once() # 关键字搜索被尝试
+    mock_faiss_paper_repo.search_similar.assert_called_once()  # 语义搜索执行
+    mock_pg_repo.search_papers_by_keyword.assert_awaited_once()  # 关键字搜索被尝试
     # 获取语义结果 ID 1 的详情应被调用
-    mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with([1], scores={1: pytest.approx(0.1)}) # 传递了ID和分数
+    mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with(
+        [1], scores={1: pytest.approx(0.1)}
+    )  # 传递了ID和分数
 
     # --- 断言返回结果 ---
     # 结果应只包含语义搜索的部分
@@ -310,14 +328,14 @@ async def test_perform_hybrid_search_one_fails(
     assert results.total == 1
     assert len(results.items) == 1
     assert results.items[0].paper_id == 1
-    assert results.items[0].score is not None # 语义结果应有分数
+    assert results.items[0].score is not None  # 语义结果应有分数
 
 
 async def test_perform_hybrid_search_both_fail(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock, 
-    mock_embedder: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
+    mock_embedder: MagicMock,
 ) -> None:
     """
     测试场景：混合搜索时，语义搜索和关键字搜索都失败。
@@ -335,7 +353,7 @@ async def test_perform_hybrid_search_both_fail(
     mock_pg_repo.search_papers_by_keyword.side_effect = Exception("Keyword DB Error")
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -345,16 +363,16 @@ async def test_perform_hybrid_search_both_fail(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=1, page_size=10, filters=filters
     )
 
     # --- 断言依赖调用 ---
-    mock_embedder.embed.assert_called_once() # 嵌入被尝试
-    mock_faiss_paper_repo.search_similar.assert_called_once() # Faiss 被尝试
-    mock_pg_repo.search_papers_by_keyword.assert_awaited_once() # 关键字搜索被尝试
+    mock_embedder.embed.assert_called_once()  # 嵌入被尝试
+    mock_faiss_paper_repo.search_similar.assert_called_once()  # Faiss 被尝试
+    mock_pg_repo.search_papers_by_keyword.assert_awaited_once()  # 关键字搜索被尝试
     # 因为两种搜索都失败，没有有效的 ID，所以不应调用获取详情的方法
     mock_pg_repo.get_papers_details_by_ids.assert_not_awaited()
 
@@ -365,9 +383,9 @@ async def test_perform_hybrid_search_both_fail(
 
 
 async def test_perform_hybrid_search_semantic_empty(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
 ) -> None:
     """
     测试场景：混合搜索时，语义搜索成功但返回空结果，关键字搜索成功。
@@ -387,7 +405,7 @@ async def test_perform_hybrid_search_semantic_empty(
     mock_pg_repo.search_papers_by_keyword.return_value = ([MOCK_PAPER_KEY_1], 1)
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -397,18 +415,19 @@ async def test_perform_hybrid_search_semantic_empty(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=1, page_size=10, filters=filters
     )
 
     # --- 断言依赖调用 ---
-    mock_faiss_paper_repo.search_similar.assert_called_once() # 语义搜索被调用
-    mock_pg_repo.search_papers_by_keyword.assert_awaited_once() # 关键字搜索被调用
+    mock_faiss_paper_repo.search_similar.assert_called_once()  # 语义搜索被调用
+    mock_pg_repo.search_papers_by_keyword.assert_awaited_once()  # 关键字搜索被调用
     # 应该调用了 get_papers_details_by_ids，但只包含关键字搜索的 ID
-    mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with([101], scores={}) # 确保调用，scores为空
-
+    mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with(
+        [101], scores={}
+    )  # 确保调用，scores为空
 
     # --- 断言返回结果 ---
     assert isinstance(results, PaginatedPaperSearchResult)
@@ -418,9 +437,9 @@ async def test_perform_hybrid_search_semantic_empty(
 
 
 async def test_perform_hybrid_search_keyword_empty(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
 ) -> None:
     """
     测试场景：混合搜索时，关键字搜索成功但返回空结果，语义搜索成功。
@@ -432,16 +451,16 @@ async def test_perform_hybrid_search_keyword_empty(
     target = cast(SearchTarget, "papers")
 
     # --- 模拟语义搜索成功 ---
-    mock_faiss_return = [(1, 0.1)] # 语义找到 paper 1
+    mock_faiss_return = [(1, 0.1)]  # 语义找到 paper 1
     mock_faiss_paper_repo.search_similar.return_value = mock_faiss_return
     # PG get_papers_details_by_ids 会被调用
 
     # --- 模拟关键字搜索为空 ---
     mock_pg_repo.search_papers_by_keyword.side_effect = None
-    mock_pg_repo.search_papers_by_keyword.return_value = ([], 0) # 返回空列表和 0
+    mock_pg_repo.search_papers_by_keyword.return_value = ([], 0)  # 返回空列表和 0
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -451,30 +470,32 @@ async def test_perform_hybrid_search_keyword_empty(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=1, page_size=10, filters=filters
     )
 
     # --- 断言依赖调用 ---
-    mock_faiss_paper_repo.search_similar.assert_called_once() # 语义搜索被调用
-    mock_pg_repo.search_papers_by_keyword.assert_awaited_once() # 关键字搜索被调用
+    mock_faiss_paper_repo.search_similar.assert_called_once()  # 语义搜索被调用
+    mock_pg_repo.search_papers_by_keyword.assert_awaited_once()  # 关键字搜索被调用
     # 只应获取语义结果 ID 1 的详情
-    mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with([1], scores={1: pytest.approx(0.1)}) # 传递了ID和分数
+    mock_pg_repo.get_papers_details_by_ids.assert_awaited_once_with(
+        [1], scores={1: pytest.approx(0.1)}
+    )  # 传递了ID和分数
 
     # --- 断言返回结果 ---
     assert isinstance(results, PaginatedPaperSearchResult)
     assert results.total == 1
     assert len(results.items) == 1
     assert results.items[0].paper_id == 1
-    assert results.items[0].score is not None # 语义结果有分数
+    assert results.items[0].score is not None  # 语义结果有分数
 
 
 async def test_perform_hybrid_search_both_empty(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
 ) -> None:
     """
     测试场景：混合搜索时，语义搜索和关键字搜索都成功执行但都返回空结果。
@@ -490,7 +511,7 @@ async def test_perform_hybrid_search_both_empty(
     mock_pg_repo.search_papers_by_keyword.return_value = ([], 0)
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -500,15 +521,15 @@ async def test_perform_hybrid_search_both_empty(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=1, page_size=10, filters=filters
     )
 
     # --- 断言依赖调用 ---
-    mock_faiss_paper_repo.search_similar.assert_called_once() # 语义搜索被调用
-    mock_pg_repo.search_papers_by_keyword.assert_awaited_once() # 关键字搜索被调用
+    mock_faiss_paper_repo.search_similar.assert_called_once()  # 语义搜索被调用
+    mock_pg_repo.search_papers_by_keyword.assert_awaited_once()  # 关键字搜索被调用
     # 因为没有 ID，不应调用获取详情的方法
     mock_pg_repo.get_papers_details_by_ids.assert_not_awaited()
 
@@ -519,9 +540,9 @@ async def test_perform_hybrid_search_both_empty(
 
 
 async def test_perform_hybrid_search_pagination_after_fusion(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
 ) -> None:
     """
     测试场景：验证混合搜索的分页是在结果融合之后应用的。
@@ -541,15 +562,15 @@ async def test_perform_hybrid_search_pagination_after_fusion(
     mock_faiss_paper_repo.search_similar.return_value = [(1, 0.1), (2, 0.2), (3, 0.3)]
     # 关键字: 返回 ID 3, 4, 5 (ID 3 重叠)
     keyword_papers = [
-        mock_pg_repo.paper_details_map.get(3, {}), # 获取 paper 3 详情
-        mock_pg_repo.paper_details_map.get(4, {}), # 获取 paper 4 详情
-        mock_pg_repo.paper_details_map.get(5, {}), # 获取 paper 5 详情
+        mock_pg_repo.paper_details_map.get(3, {}),  # 获取 paper 3 详情
+        mock_pg_repo.paper_details_map.get(4, {}),  # 获取 paper 4 详情
+        mock_pg_repo.paper_details_map.get(5, {}),  # 获取 paper 5 详情
     ]
     mock_pg_repo.search_papers_by_keyword.side_effect = None
     mock_pg_repo.search_papers_by_keyword.return_value = (keyword_papers, 3)
 
     # --- 调用混合搜索 ---
-    filters = SearchFilterModel( # 空过滤器，显式设置 None
+    filters = SearchFilterModel(  # 空过滤器，显式设置 None
         published_after=None,
         published_before=None,
         filter_area=None,
@@ -559,7 +580,7 @@ async def test_perform_hybrid_search_pagination_after_fusion(
         filter_tags=None,
         filter_author=None,
         sort_by=None,
-        sort_order=None
+        sort_order=None,
     )
     results = await search_service.perform_hybrid_search(
         query=query, target=target, page=page, page_size=page_size, filters=filters
@@ -569,8 +590,8 @@ async def test_perform_hybrid_search_pagination_after_fusion(
     assert isinstance(results, PaginatedPaperSearchResult)
     # 融合后的唯一 ID 集合是 {1, 2, 3, 4, 5}，总数为 5
     assert results.total == 5
-    assert len(results.items) == page_size # 返回项数应为 page_size (2)
-    assert results.skip == (page - 1) * page_size # skip 值应为 (2-1)*2 = 2
+    assert len(results.items) == page_size  # 返回项数应为 page_size (2)
+    assert results.skip == (page - 1) * page_size  # skip 值应为 (2-1)*2 = 2
     assert results.limit == page_size
 
     # --- 断言返回项内容 (不依赖具体排序) ---
@@ -582,13 +603,13 @@ async def test_perform_hybrid_search_pagination_after_fusion(
     # 获取详情时应请求所有可能的 ID (语义 + 关键字)
     mock_pg_repo.get_papers_details_by_ids.assert_awaited_once()
     call_args_list = mock_pg_repo.get_papers_details_by_ids.await_args[0][0]
-    assert set(call_args_list) == {1, 2, 3, 4, 5} # 请求了融合前的所有 ID
+    assert set(call_args_list) == {1, 2, 3, 4, 5}  # 请求了融合前的所有 ID
 
 
 async def test_perform_hybrid_search_filters_after_fusion(
-    search_service: SearchService, 
-    mock_faiss_paper_repo: MagicMock, 
-    mock_pg_repo: MagicMock
+    search_service: SearchService,
+    mock_faiss_paper_repo: MagicMock,
+    mock_pg_repo: MagicMock,
 ) -> None:
     """
     测试场景：验证混合搜索的过滤器是在结果融合之后应用的。
@@ -601,9 +622,9 @@ async def test_perform_hybrid_search_filters_after_fusion(
     target = cast(SearchTarget, "papers")
     # --- 定义过滤器 ---
     filters = SearchFilterModel(
-        published_after=date(2023, 1, 10), # 日期在此之后
-        filter_area=["CV"], # 领域是 CV (修正为列表)
-        sort_by="score", # 按分数排序 (融合后的)
+        published_after=date(2023, 1, 10),  # 日期在此之后
+        filter_area=["CV"],  # 领域是 CV (修正为列表)
+        sort_by="score",  # 按分数排序 (融合后的)
         sort_order="desc",
         # 显式设置其他过滤器为 None
         published_before=None,
@@ -627,9 +648,14 @@ async def test_perform_hybrid_search_filters_after_fusion(
     # Paper 3 (来自 conftest): area=CV, 但日期 2023-1-5, 不满足过滤器
     # 添加 paper 102: 满足日期和领域过滤器
     mock_pg_repo.paper_details_map[102] = {
-        "paper_id": 102, "pwc_id": "pwc_102", "title": "Filter Test Paper 102",
-        "summary": "Matches filters", "published_date": date(2023, 3, 1),
-        "area": "CV", "authors": ["Author 102"], "pdf_url": "https://example.com/102.pdf",
+        "paper_id": 102,
+        "pwc_id": "pwc_102",
+        "title": "Filter Test Paper 102",
+        "summary": "Matches filters",
+        "published_date": date(2023, 3, 1),
+        "area": "CV",
+        "authors": ["Author 102"],
+        "pdf_url": "https://example.com/102.pdf",
     }
 
     # --- 模拟关键字搜索结果 ---
@@ -641,24 +667,24 @@ async def test_perform_hybrid_search_filters_after_fusion(
             mock_pg_repo.paper_details_map[102],
             mock_pg_repo.paper_details_map[2],
         ],
-        3, # 总数 3
+        3,  # 总数 3
     )
 
     # --- 调用带过滤器的混合搜索 ---
     results = await search_service.perform_hybrid_search(
         query=query,
         target=target,
-        filters=filters, # 传入过滤器对象
-        page=1, # 添加默认分页参数
-        page_size=10
+        filters=filters,  # 传入过滤器对象
+        page=1,  # 添加默认分页参数
+        page_size=10,
     )
 
     # --- 断言结果 ---
     assert isinstance(results, PaginatedPaperSearchResult)
     # 融合前的 ID 集合: {1, 2, 3} U {1, 102, 2} = {1, 2, 3, 102}
     # 满足过滤器的 ID: {1, 102}
-    assert results.total == 2 # 总数应为满足过滤条件的数量
-    assert len(results.items) == 2 # 返回项数也是 2
+    assert results.total == 2  # 总数应为满足过滤条件的数量
+    assert len(results.items) == 2  # 返回项数也是 2
 
     # 验证返回的 ID 是否正确
     result_ids = {item.paper_id for item in results.items}
@@ -671,5 +697,6 @@ async def test_perform_hybrid_search_filters_after_fusion(
     for item in results.items:
         assert item.area == "CV"
         assert item.published_date and item.published_date >= date(2023, 1, 10)
+
 
 # 文件末尾确保没有多余字符或语法错误

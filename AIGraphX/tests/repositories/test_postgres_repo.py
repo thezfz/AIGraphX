@@ -32,6 +32,7 @@
 - 导入数据模型 `aigraphx.models.paper.Paper` 用于创建测试数据。
 - **关键依赖:** `tests/conftest.py` 提供的 `db_pool` 和 `repository` fixtures。
 """
+
 import pytest
 import pytest_asyncio  # 导入 pytest-asyncio 用于异步 fixture 支持
 import os  # 导入 os 模块 (在此文件中似乎未使用)
@@ -39,13 +40,19 @@ import json  # 导入 json 模块 (在此文件中似乎未使用)
 import datetime  # 导入 datetime 模块，但未使用其成员，下面导入了 date
 import asyncio  # 导入 asyncio 库，用于异步操作，如此处的 anext
 from typing import AsyncGenerator, Dict, Any, Optional, List, cast  # 导入类型提示工具
-from pydantic import HttpUrl  # 从 pydantic 导入 HttpUrl 类型，用于 Paper 模型中的 URL 字段
+from pydantic import (
+    HttpUrl,
+)  # 从 pydantic 导入 HttpUrl 类型，用于 Paper 模型中的 URL 字段
 from psycopg_pool import AsyncConnectionPool  # 导入异步连接池类，由 fixture 提供
 from psycopg.rows import dict_row  # 导入 psycopg 的行工厂，用于将查询结果转为字典
-from dotenv import load_dotenv  # 导入用于加载 .env 文件的函数 (在此测试文件中未使用，由 conftest 处理)
+from dotenv import (
+    load_dotenv,
+)  # 导入用于加载 .env 文件的函数 (在此测试文件中未使用，由 conftest 处理)
 import logging  # 导入日志库
 from unittest.mock import AsyncMock, MagicMock, patch  # 导入模拟工具
-from datetime import date as date_type  # 从 datetime 模块导入 date 类，并重命名为 date_type 以免与变量名冲突
+from datetime import (
+    date as date_type,
+)  # 从 datetime 模块导入 date 类，并重命名为 date_type 以免与变量名冲突
 import unittest  # 导入 unittest 库 (在此文件中似乎未使用)
 import numpy as np  # 导入 numpy (在此文件中似乎未使用)
 from psycopg.connection_async import AsyncConnection  # 导入异步连接类型 (未使用)
@@ -225,13 +232,17 @@ async def test_get_papers_details_by_ids(repository: PostgresRepository) -> None
     # 验证返回的字典内容是否与插入的数据一致
     assert results_map[id1]["pwc_id"] == test_paper_data_1["pwc_id"]
     assert results_map[id1]["title"] == test_paper_data_1["title"]
-    assert results_map[id1]["authors"] == test_paper_data_1["authors"]  # 列表类型也应匹配
+    assert (
+        results_map[id1]["authors"] == test_paper_data_1["authors"]
+    )  # 列表类型也应匹配
 
     assert results_map[id2]["pwc_id"] == test_paper_data_2["pwc_id"]
     assert results_map[id2]["summary"] == test_paper_data_2["summary"]  # 验证 None 值
 
     # --- 4. 测试获取混合存在与不存在的 ID ---
-    results_mixed = await repository.get_papers_details_by_ids([id1, 99999])  # 99999 是一个不存在的 ID
+    results_mixed = await repository.get_papers_details_by_ids(
+        [id1, 99999]
+    )  # 99999 是一个不存在的 ID
     assert len(results_mixed) == 1  # 只应返回存在的 ID 对应的数据
     assert results_mixed[0]["paper_id"] == id1
 
@@ -305,7 +316,9 @@ async def test_search_papers_by_keyword_no_filters(
     """
     # --- 1. 准备数据 ---
     # 插入四篇测试论文
-    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1)) # 使用 ** 解包字典 (需要 cast)
+    paper1 = Paper(
+        **cast(Dict[str, Any], test_paper_data_1)
+    )  # 使用 ** 解包字典 (需要 cast)
     paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2))
     paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3))
     paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4))
@@ -347,10 +360,10 @@ async def test_search_papers_by_keyword_with_limit_skip(
           来验证返回的子集是否正确。
     """
     # --- 1. 准备数据 ---
-    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1)) # 2024-01-01
-    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2)) # 2024-02-15
-    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3)) # 2023-12-25
-    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4)) # 2022-05-10
+    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1))  # 2024-01-01
+    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2))  # 2024-02-15
+    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3))  # 2023-12-25
+    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4))  # 2022-05-10
     id1 = await repository.upsert_paper(paper1)
     id2 = await repository.upsert_paper(paper2)
     id3 = await repository.upsert_paper(paper3)
@@ -369,9 +382,9 @@ async def test_search_papers_by_keyword_with_limit_skip(
     results_list, total_count = await repository.search_papers_by_keyword(
         query=query,
         skip=2,  # 跳过前 2 条记录 (id2, id1)
-        limit=2, # 获取接下来的 2 条记录
-        sort_by="published_date", # 显式指定排序以确保一致性
-        sort_order="desc"
+        limit=2,  # 获取接下来的 2 条记录
+        sort_by="published_date",  # 显式指定排序以确保一致性
+        sort_order="desc",
     )
 
     # --- 4. 验证结果 ---
@@ -394,10 +407,10 @@ async def test_search_papers_by_keyword_with_filters(
           同时满足所有条件的论文。
     """
     # --- 1. 准备数据 ---
-    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1)) # CV, 2024-01-01
-    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2)) # NLP, 2024-02-15
-    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3)) # CV, 2023-12-25
-    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4)) # NLP, 2022-05-10
+    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1))  # CV, 2024-01-01
+    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2))  # NLP, 2024-02-15
+    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3))  # CV, 2023-12-25
+    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4))  # NLP, 2022-05-10
     id1 = await repository.upsert_paper(paper1)
     id2 = await repository.upsert_paper(paper2)
     id3 = await repository.upsert_paper(paper3)
@@ -415,7 +428,7 @@ async def test_search_papers_by_keyword_with_filters(
         query=query,
         published_after=date_from,
         published_before=date_to,
-        filter_area=area, # 传入 area 列表
+        filter_area=area,  # 传入 area 列表
     )
 
     # --- 4. 验证结果 ---
@@ -436,16 +449,16 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
     """
     # --- 1. 准备数据 ---
     # 插入 4 篇标准测试论文
-    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1)) # 有摘要
-    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2)) # 无摘要，有标题
-    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3)) # 有摘要
-    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4)) # 有摘要
+    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1))  # 有摘要
+    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2))  # 无摘要，有标题
+    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3))  # 有摘要
+    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4))  # 有摘要
     # 再插入一篇只有标题没有摘要的论文
     paper_no_summary_title = Paper(
         pwc_id="test-paper-5",
         arxiv_id_base="2403.00005",
-        title="Paper Without Summary", # 有标题
-        summary=None, # 摘要为 None
+        title="Paper Without Summary",  # 有标题
+        summary=None,  # 摘要为 None
         pdf_url=None,
         published_date=date_type(2024, 3, 1),
         authors=["Author G"],
@@ -461,7 +474,7 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
     id3 = await repository.upsert_paper(paper3)
     id4 = await repository.upsert_paper(paper4)
     id5 = await repository.upsert_paper(paper_no_summary_title)
-    assert all([id1, id2, id3, id4, id5]) # 确保所有插入都成功
+    assert all([id1, id2, id3, id4, id5])  # 确保所有插入都成功
 
     # --- 2. (可选) 添加诊断日志，检查插入后的数据库状态 ---
     async with repository.pool.connection() as conn:
@@ -475,16 +488,16 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
     # --- 3. 迭代生成器并收集结果 ---
     results = {}  # 用于存储 ID -> 文本内容的字典
     logger.info("[test_get_all_paper_ids_and_text] Starting manual iteration...")
-    generator = repository.get_all_paper_ids_and_text() # 获取异步生成器
+    generator = repository.get_all_paper_ids_and_text()  # 获取异步生成器
     items_yielded = 0
     try:
         # 使用 anext() 手动迭代异步生成器 (需要 import asyncio)
         while True:
             paper_id, text_content = await anext(generator)
             logger.info(
-                f"[test_get_all_paper_ids_and_text] Yielded: ID={paper_id}, Text='{text_content[:50]}...'" # 记录日志
+                f"[test_get_all_paper_ids_and_text] Yielded: ID={paper_id}, Text='{text_content[:50]}...'"  # 记录日志
             )
-            results[paper_id] = text_content # 存储结果
+            results[paper_id] = text_content  # 存储结果
             items_yielded += 1
     except StopAsyncIteration:
         # 生成器迭代完成时会抛出 StopAsyncIteration 异常
@@ -502,17 +515,17 @@ async def test_get_all_paper_ids_and_text(repository: PostgresRepository) -> Non
     )
 
     # --- 4. 验证结果 ---
-    assert len(results) == 5 # 应返回 5 篇论文
+    assert len(results) == 5  # 应返回 5 篇论文
 
     # 验证文本内容是否符合预期（优先摘要，其次标题）
-    assert id1 is not None # 确保 id 不是 None
-    assert results[id1] == test_paper_data_1["summary"] # paper1 有摘要
+    assert id1 is not None  # 确保 id 不是 None
+    assert results[id1] == test_paper_data_1["summary"]  # paper1 有摘要
     assert id2 is not None
     assert results[id2] == test_paper_data_2["title"]  # paper2 无摘要，回退到标题
     assert id3 is not None
-    assert results[id3] == test_paper_data_3["summary"] # paper3 有摘要
+    assert results[id3] == test_paper_data_3["summary"]  # paper3 有摘要
     assert id4 is not None
-    assert results[id4] == test_paper_data_4["summary"] # paper4 有摘要
+    assert results[id4] == test_paper_data_4["summary"]  # paper4 有摘要
     assert id5 is not None
     assert results[id5] == paper_no_summary_title.title  # paper5 无摘要，回退到标题
 
@@ -538,7 +551,8 @@ async def setup_simple_data(repository: PostgresRepository) -> None:
 
 
 async def test_fetch_data_cursor(
-    repository: PostgresRepository, setup_simple_data: Any # 使用 setup_simple_data 插入数据
+    repository: PostgresRepository,
+    setup_simple_data: Any,  # 使用 setup_simple_data 插入数据
 ) -> None:
     """
     测试场景：使用异步生成器 `fetch_data_cursor` 分批获取查询结果。
@@ -557,26 +571,26 @@ async def test_fetch_data_cursor(
             )
 
     # --- 2. 测试 batch_size = 1 ---
-    query = "SELECT paper_id, pwc_id, title FROM papers ORDER BY paper_id" # 定义查询
+    query = "SELECT paper_id, pwc_id, title FROM papers ORDER BY paper_id"  # 定义查询
     batch_size = 1  # 每次获取 1 行
     count = 0
-    ids_seen = set() # 用于记录已获取的 ID，检查重复
+    ids_seen = set()  # 用于记录已获取的 ID，检查重复
 
     logger.info(
         "[test_fetch_data_cursor] Starting manual iteration 1 (batch_size=1)..."
     )
-    generator_b1 = repository.fetch_data_cursor(query, (), batch_size) # 获取生成器
+    generator_b1 = repository.fetch_data_cursor(query, (), batch_size)  # 获取生成器
     items_yielded_b1 = 0
     try:
         # 手动迭代生成器
         while True:
             row = await anext(generator_b1)
             logger.info(f"[test_fetch_data_cursor] Yielded (b1): {row}")
-            assert isinstance(row, dict) # 每行应为字典
-            assert "paper_id" in row # 检查关键字段是否存在
+            assert isinstance(row, dict)  # 每行应为字典
+            assert "paper_id" in row  # 检查关键字段是否存在
             assert "pwc_id" in row
             assert "title" in row
-            assert row["paper_id"] not in ids_seen # 确保 ID 未重复
+            assert row["paper_id"] not in ids_seen  # 确保 ID 未重复
             ids_seen.add(row["paper_id"])
             count += 1
             items_yielded_b1 += 1
@@ -628,10 +642,12 @@ async def test_fetch_data_cursor(
     logger.info(
         f"[test_fetch_data_cursor] Manual iteration 2 finished. Items yielded: {items_yielded_b5}"
     )
-    assert count_b2 == 2 # 仍然只应获取 2 条记录
+    assert count_b2 == 2  # 仍然只应获取 2 条记录
 
     # --- 4. 测试查询无结果的情况 ---
-    query_empty = "SELECT paper_id FROM papers WHERE pwc_id = %s" # 查询一个不存在的 pwc_id
+    query_empty = (
+        "SELECT paper_id FROM papers WHERE pwc_id = %s"  # 查询一个不存在的 pwc_id
+    )
     count_empty = 0
     logger.info(
         "[test_fetch_data_cursor] Starting manual iteration 3 (empty result)..."
@@ -640,10 +656,10 @@ async def test_fetch_data_cursor(
     items_yielded_empty = 0
     try:
         while True:
-            _ = await anext(generator_empty) # 尝试获取下一项
+            _ = await anext(generator_empty)  # 尝试获取下一项
             logger.info(
                 "[test_fetch_data_cursor] Yielded (empty): Unexpected item!"
-            ) # 如果执行到这里，说明有问题
+            )  # 如果执行到这里，说明有问题
             count_empty += 1
             items_yielded_empty += 1
     except StopAsyncIteration:
@@ -659,7 +675,7 @@ async def test_fetch_data_cursor(
     logger.info(
         f"[test_fetch_data_cursor] Manual iteration 3 finished. Items yielded: {items_yielded_empty}"
     )
-    assert count_empty == 0 # 确认没有获取到任何项
+    assert count_empty == 0  # 确认没有获取到任何项
 
 
 async def test_search_papers_by_keyword_sort_by_date(
@@ -671,10 +687,10 @@ async def test_search_papers_by_keyword_sort_by_date(
           验证返回结果的顺序是否正确。
     """
     # --- 1. 准备数据 ---
-    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1)) # 2024-01-01
-    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2)) # 2024-02-15
-    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3)) # 2023-12-25
-    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4)) # 2022-05-10
+    paper1 = Paper(**cast(Dict[str, Any], test_paper_data_1))  # 2024-01-01
+    paper2 = Paper(**cast(Dict[str, Any], test_paper_data_2))  # 2024-02-15
+    paper3 = Paper(**cast(Dict[str, Any], test_paper_data_3))  # 2023-12-25
+    paper4 = Paper(**cast(Dict[str, Any], test_paper_data_4))  # 2022-05-10
     id1 = await repository.upsert_paper(paper1)
     id2 = await repository.upsert_paper(paper2)
     id3 = await repository.upsert_paper(paper3)
@@ -685,7 +701,9 @@ async def test_search_papers_by_keyword_sort_by_date(
 
     # --- 2. 按日期降序测试 ---
     results_list_desc, total_count_desc = await repository.search_papers_by_keyword(
-        query=query, sort_by="published_date", sort_order="desc" # 指定降序
+        query=query,
+        sort_by="published_date",
+        sort_order="desc",  # 指定降序
     )
     returned_ids_desc = [item["paper_id"] for item in results_list_desc]
     assert total_count_desc == 4
@@ -694,7 +712,9 @@ async def test_search_papers_by_keyword_sort_by_date(
 
     # --- 3. 按日期升序测试 ---
     results_list_asc, total_count_asc = await repository.search_papers_by_keyword(
-        query=query, sort_by="published_date", sort_order="asc" # 指定升序
+        query=query,
+        sort_by="published_date",
+        sort_order="asc",  # 指定升序
     )
     returned_ids_asc = [item["paper_id"] for item in results_list_asc]
     assert total_count_asc == 4
@@ -725,7 +745,9 @@ async def test_get_paper_details_by_id_integration(
     assert details["authors"] == test_paper_data_1["authors"]
 
     # --- 3. 使用不存在的 ID 查询 ---
-    details_none = await repository.get_paper_details_by_id(999999) # 一个极不可能存在的 ID
+    details_none = await repository.get_paper_details_by_id(
+        999999
+    )  # 一个极不可能存在的 ID
     assert details_none is None
 
 
@@ -742,11 +764,13 @@ async def test_upsert_paper_update(repository: PostgresRepository) -> None:
     assert id_initial is not None
 
     # --- 2. 创建更新后的数据 (pwc_id 保持不变) ---
-    updated_data = test_paper_data_1.copy() # 复制初始数据
-    updated_data["title"] = "Updated Test Paper One Title" # 修改标题
-    updated_data["summary"] = "Updated summary." # 修改摘要
-    updated_data["authors"] = ["Author A", "Author B", "Author C"] # 修改作者列表
-    paper_updated = Paper(**cast(Dict[str, Any], updated_data)) # 创建更新后的 Paper 对象
+    updated_data = test_paper_data_1.copy()  # 复制初始数据
+    updated_data["title"] = "Updated Test Paper One Title"  # 修改标题
+    updated_data["summary"] = "Updated summary."  # 修改摘要
+    updated_data["authors"] = ["Author A", "Author B", "Author C"]  # 修改作者列表
+    paper_updated = Paper(
+        **cast(Dict[str, Any], updated_data)
+    )  # 创建更新后的 Paper 对象
 
     # --- 3. 再次调用 upsert ---
     id_updated = await repository.upsert_paper(paper_updated)
@@ -754,7 +778,9 @@ async def test_upsert_paper_update(repository: PostgresRepository) -> None:
     assert id_updated == id_initial
 
     # --- 4. 获取详情并验证更新 ---
-    details = await repository.get_paper_details_by_id(id_initial) # 使用初始 ID 获取详情
+    details = await repository.get_paper_details_by_id(
+        id_initial
+    )  # 使用初始 ID 获取详情
     assert details is not None
     # 验证字段是否已更新
     assert details["title"] == "Updated Test Paper One Title"
@@ -803,7 +829,7 @@ async def test_get_all_papers_for_sync_with_data(
     paper1 = Paper(
         pwc_id="test-sync-1",
         title="Paper With Summary",
-        summary="This is a summary for syncing.", # 有效摘要
+        summary="This is a summary for syncing.",  # 有效摘要
         authors=["Author X"],
     )
     paper2 = Paper(
@@ -815,13 +841,13 @@ async def test_get_all_papers_for_sync_with_data(
     paper3 = Paper(
         pwc_id="test-sync-3",
         title="Paper With Summary 2",
-        summary="Another summary for testing sync.", # 有效摘要
+        summary="Another summary for testing sync.",  # 有效摘要
         authors=["Author Z"],
     )
-    paper4_null = Paper( # 添加摘要为 None 的情况
+    paper4_null = Paper(  # 添加摘要为 None 的情况
         pwc_id="test-sync-4",
         title="Paper With Null Summary",
-        summary=None, # None 摘要，也应被排除
+        summary=None,  # None 摘要，也应被排除
         authors=["Author W"],
     )
 
@@ -847,8 +873,8 @@ async def test_get_all_papers_for_sync_with_data(
     paper_ids = {result["paper_id"] for result in results}
     assert id1 in paper_ids
     assert id3 in paper_ids
-    assert id2 not in paper_ids # 不应包含 id2
-    assert id4 not in paper_ids # 不应包含 id4
+    assert id2 not in paper_ids  # 不应包含 id2
+    assert id4 not in paper_ids  # 不应包含 id4
 
 
 async def test_count_papers_empty_db(repository: PostgresRepository) -> None:
@@ -894,7 +920,7 @@ async def test_count_papers_with_data(repository: PostgresRepository) -> None:
     count = await repository.count_papers()
 
     # --- 4. 验证结果 ---
-    assert count == 2 # 插入了 2 条记录
+    assert count == 2  # 插入了 2 条记录
 
 
 async def test_search_papers_by_keyword_empty_result(
@@ -916,13 +942,13 @@ async def test_search_papers_by_keyword_empty_result(
 
     # --- 2. 使用不存在的关键词搜索 ---
     results, count = await repository.search_papers_by_keyword(
-        "NonExistentKeywordXYZ123" # 一个极不可能存在的关键词
+        "NonExistentKeywordXYZ123"  # 一个极不可能存在的关键词
     )
 
     # --- 3. 验证结果 ---
     assert isinstance(results, list)
-    assert len(results) == 0 # 结果列表应为空
-    assert count == 0 # 总数应为 0
+    assert len(results) == 0  # 结果列表应为空
+    assert count == 0  # 总数应为 0
 
 
 async def test_search_papers_by_keyword_invalid_sort(
@@ -949,13 +975,13 @@ async def test_search_papers_by_keyword_invalid_sort(
     # --- 2. 使用无效排序字段搜索 ---
     # 使用 type: ignore 来抑制类型检查器关于 "invalid_column" 不是有效字面量的警告
     results, count = await repository.search_papers_by_keyword(
-        "Test", # 假设 "Test" 匹配插入的数据
-        sort_by="invalid_column", # type: ignore[arg-type] # 无效的列名
+        "Test",  # 假设 "Test" 匹配插入的数据
+        sort_by="invalid_column",  # type: ignore[arg-type] # 无效的列名
     )
 
     # --- 3. 验证结果 ---
     assert isinstance(results, list)
-    assert count > 0 # 应该找到匹配项
+    assert count > 0  # 应该找到匹配项
     # 结果列表不应为空，即使排序字段无效（应回退到默认排序）
     assert len(results) > 0
 
@@ -996,7 +1022,7 @@ async def test_upsert_paper_insert(repository: PostgresRepository) -> None:
     """
     # --- 1. 准备新数据 ---
     paper_new = Paper(
-        pwc_id="upsert-insert-new", # 一个新的 pwc_id
+        pwc_id="upsert-insert-new",  # 一个新的 pwc_id
         title="Upsert Insert Test",
         arxiv_id_versioned="2404.00001v1",
         arxiv_id_base="2404.00001",
@@ -1005,15 +1031,15 @@ async def test_upsert_paper_insert(repository: PostgresRepository) -> None:
         authors=["Insert Author"],
         published_date=date_type(2024, 4, 1),
         categories=["cs.AI"],
-        area="AI"
+        area="AI",
     )
 
     # --- 2. 调用 upsert ---
     result_id = await repository.upsert_paper(paper_new)
 
     # --- 3. 验证返回的 ID ---
-    assert isinstance(result_id, int) # 返回的应是整数类型的 paper_id
-    assert result_id > 0 # ID 应该是正数
+    assert isinstance(result_id, int)  # 返回的应是整数类型的 paper_id
+    assert result_id > 0  # ID 应该是正数
 
     # --- 4. 获取详情并验证插入的数据 ---
     details = await repository.get_paper_details_by_id(result_id)
@@ -1058,11 +1084,11 @@ async def test_fetch_one_success(repository: PostgresRepository) -> None:
 
     # --- 2. 调用 fetch_one ---
     query = "SELECT title, pwc_id FROM papers WHERE paper_id = %s"
-    result = await repository.fetch_one(query, (paper_id,)) # 使用元组传递参数
+    result = await repository.fetch_one(query, (paper_id,))  # 使用元组传递参数
 
     # --- 3. 验证结果 ---
-    assert result is not None # 应找到记录
-    assert isinstance(result, dict) # 返回结果应为字典
+    assert result is not None  # 应找到记录
+    assert isinstance(result, dict)  # 返回结果应为字典
     assert result["pwc_id"] == test_paper_data_1["pwc_id"]
     assert result["title"] == test_paper_data_1["title"]
 
@@ -1074,7 +1100,7 @@ async def test_fetch_one_not_found(repository: PostgresRepository) -> None:
     策略：构造 SQL 查询查询一个不存在的 ID，调用 `fetch_one`，断言结果为 None。
     """
     query = "SELECT title FROM papers WHERE paper_id = %s"
-    result = await repository.fetch_one(query, (99999,)) # 查询不存在的 ID
+    result = await repository.fetch_one(query, (99999,))  # 查询不存在的 ID
     assert result is None
 
 
@@ -1082,6 +1108,7 @@ async def test_fetch_one_not_found(repository: PostgresRepository) -> None:
 # 这些测试目前只验证了传入空 ID 列表的情况。需要补充测试用例来验证
 # 在关联表 (pwc_tasks, pwc_datasets, pwc_repositories) 中有数据时，
 # 这些方法是否能正确地将关系数据聚合到对应的 paper_id 上。
+
 
 async def test_get_tasks_for_papers_empty_ids(repository: PostgresRepository) -> None:
     """
@@ -1122,6 +1149,7 @@ async def test_get_repositories_for_papers_empty_ids(
     assert isinstance(result, dict)
     assert len(result) == 0
 
+
 async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -> None:
     """
     测试场景：获取具有关联任务的论文的任务列表。
@@ -1132,7 +1160,9 @@ async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -
     async with repository.pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("TRUNCATE papers RESTART IDENTITY CASCADE")
-            await cur.execute("TRUNCATE pwc_tasks RESTART IDENTITY CASCADE") # 清空任务表
+            await cur.execute(
+                "TRUNCATE pwc_tasks RESTART IDENTITY CASCADE"
+            )  # 清空任务表
 
     # --- 2. 准备论文数据 ---
     paper1 = Paper(
@@ -1141,7 +1171,7 @@ async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -
     paper2 = Paper(
         pwc_id="test-tasks-2", title="Test Tasks Paper 2", authors=["Author Tasks"]
     )
-    paper3_no_tasks = Paper( # 没有任务的论文
+    paper3_no_tasks = Paper(  # 没有任务的论文
         pwc_id="test-tasks-3", title="Test No Tasks Paper", authors=["Author Tasks"]
     )
 
@@ -1171,11 +1201,11 @@ async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -
 
     # --- 5. 验证结果 ---
     assert isinstance(result, dict)
-    assert len(result) == 3 # 结果字典应包含所有请求的 paper_id
+    assert len(result) == 3  # 结果字典应包含所有请求的 paper_id
     # 验证 id1 的任务列表
     assert id1 in result
     assert isinstance(result[id1], list)
-    assert set(result[id1]) == {"Task A", "Task B"} # 使用集合忽略顺序比较
+    assert set(result[id1]) == {"Task A", "Task B"}  # 使用集合忽略顺序比较
     # 验证 id2 的任务列表
     assert id2 in result
     assert isinstance(result[id2], list)
@@ -1185,11 +1215,13 @@ async def test_get_tasks_for_papers_with_tasks(repository: PostgresRepository) -
     assert isinstance(result[id3], list)
     assert len(result[id3]) == 0
 
+
 # TODO: 为 get_datasets_for_papers 和 get_repositories_for_papers 添加类似的测试用例
 # 需要：
 # 1. 假设或确认 pwc_datasets 和 pwc_repositories 表的结构。
 # 2. 在测试中插入相应的关联数据。
 # 3. 调用方法并验证返回的字典结构和内容。
+
 
 # === close 测试 ===
 async def test_close_connection_pool(repository: PostgresRepository) -> None:
@@ -1201,18 +1233,18 @@ async def test_close_connection_pool(repository: PostgresRepository) -> None:
     """
     # --- 1. 保存原始连接池以备恢复 ---
     original_pool = repository.pool
-    assert original_pool is not None # 确保原始池存在
+    assert original_pool is not None  # 确保原始池存在
 
     # --- 2. 创建模拟连接池并替换 ---
-    mock_pool = AsyncMock(spec=AsyncConnectionPool) # 创建模拟池，spec 确保接口匹配
-    repository.pool = mock_pool # 将仓库的 pool 属性替换为模拟对象
+    mock_pool = AsyncMock(spec=AsyncConnectionPool)  # 创建模拟池，spec 确保接口匹配
+    repository.pool = mock_pool  # 将仓库的 pool 属性替换为模拟对象
 
     try:
         # --- 3. 调用 close 方法 ---
         await repository.close()
 
         # --- 4. 验证模拟对象的 close 方法是否被调用 ---
-        mock_pool.close.assert_awaited_once() # 验证异步 close 方法被调用了一次
+        mock_pool.close.assert_awaited_once()  # 验证异步 close 方法被调用了一次
     finally:
         # --- 5. 恢复原始连接池 ---
         # 无论测试成功与否，都恢复原始的 pool 属性，避免影响其他测试

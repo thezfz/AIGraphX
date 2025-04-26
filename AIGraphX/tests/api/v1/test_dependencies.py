@@ -20,8 +20,14 @@
 
 import pytest  # 导入 pytest 测试框架，用于编写和运行测试。
 import pytest_asyncio  # 导入 pytest 的异步扩展，支持异步代码的测试 fixture。
-from fastapi import FastAPI, Request, HTTPException  # 从 FastAPI 框架导入核心类：FastAPI 应用、Request 请求对象、HTTPException 用于抛出 HTTP 错误。
-from starlette.datastructures import State  # 从 Starlette（FastAPI 的基础）导入 State 类，用于管理应用级别的状态。
+from fastapi import (
+    FastAPI,
+    Request,
+    HTTPException,
+)  # 从 FastAPI 框架导入核心类：FastAPI 应用、Request 请求对象、HTTPException 用于抛出 HTTP 错误。
+from starlette.datastructures import (
+    State,
+)  # 从 Starlette（FastAPI 的基础）导入 State 类，用于管理应用级别的状态。
 from unittest.mock import (
     AsyncMock,
     MagicMock,
@@ -49,7 +55,9 @@ from aigraphx.api.v1.dependencies import (
 from psycopg_pool import AsyncConnectionPool  # PostgreSQL 异步连接池类型。
 from neo4j import AsyncDriver  # Neo4j 异步驱动类型。
 from aigraphx.vectorization.embedder import TextEmbedder  # 文本嵌入器类型。
-from aigraphx.repositories.postgres_repo import PostgresRepository  # PostgreSQL 仓库类型。
+from aigraphx.repositories.postgres_repo import (
+    PostgresRepository,
+)  # PostgreSQL 仓库类型。
 from aigraphx.repositories.neo4j_repo import Neo4jRepository  # Neo4j 仓库类型。
 from aigraphx.repositories.faiss_repo import FaissRepository  # Faiss 仓库类型。
 from aigraphx.services.search_service import SearchService  # 搜索服务类型。
@@ -688,7 +696,9 @@ def test_get_search_service_get_app_state_exception(
     mock_pg_repo = MagicMock(spec=PostgresRepository)
     mock_neo4j_repo = MagicMock(spec=Neo4jRepository)
     # 定义一个当 get_app_state 被调用时要抛出的异常
-    http_exception = HTTPException(status_code=500, detail="Test exception from get_app_state")
+    http_exception = HTTPException(
+        status_code=500, detail="Test exception from get_app_state"
+    )
 
     # 执行：
     # 使用 patch 来模拟 get_app_state，使其在被调用时抛出我们定义的异常 (side_effect)
@@ -754,7 +764,7 @@ def test_get_search_service_general_exception(
     with patch("aigraphx.api.v1.dependencies.logger") as mock_logger:
         # 调用 get_search_service，传入这个特殊的 request
         result = get_search_service(
-            request=mock_request, # 使用我们特殊构造的 request
+            request=mock_request,  # 使用我们特殊构造的 request
             faiss_repo_papers=mock_faiss_papers,
             faiss_repo_models=mock_faiss_models,
             pg_repo=mock_pg_repo,

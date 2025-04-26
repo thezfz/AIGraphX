@@ -32,22 +32,26 @@
 这些测试确保 `GraphService` 能够正确地处理来自不同数据源的数据，执行必要的转换和组合，并能优雅地处理各种预期和异常情况。
 """
 
-import pytest # 导入 pytest 测试框架
-import json # 导入 json 模块，用于处理 JSON 字符串（例如 PG 返回的 frameworks）
-from unittest.mock import AsyncMock, patch, MagicMock # 从 unittest.mock 导入异步模拟、补丁和通用模拟工具
-from typing import Optional, Dict, List, Any # 导入类型提示
-from datetime import date, datetime, timezone # 导入日期和时间类型
+import pytest  # 导入 pytest 测试框架
+import json  # 导入 json 模块，用于处理 JSON 字符串（例如 PG 返回的 frameworks）
+from unittest.mock import (
+    AsyncMock,
+    patch,
+    MagicMock,
+)  # 从 unittest.mock 导入异步模拟、补丁和通用模拟工具
+from typing import Optional, Dict, List, Any  # 导入类型提示
+from datetime import date, datetime, timezone  # 导入日期和时间类型
 
 # 导入需要测试的类
 from aigraphx.services.graph_service import GraphService
 
 # 导入服务方法返回或使用的 Pydantic 模型
 from aigraphx.models.graph import (
-    PaperDetailResponse, # 论文详情响应模型
-    GraphData, # 图数据模型 (包含节点和关系)
-    Node, # 图节点模型
-    Relationship, # 图关系模型
-    HFModelDetail, # Hugging Face 模型详情模型
+    PaperDetailResponse,  # 论文详情响应模型
+    GraphData,  # 图数据模型 (包含节点和关系)
+    Node,  # 图节点模型
+    Relationship,  # 图关系模型
+    HFModelDetail,  # Hugging Face 模型详情模型
 )
 
 # 导入需要被模拟的仓库类 (用于类型提示和 spec)
@@ -75,7 +79,7 @@ def mock_neo4j_repo() -> AsyncMock:
 
 @pytest.fixture
 def graph_service(
-    mock_pg_repo: AsyncMock, # 请求模拟 PG 仓库 fixture
+    mock_pg_repo: AsyncMock,  # 请求模拟 PG 仓库 fixture
     mock_neo4j_repo: AsyncMock,  # 请求模拟 Neo4j 仓库 fixture
 ) -> GraphService:
     """
@@ -88,7 +92,7 @@ def graph_service(
 
 @pytest.fixture
 def graph_service_no_neo4j(
-    mock_pg_repo: AsyncMock, # 只请求模拟 PG 仓库
+    mock_pg_repo: AsyncMock,  # 只请求模拟 PG 仓库
 ) -> GraphService:
     """
     Pytest fixture: 创建一个 GraphService 实例，但不提供 Neo4j 仓库。
@@ -101,11 +105,12 @@ def graph_service_no_neo4j(
 # --- 测试 get_paper_details 方法 ---
 # (现有测试用例，调整了注释和清晰度)
 
-@pytest.mark.asyncio # 标记为异步测试
+
+@pytest.mark.asyncio  # 标记为异步测试
 async def test_get_paper_details_success(
-    graph_service: GraphService, # 请求注入了模拟依赖的 service 实例
-    mock_pg_repo: AsyncMock, # 请求模拟 PG 仓库 (用于配置返回值和断言调用)
-    mock_neo4j_repo: AsyncMock # 请求模拟 Neo4j 仓库
+    graph_service: GraphService,  # 请求注入了模拟依赖的 service 实例
+    mock_pg_repo: AsyncMock,  # 请求模拟 PG 仓库 (用于配置返回值和断言调用)
+    mock_neo4j_repo: AsyncMock,  # 请求模拟 Neo4j 仓库
 ) -> None:
     """
     测试场景：成功从 PG 和 Neo4j 获取论文详情并进行合并。
@@ -116,41 +121,61 @@ async def test_get_paper_details_success(
     4. 正确处理 PG 返回的 JSON 字符串字段（如 frameworks）。
     """
     # --- 准备 ---
-    pwc_id = "test_paper_1" # 测试用的论文 ID
+    pwc_id = "test_paper_1"  # 测试用的论文 ID
     # 模拟 PG 仓库返回的数据
     # 注意：这里的 tasks 字段会被 Neo4j 的数据覆盖（如果 Neo4j 返回了任务）
     mock_pg_paper_data = {
         "pwc_id": pwc_id,
         "title": "Test Paper Title",
         "summary": "This is a test summary.",
-        "abstract": "This is the abstract.", # 确保包含 abstract
+        "abstract": "This is the abstract.",  # 确保包含 abstract
         "arxiv_id_base": "1234.5678",
         "pwc_url": "http://pwc.com/paper1",
         "pdf_url": "http://arxiv.org/pdf/1234.5678",
         "published_date": date(2023, 1, 15),
         "authors": ["Author A", "Author B"],
-        "datasets": None, # PG 中可能没有直接的结构化列表
+        "datasets": None,  # PG 中可能没有直接的结构化列表
         "methods": [],
-        "frameworks": '["pytorch"]', # PG 中可能存储为 JSON 字符串
+        "frameworks": '["pytorch"]',  # PG 中可能存储为 JSON 字符串
         "area": "Test Area",
         "doi": "test/doi.123",
         "primary_category": "cs.AI",
         "categories": ["cs.AI", "cs.LG"],
-        "number_of_stars": 100, # 其他可能来自 PG 的字段
+        "number_of_stars": 100,  # 其他可能来自 PG 的字段
     }
     # 配置模拟 PG 仓库的 get_paper_details_by_pwc_id 方法返回上述数据
     mock_pg_repo.get_paper_details_by_pwc_id.return_value = mock_pg_paper_data
 
     # 模拟 Neo4j 仓库返回的邻居图数据
     mock_neo4j_graph_data = {
-        "nodes": [ # 节点列表
+        "nodes": [  # 节点列表
             {"id": pwc_id, "label": "Paper Title", "type": "Paper", "properties": {}},
-            {"id": "task1", "label": "Task 1", "type": "Task", "properties": {}}, # 任务节点
-            {"id": "dataset1", "label": "Dataset 1", "type": "Dataset", "properties": {}}, # 数据集节点
+            {
+                "id": "task1",
+                "label": "Task 1",
+                "type": "Task",
+                "properties": {},
+            },  # 任务节点
+            {
+                "id": "dataset1",
+                "label": "Dataset 1",
+                "type": "Dataset",
+                "properties": {},
+            },  # 数据集节点
         ],
-        "relationships": [ # 关系列表
-            {"source": pwc_id, "target": "task1", "type": "HAS_TASK", "properties": {}}, # 论文 -> 任务关系
-            {"source": pwc_id, "target": "dataset1", "type": "USES_DATASET", "properties": {}}, # 论文 -> 数据集关系
+        "relationships": [  # 关系列表
+            {
+                "source": pwc_id,
+                "target": "task1",
+                "type": "HAS_TASK",
+                "properties": {},
+            },  # 论文 -> 任务关系
+            {
+                "source": pwc_id,
+                "target": "dataset1",
+                "type": "USES_DATASET",
+                "properties": {},
+            },  # 论文 -> 数据集关系
         ],
     }
     # 配置模拟 Neo4j 仓库的 get_paper_neighborhood 方法返回上述数据
@@ -170,7 +195,7 @@ async def test_get_paper_details_success(
     assert isinstance(details, PaperDetailResponse), "返回类型应为 PaperDetailResponse"
     assert details.pwc_id == pwc_id
     assert details.title == "Test Paper Title"
-    assert details.abstract == "This is the abstract." # 验证 abstract 字段
+    assert details.abstract == "This is the abstract."  # 验证 abstract 字段
     assert details.url_abs == "http://pwc.com/paper1"
     assert details.url_pdf == "http://arxiv.org/pdf/1234.5678"
     assert details.published_date == date(2023, 1, 15)
@@ -188,9 +213,7 @@ async def test_get_paper_details_success(
 
 @pytest.mark.asyncio
 async def test_get_paper_details_not_found(
-    graph_service: GraphService,
-    mock_pg_repo: AsyncMock,
-    mock_neo4j_repo: AsyncMock
+    graph_service: GraphService, mock_pg_repo: AsyncMock, mock_neo4j_repo: AsyncMock
 ) -> None:
     """测试场景：当论文在 PostgreSQL 中未找到时。
     预期行为：服务方法应返回 None，并且不应调用 Neo4j 仓库。
@@ -237,13 +260,14 @@ async def test_get_paper_details_pg_error(
 
 # --- 测试 get_paper_graph 方法 ---
 
+
 # 使用 patch 来模拟 GraphData 模型，以便控制其行为或检查它是否被调用
 @patch("aigraphx.services.graph_service.GraphData")
 @pytest.mark.asyncio
 async def test_get_paper_graph_success(
-    MockGraphData: MagicMock, # 注入 patch 后的 GraphData 模拟类
-    graph_service: GraphService, # 注入服务实例
-    mock_neo4j_repo: AsyncMock # 注入模拟 Neo4j 仓库
+    MockGraphData: MagicMock,  # 注入 patch 后的 GraphData 模拟类
+    graph_service: GraphService,  # 注入服务实例
+    mock_neo4j_repo: AsyncMock,  # 注入模拟 Neo4j 仓库
 ) -> None:
     """
     测试场景：成功从 Neo4j 获取图数据并使用 GraphData 模型进行解析。
@@ -303,12 +327,12 @@ async def test_get_paper_graph_not_found(
     assert graph_data is None
 
 
-@patch("aigraphx.services.graph_service.GraphData") # 再次 patch GraphData
+@patch("aigraphx.services.graph_service.GraphData")  # 再次 patch GraphData
 @pytest.mark.asyncio
 async def test_get_paper_graph_validation_error(
-    MockGraphData: MagicMock, # 注入模拟 GraphData 类
+    MockGraphData: MagicMock,  # 注入模拟 GraphData 类
     graph_service: GraphService,
-    mock_neo4j_repo: AsyncMock
+    mock_neo4j_repo: AsyncMock,
 ) -> None:
     """
     测试场景：Neo4j 仓库返回了数据，但在尝试使用 GraphData 模型解析时发生验证错误。
@@ -337,7 +361,7 @@ async def test_get_paper_graph_validation_error(
 
 @pytest.mark.asyncio
 async def test_get_paper_graph_neo4j_unavailable(
-    graph_service_no_neo4j: GraphService, # 使用没有 Neo4j 仓库的服务实例
+    graph_service_no_neo4j: GraphService,  # 使用没有 Neo4j 仓库的服务实例
 ) -> None:
     """测试场景：当 GraphService 实例没有配置 Neo4j 仓库时。
     预期行为：服务方法应直接返回 None。
@@ -355,6 +379,7 @@ async def test_get_paper_graph_neo4j_unavailable(
 
 
 # --- 测试 get_model_details 方法 ---
+
 
 @pytest.mark.asyncio
 async def test_get_model_details_success(
@@ -374,8 +399,10 @@ async def test_get_model_details_success(
         "model_id": model_id,
         "author": "org",
         "sha": "testsha",
-        "last_modified": datetime(2023, 10, 27, 12, 0, 0, tzinfo=timezone.utc), # datetime 对象
-        "tags": ["tag1", "tag2"], # 假设 PG 返回的是列表
+        "last_modified": datetime(
+            2023, 10, 27, 12, 0, 0, tzinfo=timezone.utc
+        ),  # datetime 对象
+        "tags": ["tag1", "tag2"],  # 假设 PG 返回的是列表
         "pipeline_tag": "text-classification",
         "downloads": 500,
         "likes": 20,
@@ -430,6 +457,7 @@ async def test_get_model_details_not_found(
 
 # --- 测试 get_related_entities 方法 ---
 
+
 @pytest.mark.asyncio
 async def test_get_related_entities_success(
     graph_service: GraphService, mock_neo4j_repo: AsyncMock
@@ -452,13 +480,13 @@ async def test_get_related_entities_success(
     # --- 执行 ---
     # 调用服务方法获取相关实体
     results = await graph_service.get_related_entities(
-        start_node_label="Paper", # 起始节点标签
-        start_node_prop="pwc_id", # 起始节点用于匹配的属性
-        start_node_val="paper-rel-test", # 起始节点属性值
-        relationship_type="HAS_TASK", # 关系类型
-        target_node_label="Task", # 目标节点标签
-        direction="OUT", # 关系方向
-        limit=10, # 限制返回数量
+        start_node_label="Paper",  # 起始节点标签
+        start_node_prop="pwc_id",  # 起始节点用于匹配的属性
+        start_node_val="paper-rel-test",  # 起始节点属性值
+        relationship_type="HAS_TASK",  # 关系类型
+        target_node_label="Task",  # 目标节点标签
+        direction="OUT",  # 关系方向
+        limit=10,  # 限制返回数量
     )
 
     # --- 断言 ---

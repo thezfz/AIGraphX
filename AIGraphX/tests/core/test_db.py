@@ -26,13 +26,30 @@
 这些测试对于确保应用程序启动和关闭过程的健壮性至关重要，保证了数据库连接、向量索引等核心资源能够被正确、可靠地管理。
 """
 
-import pytest # 导入 pytest 测试框架
+import pytest  # 导入 pytest 测试框架
 import asyncio  # 导入 asyncio 模块，用于支持异步操作，特别是在手动驱动 lifespan 时
-from unittest.mock import MagicMock, AsyncMock, patch, Mock, ANY # 从 unittest.mock 导入模拟工具：MagicMock (通用模拟), AsyncMock (异步模拟), patch (用于替换对象), Mock (基础模拟), ANY (用于匹配任意参数)
-from fastapi import FastAPI # 从 FastAPI 框架导入 FastAPI 类
-from starlette.datastructures import State  # 从 Starlette 导入 State 类，FastAPI 的 app.state 基于此
-import os # 导入 os 模块，可能用于路径操作等 (虽然在此文件中不直接使用)
-from typing import Dict, Any, Tuple, List, Optional, Generator, Literal, cast # 从 typing 导入类型提示工具
+from unittest.mock import (
+    MagicMock,
+    AsyncMock,
+    patch,
+    Mock,
+    ANY,
+)  # 从 unittest.mock 导入模拟工具：MagicMock (通用模拟), AsyncMock (异步模拟), patch (用于替换对象), Mock (基础模拟), ANY (用于匹配任意参数)
+from fastapi import FastAPI  # 从 FastAPI 框架导入 FastAPI 类
+from starlette.datastructures import (
+    State,
+)  # 从 Starlette 导入 State 类，FastAPI 的 app.state 基于此
+import os  # 导入 os 模块，可能用于路径操作等 (虽然在此文件中不直接使用)
+from typing import (
+    Dict,
+    Any,
+    Tuple,
+    List,
+    Optional,
+    Generator,
+    Literal,
+    cast,
+)  # 从 typing 导入类型提示工具
 
 # 将此模块中的所有异步测试标记为使用会话作用域的事件循环
 # 这有助于在多个测试之间共享事件循环，可能提高效率，但也需注意测试间的潜在干扰
@@ -43,10 +60,13 @@ from aigraphx.core.db import lifespan
 
 # 导入被模拟的类 (用于类型注解和 spec)
 # from aigraphx.vectorization.embedder import TextEmbedder # 不再需要在此模拟 Embedder，lifespan 不再处理它
-from aigraphx.repositories.faiss_repo import FaissRepository # 导入 Faiss 仓库类
+from aigraphx.repositories.faiss_repo import FaissRepository  # 导入 Faiss 仓库类
 
 # 导入 settings 对象和 Settings 类型
-from aigraphx.core.config import settings, Settings  # 导入实际的 settings 对象和 Settings 类型定义
+from aigraphx.core.config import (
+    settings,
+    Settings,
+)  # 导入实际的 settings 对象和 Settings 类型定义
 
 
 # 使用 MagicMock 模拟类，AsyncMock 模拟实例/方法
@@ -86,7 +106,8 @@ def mock_neo4j_driver() -> Generator[Tuple[MagicMock, AsyncMock], None, None]:
     """
     with patch(
         # 注意 patch 的目标是 `aigraphx.core.db` 中导入并使用的 `driver` 函数
-        "aigraphx.core.db.AsyncGraphDatabase.driver", new_callable=MagicMock
+        "aigraphx.core.db.AsyncGraphDatabase.driver",
+        new_callable=MagicMock,
     ) as mock_driver_func:
         # 创建模拟的驱动实例
         mock_instance = AsyncMock()
@@ -102,7 +123,7 @@ def mock_neo4j_driver() -> Generator[Tuple[MagicMock, AsyncMock], None, None]:
 
 @pytest.fixture
 def mock_faiss_repository() -> Generator[
-    Tuple[MagicMock, MagicMock, MagicMock], None, None # 返回类型是包含三个 Mock 的元组
+    Tuple[MagicMock, MagicMock, MagicMock], None, None  # 返回类型是包含三个 Mock 的元组
 ]:
     """
     Pytest fixture: 模拟 FaissRepository 类及其创建的两个实例（用于论文和模型）。
@@ -112,12 +133,15 @@ def mock_faiss_repository() -> Generator[
     返回一个元组：(模拟的 FaissRepository 类, 模拟的论文仓库实例, 模拟的模型仓库实例)。
     """
     with patch(
-        "aigraphx.core.db.FaissRepository", new_callable=MagicMock # 模拟 FaissRepository 类
+        "aigraphx.core.db.FaissRepository",
+        new_callable=MagicMock,  # 模拟 FaissRepository 类
     ) as mock_repo_class:
         # --- 创建模拟实例 ---
         # 为论文 Faiss 仓库创建模拟实例
-        mock_instance_papers = MagicMock(spec=FaissRepository) # 使用 spec 确保接口一致性
-        mock_instance_papers.index = MagicMock() # 模拟 index 属性
+        mock_instance_papers = MagicMock(
+            spec=FaissRepository
+        )  # 使用 spec 确保接口一致性
+        mock_instance_papers.index = MagicMock()  # 模拟 index 属性
         mock_instance_papers.id_map = {}  # 添加模拟的 id_map 属性
         mock_instance_papers.is_ready.return_value = True  # 默认设置为准备就绪
 
@@ -130,12 +154,12 @@ def mock_faiss_repository() -> Generator[
         # --- 配置 side_effect ---
         # 定义一个函数，根据调用 FaissRepository 时的关键字参数 id_type 返回不同的实例
         def side_effect(*args: Any, **kwargs: Any) -> Any:
-            id_type = kwargs.get("id_type") # 获取 id_type 参数
-            if id_type == "int": # 如果是论文仓库（id 是整数）
+            id_type = kwargs.get("id_type")  # 获取 id_type 参数
+            if id_type == "int":  # 如果是论文仓库（id 是整数）
                 return mock_instance_papers
-            elif id_type == "str": # 如果是模型仓库（id 是字符串）
+            elif id_type == "str":  # 如果是模型仓库（id 是字符串）
                 return mock_instance_models
-            else: # 处理未预期的情况
+            else:  # 处理未预期的情况
                 raise ValueError(
                     f"在 FaissRepository 模拟中遇到未预期的 id_type: {id_type}"
                 )
@@ -155,7 +179,7 @@ def mock_app() -> FastAPI:
 
     这个实例带有一个初始化的 `state` 属性，`lifespan` 函数将在这个 `state` 上设置属性。
     """
-    app = FastAPI() # 创建 FastAPI 应用
+    app = FastAPI()  # 创建 FastAPI 应用
     app.state = State()  # 初始化 state 属性
     return app
 
@@ -163,17 +187,17 @@ def mock_app() -> FastAPI:
 # 创建带有特定配置的模拟 settings 对象的辅助 fixture
 @pytest.fixture
 def mock_settings(
-    monkeypatch: pytest.MonkeyPatch, # 请求 monkeypatch fixture 用于修改 settings
+    monkeypatch: pytest.MonkeyPatch,  # 请求 monkeypatch fixture 用于修改 settings
     # --- Fixture 参数 (允许在测试用例中覆盖这些默认值) ---
-    neo4j_uri: Optional[str] = "neo4j://testsuccess", # 默认模拟 Neo4j URI
-    neo4j_user: Optional[str] = "testuser_success", # 默认模拟 Neo4j 用户名
-    neo4j_pass: Optional[str] = "testpass_success", # 默认模拟 Neo4j 密码
+    neo4j_uri: Optional[str] = "neo4j://testsuccess",  # 默认模拟 Neo4j URI
+    neo4j_user: Optional[str] = "testuser_success",  # 默认模拟 Neo4j 用户名
+    neo4j_pass: Optional[str] = "testpass_success",  # 默认模拟 Neo4j 密码
     # embedder_model: str = "test-model", # 移除 embedder 相关参数
     # embedder_device: str = "test-device",
-    faiss_papers_index: str = "/tmp/papers.index", # 默认模拟论文 Faiss 索引路径
-    faiss_papers_map: str = "/tmp/papers.json", # 默认模拟论文 ID 映射路径
-    faiss_models_index: str = "/tmp/models.index", # 默认模拟模型 Faiss 索引路径
-    faiss_models_map: str = "/tmp/models.json", # 默认模拟模型 ID 映射路径
+    faiss_papers_index: str = "/tmp/papers.index",  # 默认模拟论文 Faiss 索引路径
+    faiss_papers_map: str = "/tmp/papers.json",  # 默认模拟论文 ID 映射路径
+    faiss_models_index: str = "/tmp/models.index",  # 默认模拟模型 Faiss 索引路径
+    faiss_models_map: str = "/tmp/models.json",  # 默认模拟模型 ID 映射路径
 ) -> Settings:
     """
     Pytest fixture: 创建一个 Settings 对象的副本，并使用 monkeypatch 修改其属性。
@@ -189,31 +213,46 @@ def mock_settings(
     # 使用 monkeypatch 修改副本的属性值，monkeypatch 会在 fixture 结束时自动恢复
     monkeypatch.setattr(
         test_settings,
-        "database_url", # 修改数据库 URL
-        "postgresql://mock_user:mock_pass@mock_host:5432/mock_db", # 设置为模拟值
+        "database_url",  # 修改数据库 URL
+        "postgresql://mock_user:mock_pass@mock_host:5432/mock_db",  # 设置为模拟值
     )
-    monkeypatch.setattr(test_settings, "neo4j_uri", neo4j_uri) # 修改 Neo4j URI
-    monkeypatch.setattr(test_settings, "neo4j_username", neo4j_user) # 修改 Neo4j 用户名
-    monkeypatch.setattr(test_settings, "neo4j_password", neo4j_pass) # 修改 Neo4j 密码
+    monkeypatch.setattr(test_settings, "neo4j_uri", neo4j_uri)  # 修改 Neo4j URI
+    monkeypatch.setattr(
+        test_settings, "neo4j_username", neo4j_user
+    )  # 修改 Neo4j 用户名
+    monkeypatch.setattr(test_settings, "neo4j_password", neo4j_pass)  # 修改 Neo4j 密码
     # monkeypatch.setattr(test_settings, "sentence_transformer_model", embedder_model) # 移除对 embedder 的修改
     # monkeypatch.setattr(test_settings, "embedder_device", embedder_device) # 移除
-    monkeypatch.setattr(test_settings, "faiss_index_path", faiss_papers_index) # 修改论文 Faiss 索引路径
-    monkeypatch.setattr(test_settings, "faiss_mapping_path", faiss_papers_map) # 修改论文 Faiss 映射路径
-    monkeypatch.setattr(test_settings, "models_faiss_index_path", faiss_models_index) # 修改模型 Faiss 索引路径
-    monkeypatch.setattr(test_settings, "models_faiss_mapping_path", faiss_models_map) # 修改模型 Faiss 映射路径
-    return test_settings # 返回修改后的 settings 副本
+    monkeypatch.setattr(
+        test_settings, "faiss_index_path", faiss_papers_index
+    )  # 修改论文 Faiss 索引路径
+    monkeypatch.setattr(
+        test_settings, "faiss_mapping_path", faiss_papers_map
+    )  # 修改论文 Faiss 映射路径
+    monkeypatch.setattr(
+        test_settings, "models_faiss_index_path", faiss_models_index
+    )  # 修改模型 Faiss 索引路径
+    monkeypatch.setattr(
+        test_settings, "models_faiss_mapping_path", faiss_models_map
+    )  # 修改模型 Faiss 映射路径
+    return test_settings  # 返回修改后的 settings 副本
 
 
 # --- 测试用例 ---
 
+
 # 测试 lifespan 成功初始化和清理的场景
-@pytest.mark.asyncio # 标记为异步测试
+@pytest.mark.asyncio  # 标记为异步测试
 async def test_lifespan_success(
-    mock_app: FastAPI, # 请求模拟 app fixture
+    mock_app: FastAPI,  # 请求模拟 app fixture
     mock_settings: Settings,  # 请求模拟 settings fixture
-    mock_async_connection_pool: Tuple[MagicMock, AsyncMock], # 请求 PG 连接池模拟 fixture
-    mock_neo4j_driver: Tuple[MagicMock, AsyncMock], # 请求 Neo4j 驱动模拟 fixture
-    mock_faiss_repository: Tuple[MagicMock, MagicMock, MagicMock],  # 请求 Faiss 仓库模拟 fixture
+    mock_async_connection_pool: Tuple[
+        MagicMock, AsyncMock
+    ],  # 请求 PG 连接池模拟 fixture
+    mock_neo4j_driver: Tuple[MagicMock, AsyncMock],  # 请求 Neo4j 驱动模拟 fixture
+    mock_faiss_repository: Tuple[
+        MagicMock, MagicMock, MagicMock
+    ],  # 请求 Faiss 仓库模拟 fixture
 ) -> None:
     """
     测试场景：lifespan 正常启动和关闭。
@@ -245,28 +284,31 @@ async def test_lifespan_success(
     # --- 验证启动过程 ---
     # 验证 PG 连接池类是否被以 mock_settings 中的参数调用了一次
     mock_pool_class.assert_called_once_with(
-        conninfo=mock_settings.database_url, # 检查连接信息
-        min_size=mock_settings.pg_pool_min_size, # 检查最小连接数
-        max_size=mock_settings.pg_pool_max_size, # 检查最大连接数
+        conninfo=mock_settings.database_url,  # 检查连接信息
+        min_size=mock_settings.pg_pool_min_size,  # 检查最小连接数
+        max_size=mock_settings.pg_pool_max_size,  # 检查最大连接数
     )
     # 验证 Neo4j driver 函数是否被以 mock_settings 中的参数调用了一次
     mock_driver_func.assert_called_once_with(
-        mock_settings.neo4j_uri, # 检查 URI
-        auth=(mock_settings.neo4j_username, mock_settings.neo4j_password), # 检查认证元组
+        mock_settings.neo4j_uri,  # 检查 URI
+        auth=(
+            mock_settings.neo4j_username,
+            mock_settings.neo4j_password,
+        ),  # 检查认证元组
     )
     # 不再检查 embedder 的调用
 
     # 验证 FaissRepository 类是否被调用了两次，分别对应论文和模型仓库的初始化
     # 使用 assert_any_call 因为调用顺序不确定或不重要
-    mock_repo_class.assert_any_call( # 验证论文仓库的调用参数
+    mock_repo_class.assert_any_call(  # 验证论文仓库的调用参数
         index_path=mock_settings.faiss_index_path,
         id_map_path=mock_settings.faiss_mapping_path,
-        id_type="int", # 关键参数：论文 ID 类型为 int
+        id_type="int",  # 关键参数：论文 ID 类型为 int
     )
-    mock_repo_class.assert_any_call( # 验证模型仓库的调用参数
+    mock_repo_class.assert_any_call(  # 验证模型仓库的调用参数
         index_path=mock_settings.models_faiss_index_path,
         id_map_path=mock_settings.models_faiss_mapping_path,
-        id_type="str", # 关键参数：模型 ID 类型为 str
+        id_type="str",  # 关键参数：模型 ID 类型为 str
     )
     # 精确断言 FaissRepository 类总共被调用了两次
     assert mock_repo_class.call_count == 2
@@ -279,8 +321,12 @@ async def test_lifespan_success(
     assert mock_app.state.pg_pool == mock_pool_instance
     assert mock_app.state.neo4j_driver == mock_driver_instance
     # assert not hasattr(mock_app.state, 'embedder') # 确认 embedder 不再被设置到 state 中
-    assert mock_app.state.faiss_repo_papers == mock_repo_instance_papers # 检查论文仓库实例
-    assert mock_app.state.faiss_repo_models == mock_repo_instance_models # 检查模型仓库实例
+    assert (
+        mock_app.state.faiss_repo_papers == mock_repo_instance_papers
+    )  # 检查论文仓库实例
+    assert (
+        mock_app.state.faiss_repo_models == mock_repo_instance_models
+    )  # 检查模型仓库实例
 
     # --- 执行退出 ---
     # 手动退出上下文（模拟应用关闭）
@@ -301,7 +347,9 @@ async def test_lifespan_pg_pool_failure(
     mock_app: FastAPI,
     mock_settings: Settings,
     mock_async_connection_pool: Tuple[MagicMock, AsyncMock],
-    mock_neo4j_driver: Tuple[MagicMock, AsyncMock], # Neo4j mock 仍然需要，即使预期它不被调用
+    mock_neo4j_driver: Tuple[
+        MagicMock, AsyncMock
+    ],  # Neo4j mock 仍然需要，即使预期它不被调用
 ) -> None:
     """
     测试场景：在 lifespan 启动过程中，PG 连接池初始化失败。
@@ -378,7 +426,7 @@ async def test_lifespan_faiss_not_ready(
     mock_settings: Settings,
     mock_async_connection_pool: Tuple[MagicMock, AsyncMock],
     mock_neo4j_driver: Tuple[MagicMock, AsyncMock],
-    mock_faiss_repository: Tuple[MagicMock, MagicMock, MagicMock], # 依赖 Faiss mock
+    mock_faiss_repository: Tuple[MagicMock, MagicMock, MagicMock],  # 依赖 Faiss mock
 ) -> None:
     """
     测试场景：Faiss 仓库实例被成功创建，但在启动检查时 `is_ready()` 返回 `False`。
@@ -425,12 +473,14 @@ async def test_lifespan_faiss_not_ready(
 
 # 测试初始化失败（例如，Faiss 论文仓库的 __init__ 方法本身失败）
 @pytest.mark.asyncio
-async def test_lifespan_faiss_papers_init_failure( # 轻微重命名以更清晰
+async def test_lifespan_faiss_papers_init_failure(  # 轻微重命名以更清晰
     mock_app: FastAPI,
     mock_settings: Settings,
     mock_async_connection_pool: Tuple[MagicMock, AsyncMock],
     mock_neo4j_driver: Tuple[MagicMock, AsyncMock],
-    mock_faiss_repository: Tuple[MagicMock, MagicMock, MagicMock], # fixture 返回的是类和两个实例模板
+    mock_faiss_repository: Tuple[
+        MagicMock, MagicMock, MagicMock
+    ],  # fixture 返回的是类和两个实例模板
 ) -> None:
     """
     测试场景：在尝试创建 Faiss 论文仓库实例时，`FaissRepository.__init__` 抛出异常。
@@ -454,7 +504,7 @@ async def test_lifespan_faiss_papers_init_failure( # 轻微重命名以更清晰
     def side_effect(*args: Any, **kwargs: Any) -> Any:
         id_type = kwargs.get("id_type")
         if id_type == "int":
-            raise ValueError("模拟论文 Faiss 初始化失败") # 抛出异常
+            raise ValueError("模拟论文 Faiss 初始化失败")  # 抛出异常
         elif id_type == "str":
             # 理论上这里不会被调用，但为了完整性，返回模型实例模板
             return mock_repo_instance_models_tmpl
@@ -487,7 +537,7 @@ async def test_lifespan_faiss_papers_init_failure( # 轻微重命名以更清晰
 
 # 测试初始化失败（例如，Faiss 模型仓库的 __init__ 方法失败）
 @pytest.mark.asyncio
-async def test_lifespan_faiss_models_init_failure( # 轻微重命名以更清晰
+async def test_lifespan_faiss_models_init_failure(  # 轻微重命名以更清晰
     mock_app: FastAPI,
     mock_settings: Settings,
     mock_async_connection_pool: Tuple[MagicMock, AsyncMock],
@@ -514,9 +564,9 @@ async def test_lifespan_faiss_models_init_failure( # 轻微重命名以更清晰
     def side_effect(*args: Any, **kwargs: Any) -> Any:
         id_type = kwargs.get("id_type")
         if id_type == "int":
-            return mock_repo_instance_papers_tmpl # 论文实例成功返回
+            return mock_repo_instance_papers_tmpl  # 论文实例成功返回
         elif id_type == "str":
-            raise ValueError("模拟模型 Faiss 初始化失败") # 模型实例失败
+            raise ValueError("模拟模型 Faiss 初始化失败")  # 模型实例失败
         else:
             raise ValueError(f"未预期的 id_type: {id_type}")
 
@@ -550,7 +600,9 @@ async def test_lifespan_neo4j_not_configured(
     mock_app: FastAPI,
     mock_settings: Settings,  # 使用 mock_settings fixture
     mock_async_connection_pool: Tuple[MagicMock, AsyncMock],
-    mock_neo4j_driver: Tuple[MagicMock, AsyncMock], # Neo4j mock 仍需提供，即使预期不被调用
+    mock_neo4j_driver: Tuple[
+        MagicMock, AsyncMock
+    ],  # Neo4j mock 仍需提供，即使预期不被调用
     mock_faiss_repository: Tuple[MagicMock, MagicMock, MagicMock],
     monkeypatch: pytest.MonkeyPatch,  # 请求 monkeypatch 用于修改 settings
 ) -> None:
@@ -578,7 +630,7 @@ async def test_lifespan_neo4j_not_configured(
     # --- 执行 ---
     ctx = lifespan(mock_app, mock_settings)
     # 预期 lifespan 不会抛出错误，只是会跳过 Neo4j 初始化（并可能记录日志，但测试不检查日志）
-    await ctx.__aenter__() # 正常进入上下文
+    await ctx.__aenter__()  # 正常进入上下文
 
     # --- 验证启动过程 ---
     # 验证 PG Pool 类被调用
@@ -608,7 +660,7 @@ async def test_lifespan_neo4j_not_configured(
     assert mock_app.state.faiss_repo_models == mock_repo_instance_models
 
     # --- 执行退出 ---
-    await ctx.__aexit__(None, None, None) # 正常退出
+    await ctx.__aexit__(None, None, None)  # 正常退出
 
     # --- 验证清理过程 ---
     # 验证 PG Pool 的 close 被调用
