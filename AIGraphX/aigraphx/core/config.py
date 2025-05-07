@@ -61,7 +61,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 检查是否在 pytest 测试环境中运行
 # Pytest 在运行时通常会设置 'PYTEST_RUNNING' 环境变量
-IS_PYTEST = os.getenv("PYTEST_RUNNING") == "1"
+IS_PYTEST = os.getenv("PYTEST_RUNNING") == "1"  
+# `PYTEST_RUNNING=1` 这个环境变量通常是由 `pytest` 测试框架**在启动测试执行时**设置的。它存在于运行 `pytest` 命令的那个**进程及其可能创建的子进程**的环境中。如果测试过程只有三十秒，那么三十秒之后这个环境变量就会消失
 logger.info(f"Is running under pytest? {IS_PYTEST}")
 
 # 计算项目根目录的绝对路径
