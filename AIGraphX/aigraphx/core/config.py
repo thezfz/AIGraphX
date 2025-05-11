@@ -150,7 +150,7 @@ class Settings(BaseSettings):
         default="intfloat/multilingual-e5-large", alias="SENTENCE_TRANSFORMER_MODEL"
     )
     # 运行嵌入模型的设备 ('cpu', 'cuda', 'mps' 等)
-    embedder_device: str = Field(default="cpu", alias="EMBEDDER_DEVICE")
+    embedder_device: str = Field(default="cuda", alias="EMBEDDER_DEVICE")
 
     # --- Faiss 索引配置 (Faiss Settings) ---
     # Faiss 向量索引文件的存储路径 (存储论文向量)
