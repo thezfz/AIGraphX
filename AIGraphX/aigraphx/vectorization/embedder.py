@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, cast
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import os
@@ -67,7 +67,7 @@ class TextEmbedder:
             if dimension is None:
                 logger.error("Model returned None for embedding dimension.")
                 return 0  # Return 0 if model gives None dimension
-            return dimension
+            return int(dimension) # Explicitly cast to int
         except Exception as e:
             logger.exception(f"Error getting embedding dimension: {e}")
             return 0  # Return 0 on unexpected error
@@ -95,7 +95,7 @@ class TextEmbedder:
             embedding = self.model.encode(
                 text, convert_to_numpy=True, normalize_embeddings=True
             )
-            return embedding
+            return cast(Optional[np.ndarray], embedding)
         except Exception as e:
             logger.exception(f"Error embedding text '{text[:50]}...': {e}")
             return None
@@ -136,7 +136,7 @@ class TextEmbedder:
                 normalize_embeddings=True,
                 show_progress_bar=show_progress_bar,
             )
-            return embeddings
+            return cast(Optional[np.ndarray], embeddings)
         except Exception as e:
             logger.exception(
                 f"Error embedding batch starting with '{valid_texts[0][:50]}...': {e}"

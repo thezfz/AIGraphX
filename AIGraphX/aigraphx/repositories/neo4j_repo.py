@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Dict, Any, Literal, Tuple, Set, Union
+from typing import List, Optional, Dict, Any, Literal, Tuple, Set, Union, cast
 from neo4j import (
     AsyncDriver,
     AsyncSession,
@@ -489,13 +489,15 @@ class Neo4jRepository:
         async def _count_papers_tx(tx: AsyncManagedTransaction) -> int:
             result = await tx.run(query)
             record = await result.single()
-            return record["count"] if record else 0
+            # Ensure count is returned as int, defaulting to 0 if record is None
+            count = record["count"] if record else 0
+            return int(count) if count is not None else 0
 
         try:
             async with self.driver.session() as session:
                 count = await session.execute_read(_count_papers_tx)
                 logger.info(f"Neo4j Paper node count: {count}")
-                return count
+                return cast(int, count)
         except Exception as e:
             logger.error(f"Error counting Paper nodes in Neo4j: {e}")
             return 0  # 错误时返回0
@@ -511,13 +513,15 @@ class Neo4jRepository:
         async def _count_models_tx(tx: AsyncManagedTransaction) -> int:
             result = await tx.run(query)
             record = await result.single()
-            return record["count"] if record else 0
+            # Ensure count is returned as int, defaulting to 0 if record is None
+            count = record["count"] if record else 0
+            return int(count) if count is not None else 0
 
         try:
             async with self.driver.session() as session:
                 count = await session.execute_read(_count_models_tx)
                 logger.info(f"Neo4j HFModel node count: {count}")
-                return count
+                return cast(int, count)
         except Exception as e:
             logger.error(f"Error counting HFModel nodes in Neo4j: {e}")
             return 0  # 错误时返回0

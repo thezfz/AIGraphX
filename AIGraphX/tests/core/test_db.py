@@ -123,7 +123,7 @@ def mock_settings(
     monkeypatch.setattr(test_settings, "faiss_mapping_path", faiss_papers_map)
     monkeypatch.setattr(test_settings, "models_faiss_index_path", faiss_models_index)
     monkeypatch.setattr(test_settings, "models_faiss_mapping_path", faiss_models_map)
-    return test_settings
+    return cast(Settings, test_settings)
 
 
 # Test successful initialization and cleanup

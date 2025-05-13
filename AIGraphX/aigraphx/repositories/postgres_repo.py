@@ -33,10 +33,8 @@ class PostgresRepository:
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(query, (paper_id,))
                     result = await cur.fetchone()
-                    # Convert JSONB fields back if needed (psycopg usually handles this)
-                    # if result and isinstance(result.get('authors'), str): result['authors'] = json.loads(result['authors'])
-                    # if result and isinstance(result.get('categories'), str): result['categories'] = json.loads(result['categories'])
-                    return result
+                    # Convert DictRow to dict
+                    return dict(result) if result else None
         except Exception as e:
             self.logger.error(f"Error fetching paper with id {paper_id} from PG: {e}")
             self.logger.debug(traceback.format_exc())
@@ -55,11 +53,8 @@ class PostgresRepository:
                     # Pass the list directly to execute
                     await cur.execute(query, (paper_ids,))
                     results = await cur.fetchall()
-                    # Convert JSONB fields back if needed (optional, depends on usage)
-                    # for row in results:
-                    #     if isinstance(row.get('authors'), str): row['authors'] = json.loads(row['authors'])
-                    #     if isinstance(row.get('categories'), str): row['categories'] = json.loads(row['categories'])
-                    return results
+                    # Convert List[DictRow] to List[Dict]
+                    return [dict(row) for row in results]
         except Exception as e:
             self.logger.error(f"Error fetching paper details by IDs from PG: {e}")
             self.logger.debug(traceback.format_exc())
@@ -72,7 +67,9 @@ class PostgresRepository:
             async with self.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(query)
-                    return await cur.fetchall()
+                    results = await cur.fetchall()
+                    # Convert List[DictRow] to List[Dict]
+                    return [dict(row) for row in results]
         except Exception as e:
             self.logger.error(f"Error fetching all papers for sync: {e}")
             self.logger.debug(traceback.format_exc())
@@ -185,7 +182,9 @@ class PostgresRepository:
                     # Execute main select query only if needed
                     if total_count > skip:
                         await cur.execute(select_sql, params)
-                        results = await cur.fetchall()
+                        fetch_results = await cur.fetchall()
+                        # Convert List[DictRow] to List[Dict]
+                        results = [dict(row) for row in fetch_results]
                         # JSON decoding might happen automatically with dict_row/psycopg3
                         # but double-check if 'authors' remains string
                         # for row in results:
@@ -215,7 +214,8 @@ class PostgresRepository:
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(query, (model_ids,))
                     results = await cur.fetchall()
-                    return results
+                    # Convert List[DictRow] to List[Dict]
+                    return [dict(row) for row in results]
         except Exception as e:
             self.logger.error(f"Error fetching HF model details by IDs from PG: {e}")
             self.logger.debug(traceback.format_exc())
@@ -509,7 +509,9 @@ class PostgresRepository:
             async with self.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(query, (pwc_id,))
-                    return await cur.fetchone()
+                    result = await cur.fetchone()
+                    # Convert DictRow to dict
+                    return dict(result) if result else None
         except Exception as e:
             self.logger.error(f"Error fetching paper by pwc_id {pwc_id}: {e}")
             self.logger.debug(traceback.format_exc())
