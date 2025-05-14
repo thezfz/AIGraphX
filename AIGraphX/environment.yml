@@ -70,5 +70,6 @@ dependencies:
     - "asgi-lifespan>=2.1.0"
     - pytest-cov>=5.0.0
     - ruff[format]>=0.4.5 # Linter + Formatter
-    - mypy>=1.10.0
+    # VSCode MyPy 扩展的 dmypy 路径: /miniconda/envs/AIGraphX/bin/dmypy
+    - git+https://github.com/python/mypy
     #- black>=24.4.2
