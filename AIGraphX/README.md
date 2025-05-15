@@ -122,30 +122,58 @@ AIGraphX/
 ├── aigraphx/          # 后端服务主 Python 包 (!!! 包名固定, 用于内部导入 !!!)
 │   ├── __init__.py
 │   ├── main.py        # FastAPI 应用实例与启动逻辑
+│   ├── logging_config.py # 集中配置日志记录器
 │   ├── core/          # 核心工具、配置加载、数据库客户端设置
 │   │   ├── __init__.py
 │   │   ├── config.py    # 配置加载 (Pydantic Settings 推荐)
 │   │   └── db.py        # 数据库客户端初始化 (PG, Neo4j, Faiss), lifespan 管理
-│   │   └── logging_config.py # (可选) 集中配置日志记录器
 │   ├── models/        # API Pydantic 模型 (!!! 严格用于 API 边界 !!!)
+│   │   ├── __init__.py
+│   │   ├── paper.py     # 论文相关的 Pydantic 模型
+│   │   ├── graph.py     # 图相关的 Pydantic 模型
+│   │   └── search.py    # 搜索相关的 Pydantic 模型
 │   ├── schemas/       # (可选) 内部 Pydantic 模型
+│   │   └── __init__.py
 │   ├── api/           # FastAPI 路由与端点
 │   │   ├── __init__.py
 │   │   └── v1/          # API 版本 v1 (!!! 路径固定 !!!)
 │   │       ├── __init__.py
-│   │       ├── endpoints/   # API 端点实现
-│   │       └── dependencies.py # API 依赖项提供函数 (!!! 关键, 见 8.1 !!!)
+│   │       ├── api.py       # API 路由定义 (FastAPI router)
+│   │       ├── dependencies.py # API 依赖项提供函数 (!!! 关键, 见 8.1 !!!)
+│   │       └── endpoints/   # API 端点实现
+│   │           ├── __init__.py
+│   │           ├── graph.py   # 图谱相关的 API 端点
+│   │           └── search.py  # 搜索相关的 API 端点
 │   ├── services/      # 服务层 (业务逻辑)
+│   │   ├── __init__.py
+│   │   ├── graph_service.py # 图谱相关业务逻辑服务
+│   │   └── search_service.py # 搜索相关业务逻辑服务
 │   ├── repositories/  # 仓库层 (数据访问)
+│   │   ├── __init__.py
+│   │   ├── faiss_repo.py   # Faiss 索引访问仓库
+│   │   ├── neo4j_repo.py   # Neo4j 图数据库访问仓库
+│   │   └── postgres_repo.py # PostgreSQL 数据库访问仓库
 │   ├── vectorization/ # 文本向量化逻辑
+│   │   ├── __init__.py
+│   │   └── embedder.py   # 文本嵌入/向量化工具
 │   ├── tasks/         # (可选) 后台任务定义
+│   │   └── __init__.py
 │   └── utils/         # (可选) 通用辅助函数
+│       └── __init__.py
 ├── scripts/           # 独立脚本
-│   ├── collect_data.py # 数据采集
-│   ├── load_postgres.py # 加载 PG
-│   ├── sync_pg_to_faiss.py # 同步论文 Faiss
-│   ├── sync_pg_to_models_faiss.py # 同步模型 Faiss
-│   ├── sync_pg_to_neo4j.py # 同步 Neo4j
+│   ├── __init__.py
+│   ├── analyze_data_integrity.py # 分析数据文件完整性与质量，并生成报告
+│   ├── check_duplicates.py      # 检查数据文件中的重复记录并生成去重后的文件
+│   ├── collect_data.py          # 增强版数据采集脚本，收集更全面的模型与论文信息
+│   ├── collect_data_initial.py  # 初期版本的数据采集脚本，从多源收集基本模型与论文信息
+│   ├── enrich_existing_data.py  # 对已有数据进行补充和丰富，使其达到新版采集标准
+│   ├── generate_test_faiss_data.py # 生成测试数据
+│   ├── load_postgres.py         # 将 JSONL 数据加载到 PostgreSQL 数据库
+│   ├── regenerate_processed_ids.py # 从数据文件中提取并重新生成已处理 ID 的跟踪文件
+│   ├── sync_pg_to_faiss.py      # 从 PG 同步论文数据到 Faiss 索引 (文本嵌入与索引构建)
+│   ├── sync_pg_to_models_faiss.py # 从 PG 同步模型数据到 Faiss 索引 (文本嵌入与索引构建)
+│   ├── sync_pg_to_neo4j.py      # 从 PG 同步数据到 Neo4j 图数据库
+│   ├── verify_data_counts.py    # 验证数据在 PostgreSQL, Neo4j, Faiss 中的数量一致性
 │   ├── init_neo4j_schema.py # (推荐) 初始化 Neo4j 约束/索引脚本
 │   └── ...
 ├── tests/             # 测试 (!!! 结构镜像代码, 命名 test_*.py !!!)
