@@ -50,11 +50,11 @@ def upgrade() -> None:
         authors JSONB,
         summary TEXT,
         published_date DATE,
-        updated_date TIMESTAMPTZ, -- Note: Mismatch with trigger target column 'updated_at'? Check consistency. Assuming updated_at is correct.
+        updated_at TIMESTAMPTZ, -- Renamed from updated_date to match trigger
         pdf_url TEXT,
         doi VARCHAR(255),
         primary_category VARCHAR(50),
-        categories TEXT, -- Store category list as JSON string (matching test data expectation)
+        categories JSONB, -- Changed to JSONB for better consistency and querying
         pwc_title TEXT,
         pwc_url TEXT,
         area VARCHAR(50),

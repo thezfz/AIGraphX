@@ -73,6 +73,57 @@ class Neo4jRepository:
                     # Ensure temporary raise is removed
                     # raise # Removed
 
+    async def create_constraints_and_indexes(self) -> None:
+        """Creates all necessary unique constraints and indexes in Neo4j."""
+        async with self.driver.session(database=self.db_name) as session:
+            # Constraints ensure data integrity and improve upsert performance
+            constraints = [
+                # HFModel constraints
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (m:HFModel) REQUIRE m.modelId IS UNIQUE;",
+                # Paper constraints
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Paper) REQUIRE p.pwcId IS UNIQUE;",
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Paper) REQUIRE p.arxivIdBase IS UNIQUE;",
+                # Entity Node constraints (adjust 'name' property if your unique key is different)
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Task) REQUIRE t.name IS UNIQUE;",
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (d:Dataset) REQUIRE d.name IS UNIQUE;",
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (meth:Method) REQUIRE meth.name IS UNIQUE;",
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (repo:Repository) REQUIRE repo.url IS UNIQUE;",
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (auth:Author) REQUIRE auth.name IS UNIQUE;", # Assuming Author nodes with unique names
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (area:Area) REQUIRE area.name IS UNIQUE;",     # Assuming Area nodes with unique names
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (cat:ArxivCategory) REQUIRE cat.name IS UNIQUE;", # Assuming ArxivCategory nodes
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (fw:Framework) REQUIRE fw.name IS UNIQUE;",   # Assuming Framework nodes
+            ]
+            
+            indexes = [
+                # HFModel indexes for faster lookups
+                "CREATE INDEX IF NOT EXISTS FOR (m:HFModel) ON (m.author);",
+                "CREATE INDEX IF NOT EXISTS FOR (m:HFModel) ON (m.pipelineTag);",
+                "CREATE INDEX IF NOT EXISTS FOR (m:HFModel) ON (m.libraryName);",
+                # Paper indexes
+                "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.title);",
+                "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.publishedDate);",
+                "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.conference);", # New field
+                "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.area);",
+                # Add other indexes as needed based on common query patterns
+            ]
+
+            logger.info("Applying Neo4j constraints...")
+            for i, constraint_cypher in enumerate(constraints):
+                try:
+                    await session.run(constraint_cypher)
+                    logger.info(f"Applied constraint {i+1}/{len(constraints)}: {constraint_cypher.split(' REQUIRE ')[0]}... DONE")
+                except Exception as e:
+                    logger.warning(f"Could not apply constraint: {constraint_cypher}. Error: {e}. It might already exist or there's another issue.")
+            
+            logger.info("Applying Neo4j indexes...")
+            for i, index_cypher in enumerate(indexes):
+                try:
+                    await session.run(index_cypher)
+                    logger.info(f"Applied index {i+1}/{len(indexes)}: {index_cypher.split(' ON ')[0]}... DONE")
+                except Exception as e:
+                    logger.warning(f"Could not apply index: {index_cypher}. Error: {e}. It might already exist or there's another issue.")
+            logger.info("Finished applying Neo4j constraints and indexes.")
+
     async def _execute_query(
         self, query: str, parameters: Optional[Dict[str, Any]] = None
     ) -> None:
