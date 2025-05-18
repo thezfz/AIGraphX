@@ -94,7 +94,7 @@ async def sync_hf_models(
     """Synchronizes HF models from PostgreSQL to Neo4j."""
     logger.info("Starting HFModel synchronization...")
     models_synced = 0
-    query = "SELECT * FROM hf_models ORDER BY hf_model_id"  # Order for deterministic batches
+    query = "SELECT hf_model_id, hf_author, hf_sha, hf_last_modified, hf_downloads, hf_likes, hf_tags, hf_pipeline_tag, hf_library_name, hf_readme_content, hf_dataset_links FROM hf_models ORDER BY hf_model_id"
     models_to_process: List[Dict[str, Any]] = []
 
     try:
@@ -123,6 +123,8 @@ async def sync_hf_models(
                 "downloads": model_data.get("hf_downloads"),
                 "likes": model_data.get("hf_likes"),
                 "library_name": model_data.get("hf_library_name"),
+                "hf_readme_content": model_data.get("hf_readme_content"),
+                "hf_dataset_links": model_data.get("hf_dataset_links") or [],
             }
             models_to_process.append(model_data)
 
@@ -174,7 +176,8 @@ async def sync_papers_and_relations(
         SELECT
             p.paper_id, p.pwc_id, p.arxiv_id_base, p.arxiv_id_versioned, p.title,
             p.authors, p.summary, p.published_date, p.area, p.pwc_url,
-            p.pdf_url, p.doi, p.primary_category, p.categories
+            p.pdf_url, p.doi, p.primary_category, p.categories,
+            p.conference
         FROM papers p
     """
     papers_to_process: List[Dict[str, Any]] = []
@@ -201,6 +204,10 @@ async def sync_papers_and_relations(
                     paper_data["categories"] = []
             if paper_data.get("published_date"):
                 paper_data["published_date"] = paper_data["published_date"].isoformat()
+            
+            # Ensure conference is included (it's fetched by the query now)
+            # paper_data["conference"] will be set from dict(paper_record)
+
             # Initialize relation keys - enrichment happens later for pwc_id papers
             paper_data["tasks"] = []
             paper_data["datasets"] = []
@@ -358,11 +365,11 @@ async def enrich_papers_with_relations(
     # --- Fetch Repositories using the CORRECT repository method --- #
     try:
         repos_map = await pg_repo.get_repositories_for_papers(paper_ids)
-        for paper_id, repo_urls in repos_map.items():
+        for paper_id, repo_list_of_dicts in repos_map.items(): # Expecting a list of dicts
             if paper_id in paper_map:
-                paper_map[paper_id]["repositories"] = [
-                    {"url": url} for url in repo_urls if url
-                ]
+                # Directly assign the list of repository dictionaries
+                # Each dict should contain: url, stars, is_official, framework, license, language
+                paper_map[paper_id]["repositories"] = repo_list_of_dicts
     except Exception as e:
         logger.error(
             f"Error fetching repository relations for paper IDs {paper_ids[:10]}...: {e}",
@@ -510,8 +517,8 @@ async def run_sync(
             logger.error("Repository objects are None after initialization")
             return 0
 
-        # 1. Make sure Neo4j constraints exist
-        await neo4j_repo.create_constraints()
+        # 1. Make sure Neo4j constraints exist - Changed to create_constraints_and_indexes
+        await neo4j_repo.create_constraints_and_indexes()
 
         # 2. Sync HF Models
         await sync_hf_models(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)

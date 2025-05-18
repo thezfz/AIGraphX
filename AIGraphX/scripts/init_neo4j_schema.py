@@ -2,7 +2,8 @@ import asyncio
 import logging
 import os
 
-from dotenv import load_dotenv
+# Removed dotenv import and call
+# from dotenv import load_dotenv
 from neo4j import AsyncGraphDatabase
 
 # Adjust import path to ensure aigraphx modules can be found
@@ -13,6 +14,10 @@ if project_root not in sys.path:
 
 from aigraphx.repositories.neo4j_repo import Neo4jRepository
 from aigraphx.core.config import settings # Using centralized settings
+
+# Load environment variables from .env file if present
+# settings object (Pydantic BaseSettings) should handle this automatically.
+# load_dotenv()
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -47,7 +52,7 @@ async def main() -> None:
             
             logger.info(f"Target Neo4j database: {settings.neo4j_database}")
             logger.info("Creating constraints and indexes...")
-            await neo4j_repo.create_constraints_and_indexes() # This method needs to be implemented
+            await neo4j_repo.create_constraints_and_indexes()
             logger.info("Successfully created constraints and indexes.")
 
     except Exception as e:

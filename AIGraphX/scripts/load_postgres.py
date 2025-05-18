@@ -155,8 +155,9 @@ async def insert_hf_model(
             """
             INSERT INTO hf_models (
                 hf_model_id, hf_author, hf_sha, hf_last_modified, hf_downloads,
-                hf_likes, hf_tags, hf_pipeline_tag, hf_library_name
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                hf_likes, hf_tags, hf_pipeline_tag, hf_library_name,
+                hf_readme_content, hf_dataset_links
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (hf_model_id) DO UPDATE SET
                 hf_author = EXCLUDED.hf_author,
                 hf_sha = EXCLUDED.hf_sha,
@@ -166,6 +167,8 @@ async def insert_hf_model(
                 hf_tags = EXCLUDED.hf_tags,
                 hf_pipeline_tag = EXCLUDED.hf_pipeline_tag,
                 hf_library_name = EXCLUDED.hf_library_name,
+                hf_readme_content = EXCLUDED.hf_readme_content,
+                hf_dataset_links = EXCLUDED.hf_dataset_links,
                 updated_at = NOW()
         """,
             (
@@ -180,6 +183,10 @@ async def insert_hf_model(
                 else None,
                 model_data.get("hf_pipeline_tag"),
                 model_data.get("hf_library_name"),
+                model_data.get("hf_readme_content"),
+                json.dumps(model_data.get("hf_dataset_links"))
+                if model_data.get("hf_dataset_links")
+                else None,
             ),
         )
 
@@ -198,6 +205,7 @@ async def get_or_insert_paper(
     arxiv_id_versioned = arxiv_meta.get("arxiv_id_versioned")
     primary_category = arxiv_meta.get("primary_category")
     area = get_area_from_category(primary_category)
+    conference = pwc_entry.get("conference")
 
     if not pwc_id and not arxiv_id_base:
         logger.warning(
@@ -227,10 +235,20 @@ async def get_or_insert_paper(
             logger.debug(
                 f"Found existing paper ID {existing_id} for pwc_id={pwc_id}, arxiv_id={arxiv_id_base}"
             )
-            await cur.execute(
-                "UPDATE papers SET area = %s, updated_at = NOW() WHERE paper_id = %s AND area IS NULL",
-                (area, existing_id),
-            )
+            update_clauses = []
+            update_params = []
+            if area:
+                update_clauses.append("area = %s")
+                update_params.append(area)
+            if conference:
+                update_clauses.append("conference = %s")
+                update_params.append(conference)
+            
+            if update_clauses:
+                conditions_str = ' OR '.join([f"{col.split(' = ')[0]} IS NULL" for col in update_clauses])
+                update_query = f"UPDATE papers SET {', '.join(update_clauses)}, updated_at = NOW() WHERE paper_id = %s AND ({conditions_str})"
+                final_update_params = tuple(update_params + [existing_id])
+                await cur.execute(update_query, final_update_params)
             return existing_id
         else:
             logger.debug(
@@ -241,9 +259,9 @@ async def get_or_insert_paper(
                     """
                     INSERT INTO papers (
                         pwc_id, arxiv_id_base, arxiv_id_versioned, title, authors, summary,
-                        published_date, updated_date, pdf_url, doi, primary_category,
-                        categories, pwc_title, pwc_url, area
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        published_date, updated_at, pdf_url, doi, primary_category,
+                        categories, pwc_title, pwc_url, area, conference
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING paper_id
                 """,
                     (
@@ -256,7 +274,7 @@ async def get_or_insert_paper(
                         else None,
                         arxiv_meta.get("summary"),
                         parse_date(arxiv_meta.get("published_date")),
-                        parse_date(arxiv_meta.get("updated_date")),
+                        parse_datetime(arxiv_meta.get("updated_date")),
                         arxiv_meta.get("pdf_url"),
                         arxiv_meta.get("doi"),
                         primary_category,
@@ -266,6 +284,7 @@ async def get_or_insert_paper(
                         pwc_entry.get("title"),
                         pwc_entry.get("pwc_url"),
                         area,
+                        conference,
                     ),
                 )
                 row = await cur.fetchone()
@@ -313,7 +332,7 @@ async def insert_pwc_repositories(
     """Inserts repository information for a paper."""
     if not repos:
         return
-    # Prepare data tuples: (paper_id, url, stars, is_official, framework)
+    # Prepare data tuples: (paper_id, url, stars, is_official, framework, license, language)
     data_tuples = [
         (
             paper_id,
@@ -321,6 +340,8 @@ async def insert_pwc_repositories(
             repo.get("stars"),
             repo.get("is_official"),
             repo.get("framework"),
+            repo.get("license"),
+            repo.get("language"),
         )
         for repo in repos
         if repo.get("url")  # Only insert if URL exists
@@ -330,12 +351,14 @@ async def insert_pwc_repositories(
         return
 
     sql = """
-        INSERT INTO pwc_repositories (paper_id, url, stars, is_official, framework)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO pwc_repositories (paper_id, url, stars, is_official, framework, license, language)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (paper_id, url) DO UPDATE SET
             stars = EXCLUDED.stars,
             is_official = EXCLUDED.is_official,
-            framework = EXCLUDED.framework
+            framework = EXCLUDED.framework,
+            license = EXCLUDED.license,
+            language = EXCLUDED.language
     """
     async with conn.cursor() as cur:
         await cur.executemany(sql, data_tuples)

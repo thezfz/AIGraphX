@@ -5,12 +5,11 @@ from psycopg_pool import AsyncConnectionPool  # Import pool
 from psycopg.rows import dict_row  # Import dict_row
 import json
 from datetime import date  # Add date
-import asyncpg  # type: ignore[import-untyped]
-from asyncpg import Record  # Add this import
 from psycopg import sql  # Use psycopg3 for SQL composition
 import numpy as np  # Import numpy
 from aigraphx.models.paper import Paper  # Add import for Paper model
 import psycopg  # Add missing import for psycopg.Error
+from psycopg import errors as psycopg_errors # For specific error handling
 from typing import get_args
 
 logger = logging.getLogger(__name__)
@@ -153,7 +152,7 @@ class PostgresRepository:
         # Main selection query for paper details
         # Select all columns needed for SearchResultItem
         select_fields = (
-            "paper_id, pwc_id, title, summary, pdf_url, published_date, authors, area"
+            "paper_id, pwc_id, title, summary, pdf_url, published_date, authors, area, conference"
         )
         params["offset"] = skip
         params["limit"] = limit
@@ -269,8 +268,8 @@ class PostgresRepository:
 
         final_where_clause = " AND ".join(where_conditions)
 
-        # Fields to select
-        select_fields = "hf_model_id, hf_author, hf_pipeline_tag, hf_last_modified, hf_tags, hf_likes, hf_downloads, hf_library_name, hf_sha"
+        # Fields to select - Added hf_readme_content and hf_dataset_links
+        select_fields = "hf_model_id, hf_author, hf_pipeline_tag, hf_last_modified, hf_tags, hf_likes, hf_downloads, hf_library_name, hf_sha, hf_readme_content, hf_dataset_links"
 
         # --- Safely construct ORDER BY clause ---
         valid_sort_columns = {
@@ -461,6 +460,12 @@ class PostgresRepository:
                 # Use f-string safely as key comes from dict keys
                 excluded_updates.append(f"{key} = EXCLUDED.{key}")
 
+        # Add updated_at to excluded_updates if not already present, to ensure it's always updated
+        if "updated_at = EXCLUDED.updated_at" not in excluded_updates and "updated_at" in cols:
+            pass # it's already there via EXCLUDED.updated_at
+        elif not any("updated_at" in ex_up for ex_up in excluded_updates):
+             excluded_updates.append("updated_at = NOW()")
+
         # 构建每行的VALUES部分
         placeholders = ", ".join(["%s"] * len(cols))
 
@@ -478,9 +483,14 @@ class PostgresRepository:
             row = []
             for col in cols:
                 value = model.get(col)
-                # FIX: Serialize list fields (like 'hf_tags') to JSON strings
-                if col == "hf_tags" and isinstance(value, list):
+                # FIX: Serialize list/dict fields (like 'hf_tags', 'hf_dataset_links') to JSON strings
+                if col in ["hf_tags", "hf_dataset_links"] and isinstance(value, (list, dict)):
                     row.append(json.dumps(value))
+                elif col == "hf_last_modified" and isinstance(value, str):
+                    # Assuming hf_last_modified might come as string, parse to datetime if so
+                    # This depends on the data source; if it's always datetime, this is not needed.
+                    # For now, let's assume it's passed correctly as datetime or None.
+                    row.append(value)
                 else:
                     row.append(value)  # type: ignore[arg-type] # Allow None, db driver handles it
             data_tuples.append(tuple(row))
@@ -488,12 +498,10 @@ class PostgresRepository:
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    # 逐个执行插入，而不是使用executemany
-                    for data_tuple in data_tuples:
-                        await cur.execute(query, data_tuple)
-
+                    # Use executemany for batch operations
+                    await cur.executemany(query, data_tuples)
                     self.logger.info(
-                        f"Successfully saved/updated batch of {len(models_data)} HF models."
+                        f"Successfully saved/updated batch of {len(models_data)} HF models using executemany."
                     )
         except Exception as e:
             self.logger.error(f"Error saving hf_models batch to PG: {e}")
@@ -636,10 +644,13 @@ class PostgresRepository:
         """
         # Corrected column name from model_id to hf_model_id
         # Corrected column name from tags to hf_tags
+        # Modified text_representation to include hf_readme_content
         query = """
             SELECT
                 hf_model_id,
-                COALESCE(hf_tags, '[]') || COALESCE(hf_pipeline_tag, '') AS text_representation
+                COALESCE(hf_readme_content, '') || ' ' ||
+                COALESCE(hf_pipeline_tag, '') || ' ' ||
+                COALESCE(hf_tags::text, '[]') AS text_representation
             FROM hf_models;
             """
         # Note: Using hf_tags + hf_pipeline_tag as a placeholder for text representation.
@@ -701,6 +712,7 @@ class PostgresRepository:
             # "url_pdf", # Redundant with pdf_url?
             # "links", # Assuming not in Paper model
             "area",  # Added from Paper model
+            "conference", # Added conference
         ]
 
         # Prepare the INSERT statement with ON CONFLICT clause using pwc_id
@@ -749,6 +761,7 @@ class PostgresRepository:
             # paper.url_pdf,
             # paper.links,
             paper.area,
+            paper.conference, # Added conference
         )
 
         try:
@@ -867,39 +880,44 @@ class PostgresRepository:
 
     async def get_repositories_for_papers(
         self, paper_ids: List[int]
-    ) -> Dict[int, List[str]]:
-        """Fetches associated repository URLs for a list of paper IDs."""
+    ) -> Dict[int, List[Dict[str, Any]]]: # Return type changed
+        """Fetches associated repository details for a list of paper IDs."""
         if not paper_ids:
             return {}
+        # Select all relevant columns from pwc_repositories
         query = sql.SQL(
             """
-            SELECT paper_id, url
+            SELECT paper_id, url, stars, is_official, framework, license, language
             FROM pwc_repositories
             WHERE paper_id = ANY(%s);
             """
         )
-        results_map: Dict[int, List[str]] = {pid: [] for pid in paper_ids}
+        # Initialize with empty lists
+        results_map: Dict[int, List[Dict[str, Any]]] = {pid: [] for pid in paper_ids}
         try:
             async with self.pool.connection() as conn:
-                async with conn.cursor() as cur:
+                # Use dict_row to get results as dictionaries directly
+                async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(query, (paper_ids,))
                     rows = await cur.fetchall()
-                    for row in rows:
-                        paper_id, item_value = row
-                        if paper_id in results_map and item_value:
-                            results_map[paper_id].append(item_value)
+                    for row_dict in rows: # row is already a dict due to dict_row
+                        paper_id = row_dict.get("paper_id")
+                        if paper_id in results_map:
+                            # Create a dictionary for the repository, excluding paper_id itself
+                            repo_details = {k: v for k, v in row_dict.items() if k != "paper_id"}
+                            results_map[paper_id].append(repo_details)
             return results_map
         except psycopg.Error as db_err:
             self.logger.error(
                 f"Database error fetching repositories for papers: {db_err}",
                 exc_info=True,
             )
-            return results_map
+            return results_map # Return partially filled map on error
         except Exception as e:
             self.logger.error(
                 f"Unexpected error fetching repositories for papers: {e}", exc_info=True
             )
-            return results_map
+            return results_map # Return partially filled map on error
 
     # --- END: Corrected implementations for specific relation fetching methods --- #
 
@@ -940,33 +958,35 @@ class PostgresRepository:
         if not paper_ids:
             return {}
 
-        # Assuming a table paper_methods links papers to methods
-        # and a methods table exists with method_id and name
-        query = """
-            SELECT pm.paper_id, m.name
-            FROM paper_methods pm
-            JOIN methods m ON pm.method_id = m.method_id
-            WHERE pm.paper_id = ANY(%s);
+        # Query directly from pwc_methods table
+        query = sql.SQL(
             """
+            SELECT paper_id, method_name 
+            FROM pwc_methods
+            WHERE paper_id = ANY(%s);
+            """
+        )
         result_map: Dict[int, List[str]] = {pid: [] for pid in paper_ids}
         try:
             async with self.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cur:
+                async with conn.cursor(row_factory=dict_row) as cur: # Using dict_row
                     await cur.execute(query, (paper_ids,))
-                    async for record in cur:
-                        if record["paper_id"] in result_map:
-                            method_name = record.get("name")
-                            if method_name:
-                                result_map[record["paper_id"]].append(method_name)
-        except asyncpg.exceptions.UndefinedTableError:
+                    rows = await cur.fetchall() # Fetch all results
+                    for row in rows:
+                        paper_id_val = row.get("paper_id")
+                        method_name = row.get("method_name")
+                        if paper_id_val in result_map and method_name:
+                            result_map[paper_id_val].append(method_name)
+        except psycopg_errors.UndefinedTable: # Catch specific psycopg error
             logger.warning(
-                "Table 'paper_methods' or 'methods' does not exist. Cannot fetch methods."
+                "Table 'pwc_methods' does not exist. Cannot fetch methods."
             )
-            # Return empty map if tables don't exist
-            return {}
+            return {} # Return empty map if table doesn't exist
+        except psycopg.Error as db_err: # General psycopg error
+            logger.error(f"Database error fetching methods for papers: {db_err}", exc_info=True)
         except Exception as e:
-            logger.error(f"Error fetching methods for papers: {e}")
-            # Return potentially partial map on other errors
+            logger.error(f"Unexpected error fetching methods for papers: {e}", exc_info=True)
+            # Return potentially partial map on other errors, or an empty one if preferred
         return result_map
 
     # --- END: Add get_methods_for_papers --- #

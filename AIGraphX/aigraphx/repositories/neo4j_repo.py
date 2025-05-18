@@ -8,15 +8,14 @@ from neo4j import (
     AsyncManagedTransaction,
 )
 import os
-from dotenv import load_dotenv
 from datetime import datetime, date  # Import datetime for Neo4j date handling
 import traceback
 
 # Keep loading .env for potential other uses or default values if driver isn't passed?
 # Or remove if repo strictly relies on injected driver.
 # For now, keeping it doesn't hurt.
-dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-load_dotenv(dotenv_path=dotenv_path)
+# dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+# load_dotenv(dotenv_path=dotenv_path)
 
 # Default connection details might be removed if driver injection is enforced
 # NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
@@ -38,40 +37,6 @@ class Neo4jRepository:
         self.driver = driver
         self.db_name = db_name
         logger.debug("Neo4jRepository initialized with provided driver.")
-
-    async def create_constraints(self) -> None:
-        """Creates necessary unique constraints and indexes in Neo4j."""
-        if not self.driver or not hasattr(self.driver, "session"):
-            logger.error("Cannot create constraints: Neo4j driver not available.")
-            raise ConnectionError("Neo4j driver is not available.")
-
-        # Updated list of constraints and indexes
-        queries = [
-            # Unique constraints
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Paper) REQUIRE p.pwc_id IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (m:HFModel) REQUIRE m.model_id IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Task) REQUIRE t.name IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (d:Dataset) REQUIRE d.name IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (r:Repository) REQUIRE r.url IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Author) REQUIRE a.name IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (ar:Area) REQUIRE ar.name IS UNIQUE;",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (f:Framework) REQUIRE f.name IS UNIQUE;",
-            # Indexes (add more as needed for performance)
-            "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.arxiv_id_base);",
-            "CREATE INDEX IF NOT EXISTS FOR (p:Paper) ON (p.title);",  # Keep title index
-            "CREATE INDEX IF NOT EXISTS FOR (m:HFModel) ON (m.author);",  # Keep author index
-            "CREATE INDEX IF NOT EXISTS FOR (e:Method) ON (e.name);",  # Assuming Method nodes are still planned/used elsewhere
-        ]
-
-        async with self.driver.session() as session:
-            for query in queries:
-                try:
-                    await session.run(query)
-                    logger.info(f"Successfully applied Neo4j DDL: {query}")
-                except Exception as e:
-                    logger.error(f"Error applying Neo4j DDL: {query} - {e}")
-                    # Ensure temporary raise is removed
-                    # raise # Removed
 
     async def create_constraints_and_indexes(self) -> None:
         """Creates all necessary unique constraints and indexes in Neo4j."""
@@ -289,6 +254,7 @@ class Neo4jRepository:
             p.doi = paper_props.doi,
             p.primary_category = paper_props.primary_category,
             p.categories = paper_props.categories, // Restore list assignment
+            p.conference = paper_props.conference, // Added conference
             p.created_at = timestamp()
         ON MATCH SET
             p.arxiv_id_base = CASE WHEN p.arxiv_id_base IS NULL THEN paper_props.arxiv_id_base ELSE p.arxiv_id_base END,
@@ -302,6 +268,7 @@ class Neo4jRepository:
             p.doi = paper_props.doi,
             p.primary_category = paper_props.primary_category,
             p.categories = paper_props.categories, // Restore list assignment
+            p.conference = paper_props.conference, // Added conference
             p.updated_at = timestamp()
 
         // Restore relationship processing
@@ -355,11 +322,15 @@ class Neo4jRepository:
                     repo.stars = repo_data.stars,
                     repo.is_official = repo_data.is_official,
                     repo.framework = repo_data.framework,
+                    repo.license = repo_data.license, // Added license
+                    repo.language = repo_data.language, // Added language
                     repo.created_at = timestamp()
                 ON MATCH SET
                     repo.stars = repo_data.stars,
                     repo.is_official = repo_data.is_official,
                     repo.framework = repo_data.framework,
+                    repo.license = repo_data.license, // Added license
+                    repo.language = repo_data.language, // Added language
                     repo.updated_at = timestamp()
                 MERGE (p)-[r_repo:HAS_REPOSITORY]->(repo)
                 ON CREATE SET r_repo.created_at = timestamp()
@@ -399,6 +370,8 @@ class Neo4jRepository:
                                     "is_official", False
                                 ),  # Default to False
                                 "framework": repo.get("framework"),  # Allow None
+                                "license": repo.get("license"),  # Added license
+                                "language": repo.get("language"),  # Added language
                             }
                         )
 
@@ -421,6 +394,7 @@ class Neo4jRepository:
                 "methods": paper.get("methods") or [],  # Include if still relevant
                 "repositories": repositories,  # Use cleaned list
                 "categories": paper.get("categories") or [],
+                "conference": paper.get("conference"), # Added conference
             }
             prepared_batch.append(prepared_paper)
 
@@ -458,7 +432,7 @@ class Neo4jRepository:
         params_list = []
         for model in models_data:
             params = {
-                "model_id": model.get("model_id"),
+                "modelId": model.get("model_id"),
                 "author": model.get("author"),
                 "sha": model.get("sha"),
                 # Neo4j driver v5+ handles Python datetime, use datetime() for safety
@@ -468,10 +442,12 @@ class Neo4jRepository:
                 "downloads": model.get("downloads"),
                 "likes": model.get("likes"),
                 "library_name": model.get("library_name"),
+                "hf_readme_content": model.get("hf_readme_content"),
+                "hf_dataset_links": model.get("hf_dataset_links"),
             }
             # Filter out models without a model_id and None values for properties
             # (MERGE SET with null might erase existing values depending on Cypher version/settings)
-            if params["model_id"]:
+            if params["modelId"]:
                 # Keep None values if Neo4j/Cypher handles them as expected (usually overwrites)
                 # If you want to avoid overwriting with None, filter here:
                 # params_list.append({k: v for k, v in params.items() if v is not None})
@@ -488,7 +464,7 @@ class Neo4jRepository:
         # Cypher query using UNWIND and MERGE
         query = """
         UNWIND $batch AS model_props
-        MERGE (m:HFModel {model_id: model_props.model_id})
+        MERGE (m:HFModel {modelId: model_props.modelId})
         ON CREATE SET
             m += model_props, // Set all properties provided in the map
             m.created_at = timestamp(),
@@ -681,7 +657,7 @@ class Neo4jRepository:
         async def _run_link_batch_tx(tx: AsyncManagedTransaction) -> None:
             query = """
             UNWIND $batch AS link_data
-            MATCH (m:HFModel {model_id: link_data.model_id})
+            MATCH (m:HFModel {modelId: link_data.model_id})
             MATCH (p:Paper {pwc_id: link_data.pwc_id})
             MERGE (m)-[r:MENTIONS]->(p)
             ON CREATE SET 
@@ -1078,32 +1054,6 @@ class Neo4jRepository:
                     results.append(result_item)
 
                 logger.debug(f"Returning {len(results)} processed results")
-
-            # 添加测试场景处理（方便单元测试）
-            # 对于HFModel-MENTIONS-Paper测试，如果没有结果，添加一个模拟结果
-            if (
-                len(results) == 0
-                and start_node_label == "HFModel"
-                and target_node_label == "Paper"
-                and relationship_type == "MENTIONS"
-                and start_node_val in ["test-model-1", "test-model-2"]
-            ):
-                logger.debug(
-                    "Special case: Adding mock result for HFModel-MENTIONS-Paper test"
-                )
-                # 添加一个固定的测试结果
-                mock_result = {
-                    "node": {
-                        "pwc_id": f"test-paper-for-{start_node_val}",
-                        "title": "Test Paper Title",
-                    },
-                    "relationship": {
-                        "relationship_type": "MENTIONS",
-                        "confidence": 0.95,
-                    },
-                    "score": 1.0,
-                }
-                results.append(mock_result)
 
             return results
         except Exception as e:
