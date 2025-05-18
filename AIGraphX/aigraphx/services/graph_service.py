@@ -47,10 +47,11 @@ class GraphService:
         # Ensure paper_data is a mutable dict for updates
         paper_data = dict(paper_data_record)
 
-        # 2. Get related entities from Neo4j if available using get_related_nodes
+        # Initialize lists for related entities
         tasks_list: List[str] = []
         datasets_list: List[str] = []
         methods_list: List[str] = []
+        repositories_list: List[Dict[str, Any]] = [] # Initialize here
 
         if self.neo4j_repo:
             try:
@@ -69,9 +70,9 @@ class GraphService:
                     limit=50,  # Set a reasonable limit
                 )
                 tasks_list = [
-                    node.get("properties", {}).get("name")
+                    node.get("target_node", {}).get("name") # Corrected: extract from target_node
                     for node in task_nodes
-                    if node.get("properties", {}).get("name")
+                    if node.get("target_node", {}).get("name")
                 ]
 
                 # Fetch Datasets
@@ -85,9 +86,9 @@ class GraphService:
                     limit=50,
                 )
                 datasets_list = [
-                    node.get("properties", {}).get("name")
+                    node.get("target_node", {}).get("name") # Corrected: extract from target_node
                     for node in dataset_nodes
-                    if node.get("properties", {}).get("name")
+                    if node.get("target_node", {}).get("name")
                 ]
 
                 # Fetch Methods
@@ -101,14 +102,32 @@ class GraphService:
                     limit=50,
                 )
                 methods_list = [
-                    node.get("properties", {}).get("name")
+                    node.get("target_node", {}).get("name") # Corrected: extract from target_node
                     for node in method_nodes
-                    if node.get("properties", {}).get("name")
+                    if node.get("target_node", {}).get("name")
                 ]
+
+                # Fetch Repositories (expecting detailed dictionaries)
+                repository_related_data = await self.neo4j_repo.get_related_nodes(
+                    start_node_label="Paper",
+                    start_node_prop="pwc_id",
+                    start_node_val=pwc_id,
+                    relationship_type="HAS_REPOSITORY",
+                    target_node_label="Repository",
+                    direction="OUT",
+                    limit=10, # Adjust limit as needed
+                )
+                # Corrected list comprehension for repositories_list
+                temp_repo_list = []
+                for data in repository_related_data:
+                    target_node = data.get("target_node")
+                    if isinstance(target_node, dict): # Ensure it's a dict and not None
+                        temp_repo_list.append(target_node)
+                repositories_list = temp_repo_list
 
                 logger.debug(
                     f"Retrieved relations for {pwc_id} from Neo4j: "
-                    f"Tasks={len(tasks_list)}, Datasets={len(datasets_list)}, Methods={len(methods_list)}"
+                    f"Tasks={len(tasks_list)}, Datasets={len(datasets_list)}, Methods={len(methods_list)}, Repositories={len(repositories_list)}"
                 )
 
             except Exception as e:
@@ -116,12 +135,13 @@ class GraphService:
                     f"Failed to fetch related entities from Neo4j for {pwc_id}: {e}",
                     exc_info=True,
                 )
-                # Continue with PG data, lists will remain empty
+                # Continue with PG data, lists will remain empty (as initialized)
 
         # Update paper_data with lists from Neo4j (or empty lists if failed/unavailable)
         paper_data["tasks"] = tasks_list
         paper_data["datasets"] = datasets_list
         paper_data["methods"] = methods_list
+        paper_data["repositories"] = repositories_list
 
         # Add check for pwc_id before creating response object
         pwc_id_val = paper_data.get("pwc_id")
@@ -138,16 +158,16 @@ class GraphService:
 
         # 3. Construct the response model (using potentially updated paper_data)
         # Need to handle potential JSON string fields from PG if not auto-decoded
-        def _decode_json_field(field_data: Any) -> list[Any]:
-            if isinstance(field_data, list):  # Already decoded
-                return list(field_data)  # 显式转换为list
-            elif isinstance(field_data, str):
-                try:
-                    return list(json.loads(field_data))  # 显式转换为list
-                except json.JSONDecodeError:
-                    logger.warning(f"Failed to decode JSON field: {field_data[:50]}...")
-                    return []
-            return []  # Default to empty list for other types or None
+        # def _decode_json_field(field_data: Any) -> list[Any]:
+        #     if isinstance(field_data, list):  # Already decoded
+        #         return list(field_data)
+        #     elif isinstance(field_data, str):
+        #         try:
+        #             return list(json.loads(field_data))
+        #         except json.JSONDecodeError:
+        #             logger.warning(f"Failed to decode JSON field: {field_data[:50]}...")
+        #             return []
+        #     return []  # Default to empty list for other types or None
 
         # Fix published_date conversion
         published_date_val = paper_data.get("published_date")
@@ -171,13 +191,14 @@ class GraphService:
             url_abs=paper_data.get("pwc_url"),
             url_pdf=paper_data.get("pdf_url"),
             published_date=published_date_obj,
-            authors=_decode_json_field(paper_data.get("authors")),
+            authors=paper_data.get("authors", []), # Assuming psycopg handles JSONB to list
             tasks=paper_data.get("tasks", []),
             datasets=paper_data.get("datasets", []),
             methods=paper_data.get("methods", []),
-            frameworks=_decode_json_field(paper_data.get("frameworks")),
-            number_of_stars=paper_data.get("number_of_stars"),
+            # frameworks and number_of_stars are removed from PaperDetailResponse
+            repositories=paper_data.get("repositories", []), # Populate repositories
             area=paper_data.get("area"),
+            conference=paper_data.get("conference") # Added conference
         )
 
         logger.info(
@@ -252,18 +273,49 @@ class GraphService:
 
             # Manually map ALL database column names (with hf_ prefix)
             # to Pydantic model field names (without hf_ prefix).
+            # Ensure hf_dataset_links is correctly handled (it might be JSON string or already parsed list/dict)
+            hf_dataset_links_raw = model_data.get("hf_dataset_links")
+            dataset_links_processed: Optional[List[str]] = None # Changed type to List[str]
+            if isinstance(hf_dataset_links_raw, list): # Already a list
+                # Ensure all elements are strings, if not, log warning or attempt conversion
+                if all(isinstance(item, str) for item in hf_dataset_links_raw):
+                    dataset_links_processed = hf_dataset_links_raw
+                else:
+                    logger.warning(f"hf_dataset_links for model {retrieved_model_id} is a list, but not all items are strings. Attempting conversion.")
+                    dataset_links_processed = [str(item) for item in hf_dataset_links_raw]
+            elif isinstance(hf_dataset_links_raw, str):
+                try:
+                    parsed_links = json.loads(hf_dataset_links_raw)
+                    if isinstance(parsed_links, list):
+                        # Ensure all elements of parsed_links are strings
+                        if all(isinstance(item, str) for item in parsed_links):
+                            dataset_links_processed = parsed_links
+                        else:
+                            logger.warning(f"Parsed hf_dataset_links for model {retrieved_model_id} is a list, but not all items are strings. Attempting conversion.")
+                            dataset_links_processed = [str(item) for item in parsed_links]
+                    else:
+                        logger.warning(f"hf_dataset_links for model {retrieved_model_id} decoded to non-list: {type(parsed_links)}")
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to decode hf_dataset_links JSON for model {retrieved_model_id}: {hf_dataset_links_raw[:100]}...")
+            elif hf_dataset_links_raw is not None:
+                 logger.warning(f"hf_dataset_links for model {retrieved_model_id} is of unexpected type: {type(hf_dataset_links_raw)}")
+
+
             mapped_data = {
                 "model_id": retrieved_model_id,  # Use validated ID
                 "author": model_data.get("hf_author"),
                 "sha": model_data.get("hf_sha"),
                 "last_modified": model_data.get("hf_last_modified"),
-                "tags": model_data.get("hf_tags"),
+                "tags": model_data.get("hf_tags"), # Assumed to be list from PG if JSONB
                 "pipeline_tag": model_data.get("hf_pipeline_tag"),
                 "downloads": model_data.get("hf_downloads"),
                 "likes": model_data.get("hf_likes"),
                 "library_name": model_data.get("hf_library_name"),
                 "created_at": model_data.get("created_at"),
                 "updated_at": model_data.get("updated_at"),
+                # Updated field names and use processed links
+                "readme_content": model_data.get("hf_readme_content"),
+                "dataset_links": dataset_links_processed,
             }
 
             logger.debug(

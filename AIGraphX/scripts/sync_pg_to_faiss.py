@@ -13,7 +13,6 @@ import argparse
 import psycopg_pool  # Import psycopg_pool
 import faiss  # type: ignore[import-untyped]
 import numpy as np
-from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
 
 # --- Project Imports ---
@@ -31,8 +30,7 @@ from aigraphx.vectorization.embedder import TextEmbedder
 from aigraphx.core.config import settings  # Reverted from settings
 
 # --- Configuration ---
-dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-load_dotenv(dotenv_path=dotenv_path)
+# Removed dotenv_path and load_dotenv call as settings handles .env loading
 
 # --- Constants ---
 # Constants like BATCH_SIZE are now read from settings where applicable

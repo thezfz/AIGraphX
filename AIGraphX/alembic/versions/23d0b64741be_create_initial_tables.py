@@ -50,7 +50,6 @@ def upgrade() -> None:
         authors JSONB,
         summary TEXT,
         published_date DATE,
-        updated_at TIMESTAMPTZ, -- Renamed from updated_date to match trigger
         pdf_url TEXT,
         doi VARCHAR(255),
         primary_category VARCHAR(50),

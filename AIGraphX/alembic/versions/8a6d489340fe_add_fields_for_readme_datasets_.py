@@ -30,7 +30,7 @@ def upgrade() -> None:
     op.add_column("hf_models", sa.Column("hf_readme_content", sa.TEXT(), nullable=True))
     # PostgreSQL uses TEXT[] for string arrays. Adjust if using a different DB.
     op.add_column(
-        "hf_models", sa.Column("hf_dataset_links", sa.JSONB(), nullable=True)
+        "hf_models", sa.Column("hf_dataset_links", sa.JSON(), nullable=True)
     )
     print("Added columns to hf_models.")
 

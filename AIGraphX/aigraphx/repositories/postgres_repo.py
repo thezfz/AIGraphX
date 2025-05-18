@@ -11,6 +11,7 @@ from aigraphx.models.paper import Paper  # Add import for Paper model
 import psycopg  # Add missing import for psycopg.Error
 from psycopg import errors as psycopg_errors # For specific error handling
 from typing import get_args
+import re # Added re for text preprocessing
 
 logger = logging.getLogger(__name__)
 
@@ -633,48 +634,101 @@ class PostgresRepository:
 
     # --- End NEW Method --- #
 
+    def _preprocess_readme_content(self, text: Optional[str]) -> str:
+        if not text:
+            return ""
+        
+        # 1. Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # 2. Remove Markdown fenced code blocks (and their content)
+        text = re.sub(r'```[^\S\r\n]*[a-zA-Z0-9_+#]*\n.*?\n```', '', text, flags=re.DOTALL | re.MULTILINE)
+        
+        # 3. Remove Markdown inline code (and its content)
+        text = re.sub(r'`.*?`', '', text)
+        
+        # 4. Remove Markdown images ![alt text](url)
+        text = re.sub(r'!\[[^]]*\]\([^)]*\)', '', text)
+        
+        # 5. Remove Markdown links [link text](url) - keep link text
+        text = re.sub(r'\[([^]]+)\]\([^)]*\)', r'\1', text)
+        
+        # 6. Remove Markdown headings (e.g., # Heading, ## Heading)
+        text = re.sub(r'^(#+\s+)', '', text, flags=re.MULTILINE)
+        
+        # 7. Remove Markdown list markers (*, -, +, 1.)
+        text = re.sub(r'^[*\-\+]\s+\s*', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^[*\-\+]\s*\d+\.\s+\s*', '', text, flags=re.MULTILINE)
+
+        # 8. Remove Markdown bold and italic markers, keeping the text
+        text = re.sub(r'\*\*(.*?)\*\*|__(.*?)__', r'\1\2', text, flags=re.DOTALL)
+        text = re.sub(r'\*(.*?)\*|_(.*?)_', r'\1\2', text, flags=re.DOTALL)
+
+        # 9. Remove horizontal rules (---, ***, ___)
+        text = re.sub(r'^[*-_]{3,}\s*$', '', text, flags=re.MULTILINE)
+
+        # 10. Remove blockquotes
+        text = re.sub(r'^>\s?\s*', '', text, flags=re.MULTILINE)
+
+        # Normalize whitespace: replace multiple spaces/newlines with a single space, then strip
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+
     async def get_all_models_for_indexing(
         self,
     ) -> AsyncGenerator[Tuple[str, str], None]:
         """
-        Fetches all Hugging Face model IDs and their text representation (e.g., description or concatenated fields)
-        from the database for indexing purposes. Yields batches.
-        TODO: Define what constitutes the 'text' for a model (description? tags? combination?).
-        For now, returning hf_model_id and description if available, else empty string.
+        Fetches all Hugging Face model IDs and their text representation.
+        hf_readme_content is preprocessed to remove markdown/HTML tags and code blocks.
         """
-        # Corrected column name from model_id to hf_model_id
-        # Corrected column name from tags to hf_tags
-        # Modified text_representation to include hf_readme_content
         query = """
             SELECT
                 hf_model_id,
-                COALESCE(hf_readme_content, '') || ' ' ||
-                COALESCE(hf_pipeline_tag, '') || ' ' ||
-                COALESCE(hf_tags::text, '[]') AS text_representation
+                hf_readme_content,    -- Raw README content
+                hf_pipeline_tag,      -- Pipeline tag
+                hf_tags               -- Raw tags (JSONB)
             FROM hf_models;
             """
-        # Note: Using hf_tags + hf_pipeline_tag as a placeholder for text representation.
-        # This might need refinement based on what should be indexed.
 
         try:
             async with self.pool.connection() as conn:
-                async with conn.cursor() as cur:
+                async with conn.cursor(row_factory=dict_row) as cur: # Ensure dict_row is used
                     await cur.execute(query)
                     while True:
-                        # Use fetchmany instead of fetch
-                        rows = await cur.fetchmany(100)  # Fetch in batches
+                        rows = await cur.fetchmany(100)
                         if not rows:
                             break
                         for row in rows:
-                            # Yield hf_model_id and the constructed text
-                            yield (
-                                row[0],
-                                row[1],
-                            )  # Assuming row[0] is hf_model_id, row[1] is text
+                            hf_model_id = row.get("hf_model_id")
+                            raw_readme = row.get("hf_readme_content")
+                            pipeline_tag = row.get("hf_pipeline_tag") or ""
+                            
+                            tags_data = row.get("hf_tags") # Should be a list if JSONB is parsed by psycopg
+                            tags_text = ""
+                            if isinstance(tags_data, list):
+                                tags_text = " ".join(filter(None, tags_data))
+                            elif isinstance(tags_data, str): # Fallback if not parsed
+                                try:
+                                    parsed_tags = json.loads(tags_data)
+                                    if isinstance(parsed_tags, list):
+                                        tags_text = " ".join(filter(None, parsed_tags))
+                                except json.JSONDecodeError:
+                                    pass # Keep tags_text as ""
+                            
+                            processed_readme = self._preprocess_readme_content(raw_readme)
+                            
+                            # Concatenate parts for text representation
+                            # Ensure no excessive spacing if some parts are empty
+                            parts = [processed_readme, pipeline_tag, tags_text]
+                            text_representation = " ".join(p for p in parts if p).strip() # Filter out empty strings before joining
+                            
+                            if hf_model_id:
+                                # Yield even if text_representation is empty, as per prior logic
+                                yield (hf_model_id, text_representation)
         except Exception as e:
             self.logger.error(f"Error fetching all models for indexing: {e}")
             self.logger.debug(traceback.format_exc())
-            # Ensure the generator stops cleanly on error
             return
 
     async def upsert_paper(self, paper: Paper) -> Optional[int]:

@@ -65,9 +65,9 @@ class PaperDetailResponse(BaseModel):
     tasks: Optional[List[str]] = None
     methods: Optional[List[str]] = None
     datasets: Optional[List[str]] = None
-    frameworks: Optional[List[str]] = None
-    number_of_stars: Optional[int] = None
+    repositories: Optional[List[Dict[str, Any]]] = None
     area: Optional[str] = None
+    conference: Optional[str] = None
     # Add neighborhood later if needed
 
     model_config = ConfigDict(from_attributes=True)
@@ -95,6 +95,8 @@ class HFModelDetail(BaseModel):
     library_name: Optional[str] = Field(
         None, description="The library associated with the model (e.g., transformers)."
     )
+    readme_content: Optional[str] = Field(None, description="The README content of the model.")
+    dataset_links: Optional[List[str]] = Field(None, description="Links to datasets used by the model.")
     created_at: Optional[datetime] = Field(
         None, description="Timestamp when the record was created in the database."
     )

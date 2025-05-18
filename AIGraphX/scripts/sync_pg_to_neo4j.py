@@ -537,7 +537,7 @@ async def run_sync(
         neo4j_papers = await neo4j_repo.count_paper_nodes()
         logger.info(f"Current Neo4j paper count: {neo4j_papers}")
 
-        return 1  # 成功完成同步，返回1以通过测试
+        return papers_count  # 返回实际同步的论文数量
     except Exception as e:
         logger.error(f"Synchronization failed with error: {e}")
         logger.error(traceback.format_exc())

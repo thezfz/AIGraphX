@@ -1,13 +1,11 @@
 import logging
 import os
-import pickle
 from typing import List, Tuple, Optional, Dict, Union
 import numpy as np
 import faiss  # type: ignore[import-untyped]
 import json
 import asyncio
 from typing import Literal
-from unittest.mock import patch  # Keep patch if needed for error simulation
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +98,7 @@ class FaissRepository:
         )  # Use -1 to indicate index is None
         map_exists_and_not_empty = bool(self.id_map)
         ready_status = index_exists and ntotal > 0 and map_exists_and_not_empty
-        logger.info(
+        logger.debug(
             f"[is_ready Check - Instance ID: {id(self)}] index_exists={index_exists}, index.ntotal={ntotal}, map_exists_and_not_empty={map_exists_and_not_empty} -> Returning: {ready_status}"
         )
         # Original logic:
