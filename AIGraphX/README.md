@@ -22,6 +22,9 @@
 初始版本将专注于构建一个能够实现以下功能的系统：
 
 - **数据采集:** 从 **多个关键数据源**（Hugging Face Hub, ArXiv, Papers with Code, GitHub）收集 AI 模型和论文的基本元数据及关系。
+  *   针对 Hugging Face 模型：README 内容 (`hf_readme_content`) 和相关数据集链接 (`hf_dataset_links`)。
+  *   针对学术论文：会议信息 (`conference`)。
+  *   针对 Papers with Code 代码库：许可证信息 (`license`) 和主要编程语言 (`language`)。
 - **核心存储:**
     - 使用 **PostgreSQL** 存储结构化元数据。
     - 使用 **Neo4j** 存储关键关系 (例如，模型-论文，模型-任务，论文-代码库等)。
@@ -51,7 +54,7 @@ graph TD
         DC -- 使用 ArXiv ID 查询 --> PWC # ArXiv->PWC
         DC -- 获取代码库 URL --> GITHUB # PWC->GitHub
         DC -- 写入 --> PG[(PostgreSQL)]
-        DSync_Neo4j[同步脚本: PG->Neo4j] -- 读取 --> PG
+        DSync_Neo4j[同步脚本: PG->Neo4j <br>(Models, Papers, Tasks, Datasets, Repos, <br> Model-Paper, Model-Task, Paper-X links, <br> Model-Model :DERIVED_FROM)] -- 读取 --> PG
         DSync_Neo4j -- 更新 --> NJ[(Neo4j)]
         DSync_Faiss_Papers[同步脚本: PG->Faiss (论文)] -- 读取 --> PG
         DSync_Faiss_Papers -- 更新 --> FA_Papers[(Faiss 索引 - 论文)]
@@ -209,15 +212,15 @@ AIGraphX/
 
 项目的数据处理需要首先确保数据库模式已初始化，然后通过 `scripts/` 目录下的独立脚本按顺序执行：
 
-1. **(首次或模式变更时) 数据库模式初始化/迁移:**
-    - **PostgreSQL:** 运行 `alembic upgrade head` 应用最新的数据库模式。
-    - **Neo4j:** 运行创建约束和索引的脚本 (例如 `python scripts/init_neo4j_schema.py`)。
+1.  **(首次或模式变更时) 数据库模式初始化/迁移:**
+    -   **PostgreSQL:** 运行 `alembic upgrade head` 应用最新的数据库模式。(包括 `hf_models` 表中的 `hf_base_models JSONB` 列)。
+    -   **Neo4j:** 运行创建约束和索引的脚本 (例如 `python scripts/init_neo4j_schema.py`)。
     * **一致性检查:** 确保所有后续的数据处理代码（仓库层、脚本、测试）都**严格使用**此处定义的最新表名和列名。
-2. **数据采集 (`collect_data.py`):** (同前)
-3. **数据加载 (`load_postgres.py`):** (同前)
-4. **论文索引构建/同步 (`sync_pg_to_faiss.py`):** (同前)
-5. **模型索引构建/同步 (`sync_pg_to_models_faiss.py`):** (同前)
-6. **图数据同步 (`sync_pg_to_neo4j.py`):** (同前)
+2.  **数据采集 (`collect_data.py`):** (同前，确保采集包含 `base_model` 字段)。
+3.  **数据加载 (`load_postgres.py`):** (同前，将 `base_model` 数据加载到 `hf_base_models` 列)。
+4.  **论文索引构建/同步 (`sync_pg_to_faiss.py`):** (同前)
+5.  **模型索引构建/同步 (`sync_pg_to_models_faiss.py`):** (同前)
+6.  **图数据同步 (`sync_pg_to_neo4j.py`):** (同前，现在包括同步模型节点、论文节点、其他实体节点、它们之间的关系，以及模型之间的 `:DERIVED_FROM` 关系)。
 
 这些脚本通常需要手动按顺序运行，或者在未来通过调度机制自动化。数据库模式管理步骤是进行后续数据处理的前提。
 
@@ -628,7 +631,7 @@ AIGraphX/
 **14. 未来增强功能 (MVP 之后)**
 
 明确推迟以下复杂功能，**严格按需评估**后才考虑引入：
-多源采集与冲突解决、高级图分析/可视化、分布式事件总线、服务发现、集中配置、复杂缓存层、高级监控/追踪、高可用设置、Vault、复杂跨库一致性机制、正式 `common` 库。
+多源采集与冲突解决、高级图分析/可视化 (例如，展示模型派生链)、分布式事件总线、服务发现、集中配置、复杂缓存层、高级监控/追踪、高可用设置、Vault、复杂跨库一致性机制、正式 `common` 库。
 
 **15. 部署注意事项**
 

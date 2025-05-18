@@ -1,30 +1,260 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useModelDetail } from '../api/apiQueries'; // 引入 Hook
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useModelDetail, useModelGraphData } from '../services/apiQueries'; // 修正导入路径
 import Spinner from '../components/common/Spinner'; // 引入 Spinner
 import { ArrowDownTrayIcon, HeartIcon } from '@heroicons/react/24/outline'; // 引入图标
 import ReactMarkdown from 'react-markdown'; // ADDED
 import remarkGfm from 'remark-gfm'; // ADDED
 
+// 导入 react-graph-vis 和其 CSS
+import Graph from 'react-graph-vis';
+import 'vis-network/styles/vis-network.css';
+
+// 修改导入以正确指向 components.schemas 下的类型
+import type { components } from '../types/api'; 
+type GraphData = components['schemas']['GraphData'];
+type ApiNode = components['schemas']['Node'];
+type ApiRelationship = components['schemas']['Relationship']; // 定义 Relationship 类型
+// 如果还需要 Relationship 类型，可以类似添加：
+// type ApiRelationship = components['schemas']['Relationship'];
+
 const ModelDetailPage: React.FC = () => {
   const { modelId } = useParams<{ modelId: string }>();
   const [showDebugInfo, setShowDebugInfo] = useState(false); // 添加状态控制调试信息显示
+  const [parentModels, setParentModels] = useState<ApiNode[]>([]);
+  const [derivedModels, setDerivedModels] = useState<ApiNode[]>([]);
 
-  // 使用 React Query Hook 获取数据
+  // 获取模型文本详情 (假设这个hook仍然需要)
   const {
-    data: model, // API 返回的数据结构可能与之前的 ModelDetail 不同
-    isLoading,
-    isError,
-    error,
-  } = useModelDetail(modelId); // 传入 modelId
+    data: modelDetails, // 重命名以区分图数据
+    isLoading: isLoadingDetails,
+    isError: isErrorDetails,
+    error: errorDetails,
+  } = useModelDetail(modelId); // 确保 modelId 非空再调用
+
+  // 获取模型图数据
+  const {
+    data: modelGraphData,
+    isLoading: isLoadingGraph,
+    isError: isErrorGraph,
+    error: errorGraph,
+  } = useModelGraphData(modelId!, !!modelId); // 使用 modelId! 断言，因为前面有检查
 
   // 添加调试日志
   useEffect(() => {
-    if (model) {
-      console.log('Model detail received in component:', model);
-      console.log('Model fields:', Object.keys(model));
+    if (modelDetails) {
+      console.log('Model TEXT details received:', modelDetails);
     }
-  }, [model]);
+    if (modelGraphData) {
+      console.log('Model GRAPH data received:', modelGraphData);
+
+      // 解析父模型和派生模型
+      if (modelGraphData.nodes && modelGraphData.relationships && modelId) {
+        const parents: ApiNode[] = [];
+        const derived: ApiNode[] = [];
+        const currentModelNodeId = modelId; // 使用从 useParams 获取的 modelId 作为中心
+        console.log(`[Debug DERIVED_FROM] Processing relationships for currentModelNodeId: ${currentModelNodeId}`);
+
+        modelGraphData.relationships.forEach(rel => {
+          console.log(`[Debug DERIVED_FROM] Inspecting relationship: source=${rel.source}, target=${rel.target}, type=${rel.type}`);
+          if (rel.type === 'DERIVED_FROM') {
+            console.log(`[Debug DERIVED_FROM] Found DERIVED_FROM: source=${rel.source}, target=${rel.target}`);
+            // 如果当前模型是目标，则 rel.source 是父模型
+            if (rel.target === currentModelNodeId) {
+              console.log(`[Debug DERIVED_FROM] Match for Parent: ${rel.source} -> ${currentModelNodeId}`);
+              const parentNode = modelGraphData.nodes.find(n => n.id === rel.source);
+              if (parentNode) {
+                parents.push(parentNode);
+                console.log(`[Debug DERIVED_FROM] Added Parent Node:`, parentNode);
+              } else {
+                console.warn(`[Debug DERIVED_FROM] Parent node with id ${rel.source} not found in modelGraphData.nodes`);
+              }
+            }
+            // 如果当前模型是源，则 rel.target 是派生模型
+            else if (rel.source === currentModelNodeId) {
+              console.log(`[Debug DERIVED_FROM] Match for Derived: ${currentModelNodeId} -> ${rel.target}`);
+              const derivedNode = modelGraphData.nodes.find(n => n.id === rel.target);
+              if (derivedNode) {
+                derived.push(derivedNode);
+                console.log(`[Debug DERIVED_FROM] Added Derived Node:`, derivedNode);
+              } else {
+                console.warn(`[Debug DERIVED_FROM] Derived node with id ${rel.target} not found in modelGraphData.nodes`);
+              }
+            }
+          }
+        });
+        setParentModels(parents);
+        setDerivedModels(derived);
+        console.log('Parent models:', parents);
+        console.log('Derived models:', derived);
+      }
+
+      // 主动检测重复NODE ID
+      if (modelGraphData.nodes) {
+        const nodeIds = modelGraphData.nodes.map(n => n.id);
+        const uniqueNodeIds = new Set(nodeIds);
+        if (nodeIds.length !== uniqueNodeIds.size) {
+            console.error('DUPLICATE NODE IDs DETECTED IN modelGraphData.nodes:', modelGraphData.nodes);
+            const idCounts: Record<string, number> = {};
+            nodeIds.forEach(id => {
+                idCounts[id] = (idCounts[id] || 0) + 1;
+            });
+            const duplicates = Object.entries(idCounts).filter(([/*id*/, count]) => count > 1);
+            console.error('Duplicate IDs and their counts:', duplicates);
+        } else {
+            console.log('No duplicate node IDs found in modelGraphData.nodes.');
+        }
+      }
+
+      // 主动检测重复 RELATIONSHIP
+      if (modelGraphData.relationships) {
+        const relSignatures = modelGraphData.relationships.map(
+            r => `${r.source}|${r.target}|${r.type}`
+        );
+        const uniqueRelSignatures = new Set(relSignatures);
+        if (relSignatures.length !== uniqueRelSignatures.size) {
+            console.error(
+                'DUPLICATE RELATIONSHIPS DETECTED in modelGraphData.relationships:',
+                modelGraphData.relationships
+            );
+            const relCounts: Record<string, number> = {};
+            relSignatures.forEach(sig => {
+                relCounts[sig] = (relCounts[sig] || 0) + 1;
+            });
+            const duplicateRels = Object.entries(relCounts).filter(
+                ([/*sig*/, count]) => count > 1
+            );
+            console.error('Duplicate relationship signatures and their counts:', duplicateRels);
+        } else {
+            console.log('No duplicate relationships found in modelGraphData.relationships.');
+        }
+      }
+    }
+  }, [modelDetails, modelGraphData, modelId]);
+
+  // --- 数据转换为图表库所需的格式 ---
+  const graph = useMemo(() => {
+    if (!modelGraphData || !modelGraphData.nodes || !modelGraphData.relationships) {
+      return { nodes: [], edges: [] };
+    }
+
+    const currentModelNodeId = modelId; // 从 useParams
+
+    const nodes = modelGraphData.nodes.map(node => {
+      let color = '#D3D3D3'; // Default color
+      let shape = 'dot';
+      let borderWidth = 2;
+      let size = 16;
+
+      if (node.type === 'HFModel') {
+        if (node.id === currentModelNodeId) {
+          color = '#FF4500'; // 当前模型 - 橙红色突出
+          shape = 'star';    // 星形
+          size = 30;         // 更大
+          borderWidth = 3;
+        } else if (parentModels.some(p => p.id === node.id)) {
+          color = '#87CEEB'; // 父模型 - 天蓝色
+          shape = 'triangle'; // 三角形向上
+          size = 20;
+        } else if (derivedModels.some(d => d.id === node.id)) {
+          color = '#98FB98'; // 派生模型 - 淡绿色
+          shape = 'triangleDown'; // 三角形向下
+          size = 20;
+        } else {
+          color = '#FFD700'; // 其他 HFModel - 金色 (原HFModel颜色)
+          shape = 'star'; // 其他HFModel保持星形
+        }
+      } else if (node.type === 'Paper') {
+        color = '#ADD8E6'; // Paper - 淡蓝色
+      } else if (node.type === 'Task') {
+        color = '#90EE90'; // Task - 浅绿色
+      }
+      // 可以为其他类型如 Dataset, Method 等添加颜色
+
+      return {
+        id: node.id,
+        label: node.label || node.id,
+        title: `Type: ${node.type}\nID: ${node.id}${node.label ? '\nLabel: ' + node.label : ''}`,
+        color: color,
+        shape: shape,
+        size: size,
+        font: { size: 12, color: '#333' },
+        borderWidth: borderWidth,
+      };
+    });
+
+    const edges = modelGraphData.relationships.map((rel: ApiRelationship) => ({ // 添加类型提示，并为边添加唯一ID
+      id: `${rel.source}|${rel.target}|${rel.type}`, // 使用 source|target|type 作为唯一 ID
+      from: rel.source,
+      to: rel.target,
+      label: rel.type, // 显示关系类型
+      // arrows: 'to',
+    }));
+
+    return { nodes, edges };
+  }, [modelGraphData, modelId, parentModels, derivedModels]);
+
+  // --- 图表选项 ---
+  const graphOptions = {
+    layout: {
+      hierarchical: false, // 可以尝试 true 实现层级布局
+      // randomSeed: undefined,
+      // improvedLayout:true,
+    },
+    edges: {
+      color: '#848484',
+      arrows: {
+        to: { enabled: true, scaleFactor: 0.5 }
+      },
+      smooth: {
+        type: 'continuous' // 'dynamic', 'continuous', 'discrete', 'curvedCW', 'curvedCCW', 'straightCross'
+      }
+    },
+    nodes: {
+      shape: 'dot',
+      size: 16,
+      font: {
+        size: 12,
+        color: '#333'
+      },
+      borderWidth: 2,
+    },
+    physics: {
+      enabled: true, // 启用物理引擎以获得更好的力导向布局
+      forceAtlas2Based: {
+        gravitationalConstant: -50,
+        centralGravity: 0.01,
+        springLength: 100,
+        springConstant: 0.08,
+        avoidOverlap: 0.5 // 增加此值以减少重叠
+      },
+      solver: 'forceAtlas2Based', // 'barnesHut', 'repulsion', 'hierarchicalRepulsion', 'forceAtlas2Based'
+      stabilization: {
+        iterations: 1000, // 稳定迭代次数
+      }
+    },
+    interaction: {
+      dragNodes: true,
+      dragView: true,
+      hover: true,
+      zoomView: true,
+      tooltipDelay: 200,
+    },
+    height: '600px', // 设置图表高度
+  };
+
+  // --- 事件处理 (示例) ---
+  const graphEvents = {
+    selectNode: ({ nodes }: { nodes: string[] }) => {
+      if (nodes.length > 0) {
+        console.log('Selected node IDs:', nodes);
+        // 可以根据选中的节点ID做进一步操作，比如显示更详细的信息或导航
+      }
+    },
+    // selectEdge: ({ edges }: { edges: string[] }) => {
+    //   console.log('Selected edge IDs:', edges);
+    // },
+  };
 
   // 如果没有 modelId，直接显示错误信息
   if (!modelId) {
@@ -36,20 +266,22 @@ const ModelDetailPage: React.FC = () => {
     );
   }
 
-  if (isLoading) {
+  // 合并加载状态
+  if (isLoadingDetails || (!!modelId && isLoadingGraph)) { // 只有在 modelId 存在时才考虑 isLoadingGraph
     return (
       <div className="flex justify-center items-center py-20">
         <Spinner /> {/* 使用 Spinner 组件 */}
-        <p className="ml-2 text-gray-600">正在加载模型 {modelId} 的详情...</p>
+        <p className="ml-2 text-gray-600">正在加载模型 {modelId} 的详情与图数据...</p>
       </div>
     );
   }
 
-  if (isError) {
+  // 合并错误状态
+  if (isErrorDetails) {
     return (
       <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
         <strong className="font-bold">获取模型详情出错: </strong>
-        <span className="block sm:inline">{error instanceof Error ? error.message : JSON.stringify(error)}</span>
+        <span className="block sm:inline">{errorDetails instanceof Error ? errorDetails.message : JSON.stringify(errorDetails)}</span>
         <div className="mt-2">
           <p className="text-sm">请求的模型 ID: {modelId}</p>
           <p className="text-sm">您可以尝试刷新页面或返回搜索。</p>
@@ -57,12 +289,17 @@ const ModelDetailPage: React.FC = () => {
       </div>
     );
   }
+  // 图数据错误优先于文本详情未找到，因为图是额外信息
+  if (isErrorGraph && modelId) { // 只在尝试加载图数据时显示图错误
+     console.warn("Error loading graph data, but showing text details.", errorGraph);
+     // 不阻塞页面，允许显示文本详情，可以在图表区域显示错误信息
+  }
 
-  if (!model) {
+  if (!modelDetails) {
     return (
       <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative" role="alert">
         <strong className="font-bold">未找到: </strong>
-        <span className="block sm:inline">无法找到 ID 为 {modelId} 的模型。</span>
+        <span className="block sm:inline">无法找到 ID 为 {modelId} 的模型文本详情。</span>
         <div className="mt-2">
           <p className="text-sm">可能的原因：</p>
           <ul className="list-disc list-inside text-sm">
@@ -86,7 +323,7 @@ const ModelDetailPage: React.FC = () => {
   };
 
   // Preprocess readme_content to remove HTML-like comments
-  const cleanReadmeContent = model?.readme_content?.replace(/<!--.*?-->/gs, '') || "";
+  const cleanReadmeContent = modelDetails?.readme_content?.replace(/<!--.*?-->/gs, '') || "";
 
   // --- 渲染从 API 获取的模型数据 ---
   // 注意：这里的字段需要匹配 useModelDetail 返回的 ModelDetailResponse 类型
@@ -96,10 +333,10 @@ const ModelDetailPage: React.FC = () => {
         {/* Header Section */}
         <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50"> {/* 添加渐变背景 */} 
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-1 break-all">
-            {safeRender(() => model.model_id)}
+            {safeRender(() => modelDetails.model_id)}
           </h1>
-          {model.author && (
-            <p className="text-md text-gray-600">由 {safeRender(() => model.author)} 创建</p>
+          {modelDetails.author && (
+            <p className="text-md text-gray-600">由 {safeRender(() => modelDetails.author)} 创建</p>
           )}
         </div>
 
@@ -109,24 +346,58 @@ const ModelDetailPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             {/* Left Column: Metadata */}
             <div className="md:col-span-2 space-y-4"> {/* 使用 space-y 控制间距 */}
-              {model.pipeline_tag && (
+              {modelDetails.pipeline_tag && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">任务类型</h3>
-                  <p className="text-lg text-gray-800">{safeRender(() => model.pipeline_tag)}</p>
+                  <p className="text-lg text-gray-800">{safeRender(() => modelDetails.pipeline_tag)}</p>
                 </div>
               )}
-              {model.library_name && (
+              {modelDetails.library_name && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">库</h3>
-                  <p className="text-lg text-gray-800">{safeRender(() => model.library_name)}</p>
+                  <p className="text-lg text-gray-800">{safeRender(() => modelDetails.library_name)}</p>
                 </div>
               )}
-              {model.last_modified && (
+              {modelDetails.last_modified && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">最后更新</h3>
                   <p className="text-lg text-gray-800">
-                    {safeRender(() => model.last_modified ? new Date(model.last_modified).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }) : '未知')} {/* 改进日期格式 */} 
+                    {safeRender(() => modelDetails.last_modified ? new Date(modelDetails.last_modified).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }) : '未知')} {/* 改进日期格式 */} 
                   </p>
+                </div>
+              )}
+
+              {/* Parent Models List */}
+              {parentModels.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-500">父模型 (Base Models)</h3>
+                  <ul className="list-disc list-inside pl-4 space-y-1">
+                    {parentModels.map(node => (
+                      <li key={node.id} className="text-gray-700">
+                        <Link to={`/models/${encodeURIComponent(node.id)}`} className="text-blue-600 hover:text-blue-800 hover:underline">
+                          {node.label || node.id}
+                        </Link>
+                        {node.type && <span className="text-xs text-gray-500 ml-2">({node.type})</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Derived Models List */}
+              {derivedModels.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-500">派生模型 (Derived Models)</h3>
+                  <ul className="list-disc list-inside pl-4 space-y-1">
+                    {derivedModels.map(node => (
+                      <li key={node.id} className="text-gray-700">
+                        <Link to={`/models/${encodeURIComponent(node.id)}`} className="text-blue-600 hover:text-blue-800 hover:underline">
+                          {node.label || node.id}
+                        </Link>
+                        {node.type && <span className="text-xs text-gray-500 ml-2">({node.type})</span>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -134,25 +405,25 @@ const ModelDetailPage: React.FC = () => {
             {/* Right Column: Stats */}
             <div className="bg-gray-50 rounded-lg p-4 space-y-3"> {/* 使用 space-y */} 
               <h2 className="text-lg font-semibold text-gray-700 mb-2">统计信息</h2>
-              {model.downloads !== undefined && model.downloads !== null && (
+              {modelDetails.downloads !== undefined && modelDetails.downloads !== null && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 inline-flex items-center">
                     <ArrowDownTrayIcon className="mr-1.5 h-5 w-5 text-gray-400" aria-hidden="true" />
                     下载次数
                   </span>
                   <span className="font-medium text-gray-800">
-                    {safeRender(() => model.downloads?.toLocaleString() || '0')}
+                    {safeRender(() => modelDetails.downloads?.toLocaleString() || '0')}
                   </span>
                 </div>
               )}
-              {model.likes !== undefined && model.likes !== null && (
+              {modelDetails.likes !== undefined && modelDetails.likes !== null && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 inline-flex items-center">
                     <HeartIcon className="mr-1.5 h-5 w-5 text-gray-400" aria-hidden="true" />
                     点赞数
                   </span>
                   <span className="font-medium text-gray-800">
-                    {safeRender(() => model.likes?.toLocaleString() || '0')}
+                    {safeRender(() => modelDetails.likes?.toLocaleString() || '0')}
                   </span>
                 </div>
               )}
@@ -160,11 +431,11 @@ const ModelDetailPage: React.FC = () => {
           </div>
 
           {/* Tags Section */}
-          {model.tags && Array.isArray(model.tags) && model.tags.length > 0 && (
+          {modelDetails.tags && Array.isArray(modelDetails.tags) && modelDetails.tags.length > 0 && (
             <div className="mb-6">
               <h3 className="text-md font-semibold text-gray-700 mb-2">标签</h3>
               <div className="flex flex-wrap gap-2">
-                {model.tags.map((tag, index) => (
+                {modelDetails.tags.map((tag: string, index: number) => (
                   <span key={index} className="bg-indigo-100 text-indigo-800 text-xs font-medium px-3 py-1 rounded-full">
                     {tag}
                   </span>
@@ -173,8 +444,37 @@ const ModelDetailPage: React.FC = () => {
             </div>
           )}
 
+          {/* --- Knowledge Graph Section --- */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-700 mb-3">知识图谱关联</h3>
+            {isLoadingGraph && !isErrorGraph && (
+              <div className="flex items-center text-gray-500">
+                <Spinner />
+                <span className="ml-2">正在加载图谱数据...</span>
+              </div>
+            )}
+            {isErrorGraph && (
+              <div className="bg-red-50 border border-red-300 text-red-700 px-3 py-2 rounded text-sm">
+                加载图谱数据失败: {errorGraph instanceof Error ? errorGraph.message : JSON.stringify(errorGraph)}
+              </div>
+            )}
+            {!isLoadingGraph && !isErrorGraph && modelGraphData && graph.nodes.length > 0 && (
+              <div className="border rounded-md overflow-hidden"> {/* 添加边框和圆角 */}
+                 <Graph
+                  graph={graph} // useMemoized graph data
+                  options={graphOptions}
+                  events={graphEvents}
+                  style={{ width: '100%', height: graphOptions.height }} // 确保应用高度
+                />
+              </div>
+            )}
+            {!isLoadingGraph && !isErrorGraph && (!modelGraphData || graph.nodes.length === 0) && (
+                 <p className="text-gray-500 text-sm">未找到该模型的图谱关联数据。</p>
+            )}
+          </div>
+
           {/* ADDED: Readme Content Section */}
-          {model.readme_content && (
+          {modelDetails.readme_content && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-lg font-semibold text-gray-700 mb-3">README</h3>
               <div className="bg-gray-50 p-4 rounded-md overflow-x-auto">
@@ -197,11 +497,11 @@ const ModelDetailPage: React.FC = () => {
           )}
 
           {/* ADDED: Dataset Links Section */}
-          {model.dataset_links && Array.isArray(model.dataset_links) && model.dataset_links.length > 0 && (
+          {modelDetails.dataset_links && Array.isArray(modelDetails.dataset_links) && modelDetails.dataset_links.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-lg font-semibold text-gray-700 mb-3">相关数据集</h3>
               <ul className="list-disc list-inside space-y-1 pl-2">
-                {model.dataset_links.map((link, index) => (
+                {modelDetails.dataset_links.map((link: string, index: number) => (
                   <li key={index} className="text-sm">
                     <a 
                       href={link} 
@@ -229,7 +529,7 @@ const ModelDetailPage: React.FC = () => {
               </button>
               {showDebugInfo && (
                 <div className="p-4 bg-gray-100 rounded-lg overflow-x-auto">
-                  <pre className="text-xs">{JSON.stringify(model, null, 2)}</pre>
+                  <pre className="text-xs">{JSON.stringify(modelDetails, null, 2)}</pre>
                 </div>
               )}
             </div>
@@ -244,7 +544,7 @@ const ModelDetailPage: React.FC = () => {
         <strong className="font-bold">渲染错误: </strong>
         <span className="block sm:inline">渲染模型详情页面时发生错误。</span>
         <div className="mt-4 p-2 bg-white rounded overflow-x-auto">
-          <pre className="text-xs">{JSON.stringify({ error: String(renderError), modelId, modelKeys: model ? Object.keys(model) : [] }, null, 2)}</pre>
+          <pre className="text-xs">{JSON.stringify({ error: String(renderError), modelId, modelKeys: modelDetails ? Object.keys(modelDetails) : [] }, null, 2)}</pre>
         </div>
       </div>
     );

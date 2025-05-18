@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 import traceback  # Import traceback
-from typing import Optional, Dict, Any, List  # Import List
+from typing import Optional, Dict, Any, List, Union  # Import List and Union
 import json
 import sys  # Import sys for path manipulation
 import argparse  # Import argparse
@@ -462,6 +462,101 @@ async def sync_model_paper_links(
         logger.error(traceback.format_exc())
 
 
+async def sync_model_derivations(
+    pg_repo: PostgresRepository, neo4j_repo: Neo4jRepository, batch_size: int = 100
+) -> None:
+    """同步HFModel之间的DERIVED_FROM关系"""
+    logger.info("开始同步模型之间的派生关系 (DERIVED_FROM)...")
+
+    # 从hf_models表获取hf_model_id和hf_base_models
+    # 确保在 load_postgres.py 中使用的列名是 hf_base_models
+    query = """
+    SELECT hf_model_id, hf_base_models 
+    FROM hf_models 
+    WHERE hf_base_models IS NOT NULL AND hf_base_models <> 'null' AND hf_base_models <> '[]'
+    """
+
+    try:
+        links_to_process: List[Dict[str, str]] = []
+        link_count = 0
+
+        # Corrected call: Use keyword argument for batch_size
+        async for record in pg_repo.fetch_data_cursor(
+            query, batch_size=batch_size
+        ):
+            current_model_id = record.get("hf_model_id")
+            base_models_data = record.get("hf_base_models") # This is likely a JSON string or already parsed by psycopg
+
+            if not current_model_id or not base_models_data:
+                continue
+
+            parsed_base_models: Optional[Union[str, List[str]]] = None
+            if isinstance(base_models_data, str): # If it's a JSON string from DB
+                try:
+                    parsed_base_models = json.loads(base_models_data)
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(
+                        f"无法解析模型 {current_model_id} 的 hf_base_models JSON: {base_models_data}"
+                    )
+                    continue # Skip this record if parsing fails
+            elif isinstance(base_models_data, (list, dict)): # If psycopg already parsed it
+                 # Assuming if it's a dict, it's an error or unexpected format for base_models list/str
+                 if isinstance(base_models_data, dict):
+                    logger.warning(f"模型 {current_model_id} 的 hf_base_models 格式错误 (应为列表或字符串): {base_models_data}")
+                    continue
+                 parsed_base_models = base_models_data
+            else:
+                logger.warning(f"模型 {current_model_id} 的 hf_base_models 类型未知: {type(base_models_data)}")
+                continue
+
+            if not parsed_base_models:
+                continue
+
+            if isinstance(parsed_base_models, str):
+                # Single base model ID
+                links_to_process.append(
+                    {"source_model_id": current_model_id, "base_model_id": parsed_base_models}
+                )
+            elif isinstance(parsed_base_models, list):
+                # List of base model IDs
+                for base_id in parsed_base_models:
+                    if isinstance(base_id, str) and base_id.strip(): # Ensure it's a non-empty string
+                        links_to_process.append(
+                            {"source_model_id": current_model_id, "base_model_id": base_id.strip()}
+                        )
+                    else:
+                        logger.debug(f"模型 {current_model_id} 的 hf_base_models 列表中包含无效条目: {base_id}")
+            else:
+                logger.warning(f"模型 {current_model_id} 解析后的 hf_base_models 类型无效: {type(parsed_base_models)}")
+
+            # Batch processing
+            if len(links_to_process) >= NEO4J_WRITE_BATCH_SIZE:
+                try:
+                    await neo4j_repo.link_models_derived_from_batch(links_to_process)
+                    link_count += len(links_to_process)
+                    logger.info(f"已同步 {link_count} 条模型派生关系...")
+                except Exception as e:
+                    logger.error(f"保存模型派生关系批次时出错: {e}")
+                    logger.error(traceback.format_exc())
+                finally:
+                    links_to_process = []
+
+        # Process any remaining links
+        if links_to_process:
+            try:
+                await neo4j_repo.link_models_derived_from_batch(links_to_process)
+                link_count += len(links_to_process)
+            except Exception as e:
+                logger.error(f"保存最后一批模型派生关系时出错: {e}")
+                logger.error(traceback.format_exc())
+
+        logger.info(f"模型派生关系同步完成，总计: {link_count} 条关系")
+
+    except Exception as e:
+        logger.error(f"获取模型派生关系时出错: {e}")
+        logger.error(traceback.format_exc())
+
+
 # --- Synchronization Runner ---
 async def run_sync(
     pg_repo: Optional[PostgresRepository] = None,
@@ -531,9 +626,12 @@ async def run_sync(
         # 4. Sync Model<->Paper links
         await sync_model_paper_links(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
 
+        # 5. Sync Model<->Model (DERIVED_FROM) links
+        await sync_model_derivations(pg_repo, neo4j_repo, PG_FETCH_BATCH_SIZE)
+
         logger.info("Full synchronization completed successfully.")
 
-        # 5. Count papers in Neo4j (可选的验证步骤)
+        # 6. Count papers in Neo4j (可选的验证步骤)
         neo4j_papers = await neo4j_repo.count_paper_nodes()
         logger.info(f"Current Neo4j paper count: {neo4j_papers}")
 

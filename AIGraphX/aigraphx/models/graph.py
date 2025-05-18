@@ -73,6 +73,17 @@ class PaperDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- Added Basic Info Models for HFModelDetail ---
+class BasicPaperInfo(BaseModel):
+    pwc_id: Optional[str] = None
+    arxiv_id: Optional[str] = None # If pwc_id is not available
+    title: Optional[str] = None
+    published_date: Optional[date] = None
+
+class BasicTaskInfo(BaseModel):
+    name: str
+    # description: Optional[str] = None # Future enhancement
+
 class HFModelDetail(BaseModel):
     """Detailed information for a Hugging Face model."""
 
@@ -103,6 +114,9 @@ class HFModelDetail(BaseModel):
     updated_at: Optional[datetime] = Field(
         None, description="Timestamp when the record was last updated in the database."
     )
+    # --- New fields for related graph data ---
+    related_papers: Optional[List[BasicPaperInfo]] = Field(None, description="Papers related to this model from the graph.")
+    related_tasks_graph: Optional[List[BasicTaskInfo]] = Field(None, description="Tasks related to this model from the graph (distinct from pipeline_tag if applicable).")
 
     @field_validator("last_modified", mode="before")
     @classmethod
@@ -128,7 +142,7 @@ class HFModelDetail(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         arbitrary_types_allowed=True,
-    )  # Keep existing config
+    )
 
 
 # --- Potentially add other models later ---

@@ -7,8 +7,9 @@ from neo4j import (
     AsyncTransaction,
     AsyncManagedTransaction,
 )
+from neo4j.time import Date as Neo4jDate, DateTime as Neo4jDateTime, Time as Neo4jTime, Duration as Neo4jDuration # Import Neo4j specific types
 import os
-from datetime import datetime, date  # Import datetime for Neo4j date handling
+from datetime import datetime, date, time  # Ensure all relevant Python types are imported
 import traceback
 
 # Keep loading .env for potential other uses or default values if driver isn't passed?
@@ -24,6 +25,21 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
+
+def _convert_neo4j_temporal_types(props: Any) -> Any:
+    """Recursively converts Neo4j temporal types in a property structure to Python native types or ISO strings."""
+    if isinstance(props, dict):
+        return {k: _convert_neo4j_temporal_types(v) for k, v in props.items()}
+    elif isinstance(props, list):
+        return [_convert_neo4j_temporal_types(item) for item in props]
+    elif isinstance(props, (Neo4jDate, Neo4jDateTime, Neo4jTime)):
+        try:
+            return props.to_native()
+        except AttributeError: # Fallback for older versions or types without to_native()
+            return str(props) 
+    elif isinstance(props, Neo4jDuration):
+        return str(props) # Convert duration to string representation
+    return props
 
 class Neo4jRepository:
     """Repository class for interacting with the Neo4j database via an injected driver."""
@@ -1074,3 +1090,223 @@ class Neo4jRepository:
     #     #     pass
     #     # return processed_results
     #     pass # Assuming unused for now
+
+    async def get_model_neighborhood(self, model_id: str, limit_per_relation_type: int = 5) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves the neighborhood graph for a given Hugging Face model ID.
+        The graph includes the model itself, directly related papers (MENTIONS),
+        tasks (HAS_TASK), and potentially other relevant entities and their relationships.
+
+        Args:
+            model_id: The modelId of the Hugging Face model.
+            limit_per_relation_type: Max number of nodes to fetch for each type of direct relation. (Currently unused in the refined query for full neighborhood)
+
+        Returns:
+            A dictionary containing 'nodes' and 'relationships' for the graph,
+            or None if the model is not found or an error occurs.
+        """
+        logger.info(f"Fetching neighborhood graph for HFModel: {model_id}")
+        if not self.driver:
+            logger.error("Neo4j driver not available for get_model_neighborhood.")
+            return None
+
+        # Refined Cypher query
+        query = """
+        MATCH (center_model:HFModel {modelId: $model_id})
+
+        // Mentioned Papers
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (center_model)-[r_mentions:MENTIONS]->(paper:Paper)
+            RETURN collect(DISTINCT paper) AS mentioned_papers_nodes,
+                   collect(DISTINCT r_mentions) AS mentions_rels
+        }
+        // Tasks
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (center_model)-[r_has_task:HAS_TASK]->(task:Task)
+            RETURN collect(DISTINCT task) AS task_nodes,
+                   collect(DISTINCT r_has_task) AS has_task_rels
+        }
+        // Parent Models (Models from which center_model is DERIVED_FROM)
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (parent_model:HFModel)-[r_is_base_for:DERIVED_FROM]->(center_model)
+            RETURN collect(DISTINCT parent_model) AS parent_model_nodes,
+                   collect(DISTINCT r_is_base_for) AS is_base_for_rels
+        }
+        // Derived Models (Models DERIVED_FROM center_model)
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (center_model)-[r_has_derived:DERIVED_FROM]->(derived_model:HFModel)
+            RETURN collect(DISTINCT derived_model) AS derived_model_nodes,
+                   collect(DISTINCT r_has_derived) AS has_derived_rels
+        }
+
+        // Combine all distinct nodes and relationships
+        WITH center_model,
+             COALESCE(mentioned_papers_nodes, []) AS mentioned_papers_nodes,
+             COALESCE(task_nodes, []) AS task_nodes,
+             COALESCE(parent_model_nodes, []) AS parent_model_nodes,
+             COALESCE(derived_model_nodes, []) AS derived_model_nodes,
+             COALESCE(mentions_rels, []) AS mentions_rels,
+             COALESCE(has_task_rels, []) AS has_task_rels,
+             COALESCE(is_base_for_rels, []) AS is_base_for_rels,
+             COALESCE(has_derived_rels, []) AS has_derived_rels
+
+        // Create a single list of all unique nodes involved
+        WITH mentioned_papers_nodes + task_nodes + parent_model_nodes + derived_model_nodes + [center_model] AS all_nodes_intermediate,
+             mentions_rels + has_task_rels + is_base_for_rels + has_derived_rels AS all_rels_intermediate
+
+
+        // Unwind nodes to format them and collect distinct formatted nodes
+        UNWIND all_nodes_intermediate AS n_obj
+        WITH all_rels_intermediate, // Carry this forward first
+             collect(DISTINCT { // Start collecting nodes
+                 id: CASE
+                       WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
+                       WHEN 'Paper'      IN labels(n_obj) THEN COALESCE(n_obj.pwc_id, n_obj.arxiv_id_base) // Prefer pwc_id
+                       WHEN 'Task'       IN labels(n_obj) THEN n_obj.name
+                       WHEN 'Dataset'    IN labels(n_obj) THEN n_obj.name // Assuming 'name' as ID for Dataset
+                       WHEN 'Method'     IN labels(n_obj) THEN n_obj.name // Assuming 'name' as ID for Method
+                       WHEN 'Author'     IN labels(n_obj) THEN n_obj.name // Assuming 'name' as ID for Author
+                       WHEN 'Area'       IN labels(n_obj) THEN n_obj.name // Assuming 'name' as ID for Area
+                       WHEN 'Repository' IN labels(n_obj) THEN n_obj.url  // Assuming 'url' as ID for Repository
+                       ELSE toString(elementId(n_obj)) // Fallback to elementId if no specific ID property
+                     END,
+                 label: CASE
+                          WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
+                          WHEN 'Paper'      IN labels(n_obj) THEN n_obj.title
+                          WHEN 'Task'       IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Dataset'    IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Method'     IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Author'     IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Area'       IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Repository' IN labels(n_obj) THEN COALESCE(n_obj.name, n_obj.url) // Prefer name if exists for repo label
+                          ELSE COALESCE(n_obj.name, toString(elementId(n_obj))) // Default to 'name' or elementId
+                        END,
+                 type: labels(n_obj)[0], // Get the primary label as type
+                 properties: properties(n_obj)
+             }) AS final_nodes
+
+        // Unwind relationships to format them and collect distinct formatted relationships
+        UNWIND all_rels_intermediate AS r_obj
+        WITH final_nodes, r_obj WHERE r_obj IS NOT NULL // Ensure relationship object is not null
+        WITH final_nodes, // Carry this forward
+             collect(DISTINCT { // Start collecting relationships
+                 id: toString(elementId(r_obj)),
+                 source: CASE
+                                   WHEN 'HFModel' IN labels(startNode(r_obj)) THEN startNode(r_obj).modelId
+                                   WHEN 'Paper'   IN labels(startNode(r_obj)) THEN COALESCE(startNode(r_obj).pwc_id, startNode(r_obj).arxiv_id_base)
+                                   WHEN 'Task'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                                   WHEN 'Dataset' IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                                   WHEN 'Method'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                                   WHEN 'Author'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                                   WHEN 'Area'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                                   WHEN 'Repository' IN labels(startNode(r_obj)) THEN startNode(r_obj).url
+                                   ELSE toString(elementId(startNode(r_obj)))
+                                 END,
+                 target: CASE
+                                 WHEN 'HFModel' IN labels(endNode(r_obj)) THEN endNode(r_obj).modelId
+                                 WHEN 'Paper'   IN labels(endNode(r_obj)) THEN COALESCE(endNode(r_obj).pwc_id, endNode(r_obj).arxiv_id_base)
+                                 WHEN 'Task'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                                 WHEN 'Dataset' IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                                 WHEN 'Method'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                                 WHEN 'Author'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                                 WHEN 'Area'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                                 WHEN 'Repository' IN labels(endNode(r_obj)) THEN endNode(r_obj).url
+                                 ELSE toString(elementId(endNode(r_obj)))
+                               END,
+                 type: type(r_obj),
+                 properties: properties(r_obj)
+             }) AS final_relationships
+
+        RETURN final_nodes, final_relationships
+        """
+        # The limit_per_relation_type is not directly used in this refined query structure
+        # as it aims to fetch the full 1-hop neighborhood identified by the CALL blocks.
+        # If limiting is strictly needed per type, it should be applied within each CALL subquery's RETURN.
+
+        async with self.driver.session(database=self.db_name) as session:
+            try:
+                # Use Query object for parameters
+                result = await session.run(query, {"model_id": model_id}) # Pass model_id directly if that's the only param for Query obj
+                record = await result.single() # Expecting a single row with two lists: nodes and relationships
+
+                if not record or not record["final_nodes"]: # Check if central model or any nodes were found
+                    logger.warning(f"No graph data or no nodes found for model {model_id} after Cypher execution.")
+                    return None
+
+                raw_nodes = record["final_nodes"]
+                raw_relationships = record["final_relationships"]
+
+                # Convert Neo4j specific types in properties to Pydantic-serializable types
+                final_nodes_list = []
+                for node_data in raw_nodes:
+                    if isinstance(node_data.get("properties"), dict):
+                        node_data["properties"] = _convert_neo4j_temporal_types(node_data["properties"])
+                    final_nodes_list.append(node_data)
+                
+                final_relationships_list = []
+                for rel_data in raw_relationships:
+                    if isinstance(rel_data.get("properties"), dict):
+                        rel_data["properties"] = _convert_neo4j_temporal_types(rel_data["properties"])
+                    final_relationships_list.append(rel_data)
+                
+                # Ensure the central model node is present, if not, the query might have failed silently for it.
+                # However, the MATCH (center_model:HFModel ...) should ensure it or fail earlier.
+                if not any(node.get('id') == model_id and node.get('type') == 'HFModel' for node in final_nodes_list):
+                    logger.warning(f"Central model node {model_id} not found in the final_nodes list. Data might be incomplete.")
+                    # Optionally, if this is critical, return None or an empty structure.
+                    # For now, proceed with what was returned.
+
+                return {"nodes": final_nodes_list, "relationships": final_relationships_list}
+
+            except Exception as e:
+                logger.error(
+                    f"Error fetching model neighborhood for {model_id}: {e}",
+                    exc_info=True, # Include stack trace
+                )
+                logger.error(f"Query attempted: \\n{query}") # Log the query
+                return None
+            finally:
+                logger.debug(f"Finished get_model_neighborhood for {model_id}")
+
+    async def link_models_derived_from_batch(self, links: List[Dict[str, str]]) -> None:
+        """
+        Creates DERIVED_FROM relationships between HFModels using UNWIND.
+        Each link in the list should be a dict with 'source_model_id' and 'base_model_id'.
+        """
+        if not links:
+            return
+
+        if not self.driver or not hasattr(self.driver, "session"):
+            logger.error("Cannot link model-derived_from batch: Neo4j driver not available.")
+            raise ConnectionError("Neo4j driver is not available.")
+
+        async def _run_link_batch_tx(tx: AsyncManagedTransaction) -> None:
+            query = """
+            UNWIND $batch AS link_data
+            MATCH (source_model:HFModel {modelId: link_data.source_model_id})
+            MATCH (base_model:HFModel {modelId: link_data.base_model_id})
+            MERGE (source_model)-[r:DERIVED_FROM]->(base_model)
+            ON CREATE SET 
+                r.created_at = timestamp()
+            """
+            try:
+                await tx.run(query, parameters={"batch": links})
+            except Exception as e:
+                logger.error(f"Error executing model-derived_from link batch query: {e}")
+                logger.error(f"Problematic links batch (first 5 shown): {links[:5]}")
+                raise  # Re-raise after logging context
+
+        try:
+            async with self.driver.session(database=self.db_name) as session:
+                await session.execute_write(_run_link_batch_tx)
+                logger.info(
+                    f"Successfully processed model-derived_from link batch of {len(links)} links."
+                )
+        except Exception as e:
+            logger.error(f"Failed to link models (derived_from) in batch: {e}")
+            logger.error(traceback.format_exc())
+            raise

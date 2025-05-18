@@ -447,7 +447,17 @@ class PostgresRepository:
         if not models_data[0]:
             return  # Handle empty dict case
 
-        cols = list(models_data[0].keys())
+        # Start with keys from the first model, then ensure standard columns are present
+        # and add hf_base_models if it exists in any model.
+        cols_set = set(models_data[0].keys())
+        # Check if 'hf_base_models' exists in any of the models in the batch,
+        # as it might not be in the first one.
+        has_hf_base_models = any("hf_base_models" in model for model in models_data)
+        if has_hf_base_models:
+            cols_set.add("hf_base_models")
+
+        cols = list(cols_set) # Convert back to list for defined order
+
         # Ensure hf_model_id is present for ON CONFLICT
         if "hf_model_id" not in cols:
             self.logger.error(
@@ -482,10 +492,10 @@ class PostgresRepository:
         data_tuples = []
         for model in models_data:
             row = []
-            for col in cols:
+            for col in cols: # Iterate through the full 'cols' list
                 value = model.get(col)
-                # FIX: Serialize list/dict fields (like 'hf_tags', 'hf_dataset_links') to JSON strings
-                if col in ["hf_tags", "hf_dataset_links"] and isinstance(value, (list, dict)):
+                # FIX: Serialize list/dict fields (like 'hf_tags', 'hf_dataset_links', 'hf_base_models') to JSON strings
+                if col in ["hf_tags", "hf_dataset_links", "hf_base_models"] and isinstance(value, (list, dict)):
                     row.append(json.dumps(value))
                 elif col == "hf_last_modified" and isinstance(value, str):
                     # Assuming hf_last_modified might come as string, parse to datetime if so

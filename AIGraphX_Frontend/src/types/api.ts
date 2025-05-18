@@ -62,6 +62,13 @@ export interface paths {
      */
     get: operations["get_hf_model_details_api_v1_graph_models__model_id__get"];
   };
+  "/api/v1/graph/hf_models/{model_id}/graph": {
+    /**
+     * Get graph neighborhood for a Hugging Face model
+     * @description Retrieves the graph neighborhood for a given Hugging Face model ID.
+     */
+    get: operations["get_hf_model_graph_data_api_v1_graph_hf_models__model_id__graph_get"];
+  };
   "/api/v1/graph/related/{start_node_label}/{start_node_prop}/{start_node_val}": {
     /**
      * Get related entities
@@ -75,6 +82,22 @@ export type webhooks = Record<string, never>;
 
 export interface components {
   schemas: {
+    /** BasicPaperInfo */
+    BasicPaperInfo: {
+      /** Pwc Id */
+      pwc_id?: string | null;
+      /** Arxiv Id */
+      arxiv_id?: string | null;
+      /** Title */
+      title?: string | null;
+      /** Published Date */
+      published_date?: string | null;
+    };
+    /** BasicTaskInfo */
+    BasicTaskInfo: {
+      /** Name */
+      name: string;
+    };
     /**
      * GraphData
      * @description Represents the data structure for graph visualization or analysis.
@@ -161,6 +184,16 @@ export interface components {
        * @description Timestamp when the record was last updated in the database.
        */
       updated_at?: string | null;
+      /**
+       * Related Papers
+       * @description Papers related to this model from the graph.
+       */
+      related_papers?: components["schemas"]["BasicPaperInfo"][] | null;
+      /**
+       * Related Tasks Graph
+       * @description Tasks related to this model from the graph (distinct from pipeline_tag if applicable).
+       */
+      related_tasks_graph?: components["schemas"]["BasicTaskInfo"][] | null;
     };
     /**
      * HFSearchResultItem
@@ -422,6 +455,11 @@ export interface components {
       area?: string | null;
       /** Conference */
       conference?: string | null;
+      /**
+       * Tasks
+       * @description Key tasks associated with the paper from the graph.
+       */
+      tasks?: string[] | null;
     };
     /** ValidationError */
     ValidationError: {
@@ -655,6 +693,32 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["HFModelDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /**
+   * Get graph neighborhood for a Hugging Face model
+   * @description Retrieves the graph neighborhood for a given Hugging Face model ID.
+   */
+  get_hf_model_graph_data_api_v1_graph_hf_models__model_id__graph_get: {
+    parameters: {
+      path: {
+        /** @description The Hugging Face model ID (e.g., 'google/flan-t5-base') to get the graph for. */
+        model_id: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["GraphData"];
         };
       };
       /** @description Validation Error */

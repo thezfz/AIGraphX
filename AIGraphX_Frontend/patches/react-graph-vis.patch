@@ -1,0 +1,24 @@
+diff --git a/lib/index.js b/lib/index.js
+index 980450b493dbb23ce0fd21916a6e119ebec8a222..58659b52d4c223683f02ea21af6ab37bbe31e59f 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -26,9 +26,7 @@ var _visData = require("vis-data");
+ 
+ var _visNetwork = require("vis-network");
+ 
+-var _uuid = require("uuid");
+-
+-var _uuid2 = _interopRequireDefault(_uuid);
++var uuidv4 = require("uuid").v4;
+ 
+ var _propTypes = require("prop-types");
+ 
+@@ -54,7 +52,7 @@ var Graph = function (_Component) {
+ 
+     _this.updateGraph = _this.updateGraph.bind(_this);
+     _this.state = {
+-      identifier: identifier !== undefined ? identifier : _uuid2.default.v4()
++      identifier: identifier !== undefined ? identifier : (typeof uuidv4 === 'function' ? uuidv4() : 'uuid-fallback-' + Date.now())
+     };
+     _this.container = _react2.default.createRef();
+     return _this;

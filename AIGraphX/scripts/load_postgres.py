@@ -150,14 +150,34 @@ async def insert_hf_model(
     conn: psycopg.AsyncConnection, model_data: Dict[str, Any]
 ) -> None:
     """Inserts or updates a model in the hf_models table using psycopg."""
+    
+    # Extract and process base_model from hf_tags
+    base_model_values = []
+    hf_tags = model_data.get("hf_tags")
+    if isinstance(hf_tags, list):
+        for tag in hf_tags:
+            if isinstance(tag, str) and tag.startswith("base_model:"):
+                base_model_id = tag.split(":", 1)[1].strip()
+                if base_model_id: # Ensure it's not an empty string after stripping
+                    base_model_values.append(base_model_id)
+    
+    processed_base_models_json = None
+    if base_model_values:
+        if len(base_model_values) == 1:
+            # If only one base model, store as a JSON string directly
+            processed_base_models_json = json.dumps(base_model_values[0])
+        else:
+            # If multiple base models, store as a JSON array of strings
+            processed_base_models_json = json.dumps(base_model_values)
+            
     async with conn.cursor() as cur:
         await cur.execute(
             """
             INSERT INTO hf_models (
                 hf_model_id, hf_author, hf_sha, hf_last_modified, hf_downloads,
                 hf_likes, hf_tags, hf_pipeline_tag, hf_library_name,
-                hf_readme_content, hf_dataset_links
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                hf_readme_content, hf_dataset_links, hf_base_models
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (hf_model_id) DO UPDATE SET
                 hf_author = EXCLUDED.hf_author,
                 hf_sha = EXCLUDED.hf_sha,
@@ -169,6 +189,7 @@ async def insert_hf_model(
                 hf_library_name = EXCLUDED.hf_library_name,
                 hf_readme_content = EXCLUDED.hf_readme_content,
                 hf_dataset_links = EXCLUDED.hf_dataset_links,
+                hf_base_models = EXCLUDED.hf_base_models,
                 updated_at = NOW()
         """,
             (
@@ -178,8 +199,8 @@ async def insert_hf_model(
                 parse_datetime(model_data.get("hf_last_modified")),
                 model_data.get("hf_downloads"),
                 model_data.get("hf_likes"),
-                json.dumps(model_data.get("hf_tags"))
-                if model_data.get("hf_tags")
+                json.dumps(hf_tags) # Store all original tags as before
+                if hf_tags 
                 else None,
                 model_data.get("hf_pipeline_tag"),
                 model_data.get("hf_library_name"),
@@ -187,6 +208,7 @@ async def insert_hf_model(
                 json.dumps(model_data.get("hf_dataset_links"))
                 if model_data.get("hf_dataset_links")
                 else None,
+                processed_base_models_json, # Use the newly processed base models
             ),
         )
 

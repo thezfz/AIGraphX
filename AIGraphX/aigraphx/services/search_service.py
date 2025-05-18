@@ -107,10 +107,10 @@ class SearchService:
     async def _get_paper_details_for_ids(
         self, paper_ids: List[int], scores: Optional[Dict[int, Optional[float]]] = None
     ) -> List[SearchResultItem]:
-        """从数据库获取指定ID列表的论文详细信息。
+        """从数据库获取指定ID列表的论文详细信息，并从Neo4j补充任务和领域信息。
 
         Args:
-            paper_ids: 论文ID列表
+            paper_ids: 论文ID列表 (来自PostgreSQL的paper.paper_id)
             scores: 可选的ID到分数的映射
 
         Returns:
@@ -120,46 +120,108 @@ class SearchService:
             return []
 
         try:
-            # 获取论文详细信息
-            paper_details_list = await self.pg_repo.get_papers_details_by_ids(paper_ids)
-            if not paper_details_list:
+            paper_details_pg_list = await self.pg_repo.get_papers_details_by_ids(paper_ids)
+            if not paper_details_pg_list:
                 return []
 
-            # 创建ID到详细信息的映射，并按原始顺序填充结果
-            paper_details_map = {
-                details.get("paper_id"): details for details in paper_details_list
-            }
             results: List[SearchResultItem] = []
+            # 创建 PWC ID 到 PG 详细信息的映射，方便后续查找
+            pg_details_map_by_pwc_id: Dict[str, Dict[str, Any]] = {}
+            # 创建 paper_id (PG) 到 PWC ID 的映射，用于后续关联 Neo4j 数据
+            paper_id_to_pwc_id_map: Dict[int, str] = {}
 
-            for paper_id in paper_ids:
-                if details := paper_details_map.get(paper_id):
-                    # 获取分数，如果存在
-                    score = None
-                    if scores is not None:
-                        score = scores.get(paper_id)  # 可能为None
+            for details in paper_details_pg_list:
+                pwc_id = details.get("pwc_id")
+                paper_id_pg = details.get("paper_id")
+                if pwc_id and paper_id_pg is not None:
+                    pg_details_map_by_pwc_id[pwc_id] = details
+                    paper_id_to_pwc_id_map[paper_id_pg] = pwc_id
+            
+            # 用于存储从 Neo4j 获取的每个 PWC ID 对应的任务列表
+            neo4j_tasks_map: Dict[str, List[str]] = {}
+            # 用于存储从 Neo4j 获取的每个 PWC ID 对应的领域 (可选，作为PG的补充)
+            neo4j_area_map: Dict[str, str] = {}
 
-                    # 构建SearchResultItem
+            if self.neo4j_repo and pg_details_map_by_pwc_id: # 只有在有 Neo4j 仓库且有论文时才查询
+                pwc_ids_to_query_neo4j = list(pg_details_map_by_pwc_id.keys())
+                
+                for pwc_id_to_query in pwc_ids_to_query_neo4j:
                     try:
-                        item = SearchResultItem(
-                            paper_id=paper_id,
-                            pwc_id=details.get("pwc_id", ""),
-                            title=details.get("title", ""),
-                            summary=details.get("summary", ""),
-                            score=score,  # 允许None
-                            pdf_url=details.get("pdf_url", ""),
-                            published_date=details.get("published_date"),
-                            authors=details.get("authors", []),
-                            area=details.get("area", ""),
-                            conference=details.get("conference")
+                        # Fetch Tasks from Neo4j
+                        task_nodes_data = await self.neo4j_repo.get_related_nodes(
+                            start_node_label="Paper",
+                            start_node_prop="pwc_id",
+                            start_node_val=pwc_id_to_query,
+                            relationship_type="HAS_TASK",
+                            target_node_label="Task",
+                            direction="OUT",
+                            limit=5 # 获取少量关键任务
                         )
-                        results.append(item)
-                    except ValidationError as ve:
-                        # 记录验证错误详细信息
-                        logger.error(
-                            f"Validation error creating SearchResultItem for paper_id={paper_id}: {ve}"
-                        )
-                        # 继续处理其他项
+                        current_paper_tasks = [
+                            item.get("target_node", {}).get("name")
+                            for item in task_nodes_data
+                            if item.get("target_node", {}).get("name")
+                        ]
+                        if current_paper_tasks:
+                            neo4j_tasks_map[pwc_id_to_query] = current_paper_tasks
 
+                        # Fetch Area from Neo4j (optional, could supplement PG data)
+                        area_nodes_data = await self.neo4j_repo.get_related_nodes(
+                            start_node_label="Paper",
+                            start_node_prop="pwc_id",
+                            start_node_val=pwc_id_to_query,
+                            relationship_type="HAS_AREA",
+                            target_node_label="Area",
+                            direction="OUT",
+                            limit=1 
+                        )
+                        if area_nodes_data and area_nodes_data[0].get("target_node", {}).get("name"):
+                            neo4j_area_map[pwc_id_to_query] = area_nodes_data[0].get("target_node", {}).get("name")
+
+                    except Exception as e_neo4j:
+                        logger.error(f"Error fetching Neo4j data for pwc_id {pwc_id_to_query}: {e_neo4j}", exc_info=True)
+                        # Continue processing other papers even if one fails for Neo4j
+
+            # 构建最终的 SearchResultItem 列表，按原始 paper_ids 顺序
+            for paper_id_pg_original in paper_ids:
+                pwc_id_original = paper_id_to_pwc_id_map.get(paper_id_pg_original)
+                if not pwc_id_original: # 如果原始PG paper_id 没有对应的pwc_id，则跳过
+                    logger.warning(f"Skipping paper_id {paper_id_pg_original} as its PWC ID was not found in initial PG fetch map.")
+                    continue
+                
+                details_pg = pg_details_map_by_pwc_id.get(pwc_id_original)
+                if not details_pg: # 理论上不会发生，因为map是用这些details构建的
+                    logger.warning(f"Details not found in pg_details_map_by_pwc_id for pwc_id {pwc_id_original} (paper_id {paper_id_pg_original}).")
+                    continue
+
+                score = scores.get(paper_id_pg_original) if scores else None
+                
+                # 从Neo4j获取的任务，如果存在的话
+                tasks_from_neo4j = neo4j_tasks_map.get(pwc_id_original, []) 
+                # 从Neo4j获取的领域，如果PG中没有或者想覆盖
+                area_from_pg = details_pg.get("area", "")
+                area_from_neo4j = neo4j_area_map.get(pwc_id_original)
+                final_area = area_from_neo4j if area_from_neo4j else area_from_pg # Neo4j优先，否则用PG的
+
+                try:
+                    item = SearchResultItem(
+                        paper_id=paper_id_pg_original,
+                        pwc_id=pwc_id_original, # 确保使用 PWC ID
+                        title=details_pg.get("title", ""),
+                        summary=details_pg.get("summary", ""),
+                        score=score,
+                        pdf_url=details_pg.get("pdf_url", ""),
+                        published_date=details_pg.get("published_date"),
+                        authors=details_pg.get("authors", []),
+                        area=final_area, # 使用合并后的 area
+                        conference=details_pg.get("conference"),
+                        tasks=tasks_from_neo4j if tasks_from_neo4j else None # 添加 tasks 字段
+                    )
+                    results.append(item)
+                except ValidationError as ve:
+                    logger.error(
+                        f"Validation error creating SearchResultItem for paper_id={paper_id_pg_original} (pwc_id={pwc_id_original}): {ve}"
+                    )
             return results
 
         except Exception as e:

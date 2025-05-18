@@ -127,6 +127,37 @@ async def get_hf_model_details(
         )
 
 
+@router.get(
+    "/hf_models/{model_id:path}/graph",
+    response_model=GraphData,
+    summary="Get graph neighborhood for a Hugging Face model",
+    description="Retrieves the graph neighborhood for a given Hugging Face model ID.",
+    tags=["models", "Graph"],
+)
+async def get_hf_model_graph_data(
+    model_id: str = Path(
+        ..., description="The Hugging Face model ID (e.g., 'google/flan-t5-base') to get the graph for."
+    ),
+    graph_service: GraphService = Depends(deps.get_graph_service),
+) -> GraphData:
+    logger.info(f"Received request for graph data for model: {model_id}")
+    try:
+        graph_data = await graph_service.get_model_graph(model_id)
+        if graph_data is None:
+            logger.warning(f"Graph data not found for model {model_id}. This could be due to the model not existing or an issue fetching its neighborhood.")
+            raise HTTPException(
+                status_code=404, detail=f"Graph data not found for model {model_id}"
+            )
+        return graph_data
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Error retrieving graph data for model {model_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Internal server error retrieving model graph data."
+        )
+
+
 # --- NEW Endpoint: Get Related Entities ---
 @router.get(
     "/related/{start_node_label}/{start_node_prop}/{start_node_val}",

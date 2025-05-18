@@ -59,4 +59,117 @@ export const usePaperAreas = () => {
   });
 };
 
-// TODO: 添加 useModelSearch, usePaperDetail, useModelDetail 等 Hook 
+// TODO: 添加 useModelSearch, usePaperDetail, useModelDetail 等 Hook
+
+// --- Graph Data Hooks ---
+
+/** GraphData 类型别名 */
+type GraphData = components['schemas']['GraphData'];
+
+/**
+ * 获取论文图数据的 React Query Hook。
+ * 
+ * @param pwcId - 论文的 PWC ID。
+ * @param enabled - 是否启用查询，默认为 true。如果 pwcId 为空则通常不启用。
+ * @returns React Query 查询结果对象，包含图数据。
+ */
+export const usePaperGraphData = (pwcId: string, enabled: boolean = true) => {
+  return useQuery<
+    GraphData, 
+    Error
+  >(
+    {
+      queryKey: ['paperGraph', pwcId],
+      queryFn: async () => {
+        const response = await apiClient.get<GraphData>(`/graph/papers/${pwcId}/graph`);
+        return response.data;
+      },
+      enabled: !!pwcId && enabled, // 仅当 pwcId 存在且外部允许时才执行查询
+    }
+  );
+};
+
+/**
+ * 获取模型图数据的 React Query Hook。
+ * 
+ * @param modelId - 模型的 ID。
+ * @param enabled - 是否启用查询，默认为 true。如果 modelId 为空则通常不启用。
+ * @returns React Query 查询结果对象，包含图数据。
+ */
+export const useModelGraphData = (modelId: string, enabled: boolean = true) => {
+  return useQuery<
+    GraphData, 
+    Error
+  >(
+    {
+      queryKey: ['modelGraph', modelId],
+      queryFn: async () => {
+        // 注意：model_id 在路径中可能包含斜杠，Axios 默认会自动编码它们。
+        // 如果后端API期望未编码的路径参数（FastAPI通常能处理编码的），则无需特殊处理。
+        const response = await apiClient.get<GraphData>(`/graph/hf_models/${modelId}/graph`);
+        return response.data;
+      },
+      enabled: !!modelId && enabled, // 仅当 modelId 存在且外部允许时才执行查询
+    }
+  );
+};
+
+// --- Detail Hooks ---
+/** ModelDetail 类型别名 */
+type ModelDetail = components['schemas']['HFModelDetail']; // 确保 HFModelDetail 在 api.ts 中定义正确
+
+/**
+ * 获取模型详细信息的 React Query Hook。
+ * 
+ * @param modelId - 模型的 ID。
+ * @param enabled - 是否启用查询，默认为 true。如果 modelId 为空则通常不启用。
+ * @returns React Query 查询结果对象，包含模型详细信息。
+ */
+export const useModelDetail = (modelId?: string, enabled: boolean = true) => { // modelId 可以是 undefined
+  return useQuery<
+    ModelDetail, 
+    Error
+  >(
+    {
+      queryKey: ['modelDetail', modelId],
+      queryFn: async () => {
+        if (!modelId) { // 如果 modelId 未定义，则不执行查询并抛出错误或返回特定值
+          throw new Error('Model ID is undefined, cannot fetch details.');
+          // 或者 return Promise.resolve(null); 并相应调整类型
+        }
+        const response = await apiClient.get<ModelDetail>(`/graph/models/${modelId}`);
+        return response.data;
+      },
+      enabled: !!modelId && enabled, // 仅当 modelId 存在且外部允许时才执行查询
+    }
+  );
+};
+
+/** PaperDetail 类型别名 */
+type PaperDetail = components['schemas']['PaperDetailResponse']; // 确保 PaperDetailResponse 在 api.ts 中定义正确
+
+/**
+ * 获取论文详细信息的 React Query Hook。
+ *
+ * @param pwcId - 论文的 PWC ID。
+ * @param enabled - 是否启用查询，默认为 true。如果 pwcId 为空则通常不启用。
+ * @returns React Query 查询结果对象，包含论文详细信息。
+ */
+export const usePaperDetail = (pwcId?: string, enabled: boolean = true) => { // pwcId 可以是 undefined
+  return useQuery<
+    PaperDetail,
+    Error
+  >(
+    {
+      queryKey: ['paperDetail', pwcId],
+      queryFn: async () => {
+        if (!pwcId) { // 如果 pwcId 未定义，则不执行查询
+          throw new Error('PWC ID is undefined, cannot fetch paper details.');
+        }
+        const response = await apiClient.get<PaperDetail>(`/graph/papers/${pwcId}`);
+        return response.data;
+      },
+      enabled: !!pwcId && enabled, // 仅当 pwcId 存在且外部允许时才执行查询
+    }
+  );
+}; 

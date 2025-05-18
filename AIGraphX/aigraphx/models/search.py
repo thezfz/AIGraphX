@@ -23,6 +23,7 @@ class SearchResultItem(BaseModel):
     authors: Optional[List[str]] = None  # Assuming decoded list
     area: Optional[str] = None  # Add area field
     conference: Optional[str] = None
+    tasks: Optional[List[str]] = Field(None, description="Key tasks associated with the paper from the graph.")
 
 
 class HFSearchResultItem(BaseModel):
