@@ -150,6 +150,7 @@ class SearchService:
                             published_date=details.get("published_date"),
                             authors=details.get("authors", []),
                             area=details.get("area", ""),
+                            conference=details.get("conference")
                         )
                         results.append(item)
                     except ValidationError as ve:
@@ -239,7 +240,7 @@ class SearchService:
 
             # Process fields safely
             processed_tags: Optional[List[str]] = None
-            tags_list = detail_result.get("tags")
+            tags_list = detail_result.get("hf_tags")
             if isinstance(tags_list, str):
                 try:
                     parsed_tags = json.loads(tags_list)
@@ -265,7 +266,7 @@ class SearchService:
             processed_last_modified_str: Optional[str] = (
                 None  # Initialize as Optional[str]
             )
-            last_modified_val = detail_result.get("last_modified")
+            last_modified_val = detail_result.get("hf_last_modified")
             if isinstance(last_modified_val, (datetime, date)):
                 processed_last_modified_str = last_modified_val.isoformat()
             elif isinstance(last_modified_val, str):
@@ -327,6 +328,8 @@ class SearchService:
                     library_name=str(
                         detail_result.get("hf_library_name", "")
                     ),  # 修正: 数据库列名
+                    readme_content=str(detail_result.get("hf_readme_content", "")),
+                    dataset_links=detail_result.get("hf_dataset_links", [])
                 )
                 # 使用 hf_model_id (数据库中的真实ID) 作为 result_items_map 的键
                 db_model_id = detail_result.get("hf_model_id")
@@ -1072,7 +1075,8 @@ class SearchService:
                             else None,
                             last_modified=final_last_modified_dt,
                             score=0.0,  # Assign default score for keyword results
-                            # sha=item.get("hf_sha") # sha is not in HFSearchResultItem model
+                            readme_content=str(item.get("hf_readme_content", "")),
+                            dataset_links=item.get("hf_dataset_links", [])
                         )
                         model_items.append(model_instance)
                     except ValidationError as val_err:
@@ -1389,6 +1393,7 @@ class SearchService:
                         published_date=details.get("published_date"),
                         authors=authors,
                         area=details.get("area", ""),
+                        conference=details.get("conference")
                     )
                     all_items.append(item)
                 except ValidationError as ve:
@@ -1658,12 +1663,10 @@ class SearchService:
                         model_id=model_id,
                         author=details.get("hf_author", ""),
                         pipeline_tag=details.get("hf_pipeline_tag", ""),
-                        last_modified=details.get("hf_last_modified"),
-                        tags=tags,
-                        likes=details.get("hf_likes", 0),
-                        downloads=details.get("hf_downloads", 0),
                         library_name=details.get("hf_library_name", ""),
                         score=combined_scores.get(model_id),
+                        readme_content=details.get("hf_readme_content", ""),
+                        dataset_links=details.get("hf_dataset_links", [])
                     )
                     all_items.append(item)
                 except ValidationError as ve:

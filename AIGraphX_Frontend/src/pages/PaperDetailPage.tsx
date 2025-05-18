@@ -63,6 +63,14 @@ const PaperDetailPage: React.FC = () => {
               领域: <span className="font-medium text-indigo-700 ml-1">{paper.area}</span>
             </span>
           )}
+          {paper.conference && (
+            <span className="inline-flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 mr-1.5 text-gray-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h6M9 11.25h6M9 15.75h6M5.25 21v-3.375c0-.621.504-1.125 1.125-1.125h11.25c.621 0 1.125.504 1.125 1.125V21" />
+              </svg>
+              会议: <span className="font-medium text-teal-700 ml-1">{paper.conference}</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -105,11 +113,6 @@ const PaperDetailPage: React.FC = () => {
           {paper.arxiv_id && (
             <span className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium shadow-sm">
                <TagIcon className="w-4 h-4 mr-1.5"/> arXiv: {paper.arxiv_id}
-            </span>
-          )}
-          {paper.number_of_stars !== undefined && paper.number_of_stars !== null && (
-             <span className="inline-flex items-center px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium shadow-sm">
-               <StarIcon className="w-4 h-4 mr-1.5"/> {paper.number_of_stars.toLocaleString()} Stars
              </span>
            )}
         </div>

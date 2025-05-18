@@ -24,6 +24,7 @@ export interface ResultItem {
   publishedDate?: string;
   authors?: string[];
   venue?: string;
+  conference?: string;
   arxivId?: string;
   downloadCount?: number;
   starCount?: number;
@@ -35,6 +36,8 @@ export interface ResultItem {
   lastModified?: string;
   score?: number | null;
   author?: string;
+  readmeContent?: string;
+  datasetLinks?: string[];
 }
 
 interface ResultListProps {
@@ -102,6 +105,14 @@ const ResultList: React.FC<ResultListProps> = ({ results, isLoading, query, targ
                       {result.publishedDate}
                     </span>
                   )}
+                  {result.conference && (
+                    <span className="inline-flex items-center" title={`Conference: ${result.conference}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="mr-1 h-4 w-4 text-gray-400">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 18V7.875c0-.621.504-1.125 1.125-1.125H6.75m0-3h5.25m0 0h5.25M9 4.5V1.5M12 4.5V1.5m3 0V4.5m0 0V1.5" />
+                      </svg>
+                      {result.conference}
+                    </span>
+                  )}
                 </>
               )}
               
@@ -152,6 +163,35 @@ const ResultList: React.FC<ResultListProps> = ({ results, isLoading, query, targ
                 {result.tags.length > 5 && (
                   <span className="text-gray-500">...</span>
                 )}
+              </div>
+            )}
+
+            {result.type === 'model' && result.readmeContent && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 mb-0.5">README Snippet:</h4>
+                <p className="text-xs text-gray-600 line-clamp-3 whitespace-pre-wrap">{result.readmeContent}</p>
+              </div>
+            )}
+
+            {result.type === 'model' && result.datasetLinks && result.datasetLinks.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 mb-0.5">Dataset Links:</h4>
+                <ul className="list-disc list-inside pl-1 space-y-0.5">
+                  {result.datasetLinks.slice(0, 3).map((link, index) => (
+                    <li key={index} className="text-xs">
+                      <a 
+                        href={link}
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:text-blue-800 hover:underline truncate block"
+                        title={link}
+                      >
+                        {link}
+                      </a>
+                    </li>
+                  ))}
+                  {result.datasetLinks.length > 3 && <li className="text-xs text-gray-500">...and {result.datasetLinks.length - 3} more</li>}
+                </ul>
               </div>
             )}
 

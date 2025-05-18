@@ -3,798 +3,708 @@
  * Do not make direct changes to the file.
  */
 
+
 export interface paths {
-    "/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Root */
-        get: operations["read_root__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health Check
-         * @description Basic health check endpoint.
-         *     Returns 200 OK with status "ok" if the server is running.
-         */
-        get: operations["health_check_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/search/papers/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search Papers
-         * @description Performs semantic, keyword, or hybrid search specifically for papers, with optional filtering and sorting.
-         */
-        get: operations["search_papers_api_v1_search_papers__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/search/models/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search Models
-         * @description Performs semantic or keyword search specifically for models.
-         */
-        get: operations["search_models_api_v1_search_models__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/graph/papers/{pwc_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Paper Details Endpoint
-         * @description Retrieves detailed information about a specific paper by its PWC ID.
-         */
-        get: operations["get_paper_details_endpoint_api_v1_graph_papers__pwc_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/graph/papers/{pwc_id}/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get graph neighborhood for a paper
-         * @description Retrieves the graph neighborhood (related papers, models, concepts) for a given PWC paper ID.
-         */
-        get: operations["get_paper_graph_data_api_v1_graph_papers__pwc_id__graph_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/graph/models/{model_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get details for a Hugging Face model
-         * @description Retrieves detailed information for a specific Hugging Face model by its ID.
-         */
-        get: operations["get_hf_model_details_api_v1_graph_models__model_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/graph/related/{start_node_label}/{start_node_prop}/{start_node_val}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get related entities
-         * @description Retrieves related entities connected by a specific relationship type and direction.
-         */
-        get: operations["get_related_entities_endpoint_api_v1_graph_related__start_node_label___start_node_prop___start_node_val__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+  "/": {
+    /**
+     * Read Root
+     * @description 根端点，返回欢迎信息
+     */
+    get: operations["read_root__get"];
+  };
+  "/health": {
+    /**
+     * Health Check
+     * @description 基本健康检查端点。
+     * 如果服务器正在运行，则返回200 OK和状态"ok"。
+     */
+    get: operations["health_check_health_get"];
+  };
+  "/api/v1/search/papers/": {
+    /**
+     * Search Papers
+     * @description Performs semantic, keyword, or hybrid search specifically for papers, with optional filtering and sorting.
+     */
+    get: operations["search_papers_api_v1_search_papers__get"];
+  };
+  "/api/v1/search/models/": {
+    /**
+     * Search Models
+     * @description Performs semantic, keyword, or hybrid search specifically for models.
+     */
+    get: operations["search_models_api_v1_search_models__get"];
+  };
+  "/api/v1/search/paper-areas/": {
+    /**
+     * 获取论文领域列表
+     * @description 获取系统中所有可用的论文研究领域(area)列表，用于前端过滤器选项。
+     */
+    get: operations["get_paper_areas_api_v1_search_paper_areas__get"];
+  };
+  "/api/v1/graph/papers/{pwc_id}": {
+    /**
+     * Get Paper Details Endpoint
+     * @description Retrieves detailed information about a specific paper by its PWC ID.
+     */
+    get: operations["get_paper_details_endpoint_api_v1_graph_papers__pwc_id__get"];
+  };
+  "/api/v1/graph/papers/{pwc_id}/graph": {
+    /**
+     * Get graph neighborhood for a paper
+     * @description Retrieves the graph neighborhood (related papers, models, concepts) for a given PWC paper ID.
+     */
+    get: operations["get_paper_graph_data_api_v1_graph_papers__pwc_id__graph_get"];
+  };
+  "/api/v1/graph/models/{model_id}": {
+    /**
+     * Get details for a Hugging Face model
+     * @description Retrieves detailed information for a specific Hugging Face model by its ID.
+     */
+    get: operations["get_hf_model_details_api_v1_graph_models__model_id__get"];
+  };
+  "/api/v1/graph/related/{start_node_label}/{start_node_prop}/{start_node_val}": {
+    /**
+     * Get related entities
+     * @description Retrieves related entities connected by a specific relationship type and direction.
+     */
+    get: operations["get_related_entities_endpoint_api_v1_graph_related__start_node_label___start_node_prop___start_node_val__get"];
+  };
 }
+
 export type webhooks = Record<string, never>;
+
 export interface components {
-    schemas: {
-        /**
-         * GraphData
-         * @description Represents the data structure for graph visualization or analysis.
-         */
-        GraphData: {
-            /**
-             * Nodes
-             * @description List of nodes in the graph neighborhood.
-             */
-            nodes: components["schemas"]["Node"][];
-            /**
-             * Relationships
-             * @description List of relationships connecting the nodes.
-             */
-            relationships: components["schemas"]["Relationship"][];
-        };
-        /**
-         * HFModelDetail
-         * @description Detailed information for a Hugging Face model.
-         */
-        HFModelDetail: {
-            /**
-             * Model Id
-             * @description The unique Hugging Face model ID.
-             */
-            model_id: string;
-            /**
-             * Author
-             * @description The author or organization.
-             */
-            author?: string | null;
-            /**
-             * Sha
-             * @description The Git commit SHA associated with the model version.
-             */
-            sha?: string | null;
-            /**
-             * Last Modified
-             * @description Timestamp of the last modification.
-             */
-            last_modified?: string | null;
-            /**
-             * Tags
-             * @description List of tags associated with the model.
-             */
-            tags?: string[] | null;
-            /**
-             * Pipeline Tag
-             * @description The primary task pipeline tag.
-             */
-            pipeline_tag?: string | null;
-            /**
-             * Downloads
-             * @description Number of downloads.
-             */
-            downloads?: number | null;
-            /**
-             * Likes
-             * @description Number of likes.
-             */
-            likes?: number | null;
-            /**
-             * Library Name
-             * @description The library associated with the model (e.g., transformers).
-             */
-            library_name?: string | null;
-            /**
-             * Created At
-             * @description Timestamp when the record was created in the database.
-             */
-            created_at?: string | null;
-            /**
-             * Updated At
-             * @description Timestamp when the record was last updated in the database.
-             */
-            updated_at?: string | null;
-        };
-        /**
-         * HFSearchResultItem
-         * @description Represents a Hugging Face model in search results.
-         */
-        HFSearchResultItem: {
-            /**
-             * Model Id
-             * @description The unique Hugging Face model ID.
-             */
-            model_id: string;
-            /**
-             * Author
-             * @description The author or organization.
-             */
-            author?: string | null;
-            /**
-             * Pipeline Tag
-             * @description The primary task pipeline tag.
-             */
-            pipeline_tag?: string | null;
-            /**
-             * Library Name
-             * @description The library associated with the model (e.g., transformers).
-             */
-            library_name?: string | null;
-            /**
-             * Tags
-             * @description List of tags associated with the model.
-             */
-            tags?: string[] | null;
-            /**
-             * Likes
-             * @description Number of likes.
-             */
-            likes?: number | null;
-            /**
-             * Downloads
-             * @description Number of downloads.
-             */
-            downloads?: number | null;
-            /**
-             * Last Modified
-             * @description Last modification timestamp.
-             */
-            last_modified?: string | null;
-            /**
-             * Score
-             * @description Relevance score from the search (0.0 to 1.0).
-             */
-            score: number;
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
-        /**
-         * Node
-         * @description Represents a node in the graph.
-         */
-        Node: {
-            /**
-             * Id
-             * @description Unique identifier for the node (e.g., pwc_id or model_id)
-             */
-            id: string;
-            /**
-             * Label
-             * @description Display label for the node (e.g., paper title or model name)
-             */
-            label?: string | null;
-            /**
-             * Type
-             * @description Type of the node (e.g., 'Paper', 'HFModel', 'Concept')
-             */
-            type: string;
-            /**
-             * Properties
-             * @description Additional properties of the node.
-             * @default {}
-             */
-            properties: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * PaginatedHFModelSearchResult
-         * @description Response model for paginated Hugging Face model search results.
-         */
-        PaginatedHFModelSearchResult: {
-            /**
-             * Items
-             * @description List of HF model search results on the current page.
-             */
-            items: components["schemas"]["HFSearchResultItem"][];
-            /**
-             * Total
-             * @description Total number of HF models matching the query.
-             */
-            total: number;
-            /**
-             * Skip
-             * @description Number of items skipped (offset).
-             */
-            skip: number;
-            /**
-             * Limit
-             * @description Maximum number of items per page.
-             */
-            limit: number;
-        };
-        /**
-         * PaginatedPaperSearchResult
-         * @description Response model for paginated paper search results.
-         */
-        PaginatedPaperSearchResult: {
-            /**
-             * Items
-             * @description List of paper search results on the current page.
-             */
-            items: components["schemas"]["SearchResultItem"][];
-            /**
-             * Total
-             * @description Total number of papers matching the query.
-             */
-            total: number;
-            /**
-             * Skip
-             * @description Number of items skipped (offset).
-             */
-            skip: number;
-            /**
-             * Limit
-             * @description Maximum number of items per page.
-             */
-            limit: number;
-        };
-        /**
-         * PaginatedSemanticSearchResult
-         * @description Response model for paginated semantic search results (papers or models).
-         */
-        PaginatedSemanticSearchResult: {
-            /**
-             * Items
-             * @description List of semantic search results (papers or models) on the current page.
-             */
-            items: (components["schemas"]["SearchResultItem"] | components["schemas"]["HFSearchResultItem"])[];
-            /**
-             * Total
-             * @description Total number of candidate results found before pagination.
-             */
-            total: number;
-            /**
-             * Skip
-             * @description Number of items skipped (offset).
-             */
-            skip: number;
-            /**
-             * Limit
-             * @description Maximum number of items per page.
-             */
-            limit: number;
-        };
-        /**
-         * PaperDetailResponse
-         * @description Detailed information about a single paper.
-         */
-        PaperDetailResponse: {
-            /** Pwc Id */
-            pwc_id: string;
-            /** Title */
-            title?: string | null;
-            /** Abstract */
-            abstract?: string | null;
-            /** Arxiv Id */
-            arxiv_id?: string | null;
-            /** Url Abs */
-            url_abs?: string | null;
-            /** Url Pdf */
-            url_pdf?: string | null;
-            /** Published Date */
-            published_date?: string | null;
-            /** Authors */
-            authors?: string[] | null;
-            /** Tasks */
-            tasks?: string[] | null;
-            /** Methods */
-            methods?: string[] | null;
-            /** Datasets */
-            datasets?: string[] | null;
-            /** Frameworks */
-            frameworks?: string[] | null;
-            /** Number Of Stars */
-            number_of_stars?: number | null;
-            /** Area */
-            area?: string | null;
-        };
-        /**
-         * Relationship
-         * @description Represents a relationship (edge) between two nodes.
-         */
-        Relationship: {
-            /**
-             * Source
-             * @description ID of the source node.
-             */
-            source: string;
-            /**
-             * Target
-             * @description ID of the target node.
-             */
-            target: string;
-            /**
-             * Type
-             * @description Type of the relationship (e.g., 'CITES', 'RELATED_TO', 'USES_MODEL').
-             */
-            type: string;
-            /**
-             * Properties
-             * @description Properties of the relationship.
-             * @default {}
-             */
-            properties: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * SearchResultItem
-         * @description Represents a single search result item.
-         */
-        SearchResultItem: {
-            /** Paper Id */
-            paper_id?: number | null;
-            /** Pwc Id */
-            pwc_id: string;
-            /** Title */
-            title?: string | null;
-            /** Summary */
-            summary?: string | null;
-            /**
-             * Score
-             * @description Relevance score (0-1 range for semantic/hybrid, higher is better; None for keyword-only).
-             */
-            score?: number | null;
-            /** Pdf Url */
-            pdf_url?: string | null;
-            /** Published Date */
-            published_date?: string | null;
-            /** Authors */
-            authors?: string[] | null;
-            /** Area */
-            area?: string | null;
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
+  schemas: {
+    /**
+     * GraphData
+     * @description Represents the data structure for graph visualization or analysis.
+     */
+    GraphData: {
+      /**
+       * Nodes
+       * @description List of nodes in the graph neighborhood.
+       */
+      nodes: components["schemas"]["Node"][];
+      /**
+       * Relationships
+       * @description List of relationships connecting the nodes.
+       */
+      relationships: components["schemas"]["Relationship"][];
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /**
+     * HFModelDetail
+     * @description Detailed information for a Hugging Face model.
+     */
+    HFModelDetail: {
+      /**
+       * Model Id
+       * @description The unique Hugging Face model ID.
+       */
+      model_id: string;
+      /**
+       * Author
+       * @description The author or organization.
+       */
+      author?: string | null;
+      /**
+       * Sha
+       * @description The Git commit SHA associated with the model version.
+       */
+      sha?: string | null;
+      /**
+       * Last Modified
+       * @description Timestamp of the last modification.
+       */
+      last_modified?: string | null;
+      /**
+       * Tags
+       * @description List of tags associated with the model.
+       */
+      tags?: string[] | null;
+      /**
+       * Pipeline Tag
+       * @description The primary task pipeline tag.
+       */
+      pipeline_tag?: string | null;
+      /**
+       * Downloads
+       * @description Number of downloads.
+       */
+      downloads?: number | null;
+      /**
+       * Likes
+       * @description Number of likes.
+       */
+      likes?: number | null;
+      /**
+       * Library Name
+       * @description The library associated with the model (e.g., transformers).
+       */
+      library_name?: string | null;
+      /**
+       * Readme Content
+       * @description The README content of the model.
+       */
+      readme_content?: string | null;
+      /**
+       * Dataset Links
+       * @description Links to datasets used by the model.
+       */
+      dataset_links?: string[] | null;
+      /**
+       * Created At
+       * @description Timestamp when the record was created in the database.
+       */
+      created_at?: string | null;
+      /**
+       * Updated At
+       * @description Timestamp when the record was last updated in the database.
+       */
+      updated_at?: string | null;
+    };
+    /**
+     * HFSearchResultItem
+     * @description Represents a Hugging Face model in search results.
+     */
+    HFSearchResultItem: {
+      /**
+       * Model Id
+       * @description The unique Hugging Face model ID.
+       */
+      model_id: string;
+      /**
+       * Author
+       * @description The author or organization.
+       */
+      author?: string | null;
+      /**
+       * Pipeline Tag
+       * @description The primary task pipeline tag.
+       */
+      pipeline_tag?: string | null;
+      /**
+       * Library Name
+       * @description The library associated with the model (e.g., transformers).
+       */
+      library_name?: string | null;
+      /**
+       * Tags
+       * @description List of tags associated with the model.
+       */
+      tags?: string[] | null;
+      /**
+       * Likes
+       * @description Number of likes.
+       */
+      likes?: number | null;
+      /**
+       * Downloads
+       * @description Number of downloads.
+       */
+      downloads?: number | null;
+      /**
+       * Last Modified
+       * @description Last modification timestamp.
+       */
+      last_modified?: string | null;
+      /**
+       * Score
+       * @description Relevance score from the search (0.0 to 1.0).
+       */
+      score?: number | null;
+      /** Readme Content */
+      readme_content?: string | null;
+      /** Dataset Links */
+      dataset_links?: string[] | null;
+    };
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components["schemas"]["ValidationError"][];
+    };
+    /**
+     * Node
+     * @description Represents a node in the graph.
+     */
+    Node: {
+      /**
+       * Id
+       * @description Unique identifier for the node (e.g., pwc_id or model_id)
+       */
+      id: string;
+      /**
+       * Label
+       * @description Display label for the node (e.g., paper title or model name)
+       */
+      label?: string | null;
+      /**
+       * Type
+       * @description Type of the node (e.g., 'Paper', 'HFModel', 'Concept')
+       */
+      type: string;
+      /**
+       * Properties
+       * @description Additional properties of the node.
+       * @default {}
+       */
+      properties?: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * PaginatedHFModelSearchResult
+     * @description Response model for paginated Hugging Face model search results.
+     */
+    PaginatedHFModelSearchResult: {
+      /**
+       * Items
+       * @description List of HF model search results on the current page.
+       */
+      items: components["schemas"]["HFSearchResultItem"][];
+      /**
+       * Total
+       * @description Total number of HF models matching the query.
+       */
+      total: number;
+      /**
+       * Skip
+       * @description Number of items skipped (offset).
+       */
+      skip: number;
+      /**
+       * Limit
+       * @description Maximum number of items per page.
+       */
+      limit: number;
+    };
+    /**
+     * PaginatedPaperSearchResult
+     * @description Response model for paginated paper search results.
+     */
+    PaginatedPaperSearchResult: {
+      /**
+       * Items
+       * @description List of paper search results on the current page.
+       */
+      items: components["schemas"]["SearchResultItem"][];
+      /**
+       * Total
+       * @description Total number of papers matching the query.
+       */
+      total: number;
+      /**
+       * Skip
+       * @description Number of items skipped (offset).
+       */
+      skip: number;
+      /**
+       * Limit
+       * @description Maximum number of items per page.
+       */
+      limit: number;
+    };
+    /**
+     * PaginatedSemanticSearchResult
+     * @description Response model for paginated semantic search results (papers or models).
+     */
+    PaginatedSemanticSearchResult: {
+      /**
+       * Items
+       * @description List of semantic search results (papers or models) on the current page.
+       */
+      items: (components["schemas"]["SearchResultItem"] | components["schemas"]["HFSearchResultItem"])[];
+      /**
+       * Total
+       * @description Total number of candidate results found before pagination.
+       */
+      total: number;
+      /**
+       * Skip
+       * @description Number of items skipped (offset).
+       */
+      skip: number;
+      /**
+       * Limit
+       * @description Maximum number of items per page.
+       */
+      limit: number;
+    };
+    /**
+     * PaperDetailResponse
+     * @description Detailed information about a single paper.
+     */
+    PaperDetailResponse: {
+      /** Pwc Id */
+      pwc_id: string;
+      /** Title */
+      title?: string | null;
+      /** Abstract */
+      abstract?: string | null;
+      /** Arxiv Id */
+      arxiv_id?: string | null;
+      /** Url Abs */
+      url_abs?: string | null;
+      /** Url Pdf */
+      url_pdf?: string | null;
+      /** Published Date */
+      published_date?: string | null;
+      /** Authors */
+      authors?: string[] | null;
+      /** Tasks */
+      tasks?: string[] | null;
+      /** Methods */
+      methods?: string[] | null;
+      /** Datasets */
+      datasets?: string[] | null;
+      /** Repositories */
+      repositories?: {
+          [key: string]: unknown;
+        }[] | null;
+      /** Area */
+      area?: string | null;
+      /** Conference */
+      conference?: string | null;
+    };
+    /**
+     * Relationship
+     * @description Represents a relationship (edge) between two nodes.
+     */
+    Relationship: {
+      /**
+       * Source
+       * @description ID of the source node.
+       */
+      source: string;
+      /**
+       * Target
+       * @description ID of the target node.
+       */
+      target: string;
+      /**
+       * Type
+       * @description Type of the relationship (e.g., 'CITES', 'RELATED_TO', 'USES_MODEL').
+       */
+      type: string;
+      /**
+       * Properties
+       * @description Properties of the relationship.
+       * @default {}
+       */
+      properties?: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * SearchResultItem
+     * @description Represents a single search result item.
+     */
+    SearchResultItem: {
+      /** Paper Id */
+      paper_id?: number | null;
+      /** Pwc Id */
+      pwc_id: string;
+      /** Title */
+      title?: string | null;
+      /** Summary */
+      summary?: string | null;
+      /**
+       * Score
+       * @description Relevance score (0-1 range for semantic/hybrid, higher is better; None for keyword-only).
+       */
+      score?: number | null;
+      /** Pdf Url */
+      pdf_url?: string | null;
+      /** Published Date */
+      published_date?: string | null;
+      /** Authors */
+      authors?: string[] | null;
+      /** Area */
+      area?: string | null;
+      /** Conference */
+      conference?: string | null;
+    };
+    /** ValidationError */
+    ValidationError: {
+      /** Location */
+      loc: (string | number)[];
+      /** Message */
+      msg: string;
+      /** Error Type */
+      type: string;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
+
 export type $defs = Record<string, never>;
+
+export type external = Record<string, never>;
+
 export interface operations {
-    read_root__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+
+  /**
+   * Read Root
+   * @description 根端点，返回欢迎信息
+   */
+  read_root__get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": {
+            [key: string]: string;
+          };
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
+      };
     };
-    health_check_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+  };
+  /**
+   * Health Check
+   * @description 基本健康检查端点。
+   * 如果服务器正在运行，则返回200 OK和状态"ok"。
+   */
+  health_check_health_get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": {
+            [key: string]: string;
+          };
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
+      };
     };
-    search_papers_api_v1_search_papers__get: {
-        parameters: {
-            query: {
-                /** @description The search query string. */
-                q: string;
-                /** @description Type of search to perform. */
-                search_type?: "semantic" | "keyword" | "hybrid";
-                /** @description Number of results to skip for pagination. */
-                skip?: number;
-                /** @description Maximum number of results to return. */
-                limit?: number;
-                /** @description Filter papers published on or after this date (YYYY-MM-DD). */
-                date_from?: string | null;
-                /** @description Filter papers published on or before this date (YYYY-MM-DD). */
-                date_to?: string | null;
-                /** @description Filter papers by research area (exact match, case-sensitive). */
-                area?: string | null;
-                /** @description Field to sort paper results by. Defaults: 'score' for semantic/hybrid, 'published_date' for keyword. */
-                sort_by?: ("score" | "published_date") | null;
-                /** @description Sort order: 'asc' or 'desc'. */
-                sort_order?: ("asc" | "desc") | null;
-                /** @description Reciprocal Rank Fusion k parameter (for hybrid search). */
-                rrf_k?: number;
-                /** @description Initial number of semantic results to fetch for fusion (hybrid search). */
-                top_n_semantic?: number;
-                /** @description Initial number of keyword results to fetch for fusion (hybrid search). */
-                top_n_keyword?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedPaperSearchResult"] | components["schemas"]["PaginatedSemanticSearchResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  /**
+   * Search Papers
+   * @description Performs semantic, keyword, or hybrid search specifically for papers, with optional filtering and sorting.
+   */
+  search_papers_api_v1_search_papers__get: {
+    parameters: {
+      query: {
+        /** @description The search query string. */
+        q: string;
+        /** @description Type of search to perform. */
+        search_type?: "semantic" | "keyword" | "hybrid";
+        /** @description Number of results to skip for pagination. */
+        skip?: number;
+        /** @description Maximum number of results to return. */
+        limit?: number;
+        /** @description Filter papers published on or after this date (YYYY-MM-DD). */
+        date_from?: string | null;
+        /** @description Filter papers published on or before this date (YYYY-MM-DD). */
+        date_to?: string | null;
+        /** @description Filter papers by research area(s). 支持多选过滤。 */
+        area?: string[] | null;
+        /** @description Filter papers by author name(s). Supports multiple, uses partial matching (OR logic). */
+        filter_authors?: string[] | null;
+        /** @description Field to sort paper results by. Defaults: 'score' for semantic/hybrid, 'published_date' for keyword. */
+        sort_by?: ("score" | "published_date" | "title") | null;
+        /** @description Sort order: 'asc' or 'desc'. */
+        sort_order?: ("asc" | "desc") | null;
+        /** @description Reciprocal Rank Fusion k parameter (for hybrid search). */
+        rrf_k?: number;
+        /** @description Initial number of semantic results to fetch for fusion (hybrid search). */
+        top_n_semantic?: number;
+        /** @description Initial number of keyword results to fetch for fusion (hybrid search). */
+        top_n_keyword?: number;
+      };
     };
-    search_models_api_v1_search_models__get: {
-        parameters: {
-            query: {
-                /** @description The search query string. */
-                q: string;
-                /** @description Type of search to perform. */
-                search_type?: "semantic" | "keyword";
-                /** @description Number of results to skip for pagination. */
-                skip?: number;
-                /** @description Maximum number of results to return. */
-                limit?: number;
-                /** @description Field to sort model results by. Defaults: 'score' for semantic, 'likes' for keyword. */
-                sort_by?: ("score" | "likes" | "downloads" | "last_modified") | null;
-                /** @description Sort order: 'asc' or 'desc'. */
-                sort_order?: ("asc" | "desc") | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedPaperSearchResult"] | components["schemas"]["PaginatedSemanticSearchResult"];
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedHFModelSearchResult"] | components["schemas"]["PaginatedSemanticSearchResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
+      };
     };
-    get_paper_details_endpoint_api_v1_graph_papers__pwc_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The PWC ID of the paper to retrieve. */
-                pwc_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaperDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  /**
+   * Search Models
+   * @description Performs semantic, keyword, or hybrid search specifically for models.
+   */
+  search_models_api_v1_search_models__get: {
+    parameters: {
+      query: {
+        /** @description The search query string. */
+        q: string;
+        /** @description Type of search to perform. */
+        search_type?: "semantic" | "keyword" | "hybrid";
+        /** @description Number of results to skip for pagination. */
+        skip?: number;
+        /** @description Maximum number of results to return. */
+        limit?: number;
+        /** @description Filter models by Hugging Face pipeline tag. */
+        pipeline_tag?: string | null;
+        /** @description Filter models by library name (e.g., 'transformers', case-insensitive exact match). */
+        filter_library_name?: string | null;
+        /** @description Filter models by tags (must contain all specified tags). */
+        filter_tags?: string[] | null;
+        /** @description Filter models by author/organization name (case-insensitive partial match). */
+        filter_author?: string | null;
+        /** @description Field to sort model results by. Defaults: 'score' for semantic, 'likes' for keyword. */
+        sort_by?: ("score" | "likes" | "downloads" | "last_modified") | null;
+        /** @description Sort order: 'asc' or 'desc'. */
+        sort_order?: ("asc" | "desc") | null;
+      };
     };
-    get_paper_graph_data_api_v1_graph_papers__pwc_id__graph_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The PWC ID of the paper to get the graph for. */
-                pwc_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedHFModelSearchResult"] | components["schemas"]["PaginatedSemanticSearchResult"];
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GraphData"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
+      };
     };
-    get_hf_model_details_api_v1_graph_models__model_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The Hugging Face model ID (e.g., 'bert-base-uncased'). */
-                model_id: string;
-            };
-            cookie?: never;
+  };
+  /**
+   * 获取论文领域列表
+   * @description 获取系统中所有可用的论文研究领域(area)列表，用于前端过滤器选项。
+   */
+  get_paper_areas_api_v1_search_paper_areas__get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": string[];
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HFModelDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+      };
     };
-    get_related_entities_endpoint_api_v1_graph_related__start_node_label___start_node_prop___start_node_val__get: {
-        parameters: {
-            query: {
-                /** @description The type of relationship to traverse (e.g., 'HAS_TASK', 'AUTHORED'). */
-                relationship_type: string;
-                /** @description The label of the target nodes to retrieve (e.g., 'Paper', 'Author'). */
-                target_node_label: string;
-                /** @description Direction of the relationship relative to the start node. */
-                direction?: "IN" | "OUT" | "BOTH";
-                /** @description Maximum number of related entities to return. */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Label of the starting node (e.g., 'Paper', 'Task'). */
-                start_node_label: string;
-                /** @description Property name used to identify the start node (e.g., 'pwc_id', 'name'). */
-                start_node_prop: string;
-                /** @description Value of the identifying property for the start node. */
-                start_node_val: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  /**
+   * Get Paper Details Endpoint
+   * @description Retrieves detailed information about a specific paper by its PWC ID.
+   */
+  get_paper_details_endpoint_api_v1_graph_papers__pwc_id__get: {
+    parameters: {
+      path: {
+        /** @description The PWC ID of the paper to retrieve. */
+        pwc_id: string;
+      };
     };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaperDetailResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /**
+   * Get graph neighborhood for a paper
+   * @description Retrieves the graph neighborhood (related papers, models, concepts) for a given PWC paper ID.
+   */
+  get_paper_graph_data_api_v1_graph_papers__pwc_id__graph_get: {
+    parameters: {
+      path: {
+        /** @description The PWC ID of the paper to get the graph for. */
+        pwc_id: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["GraphData"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /**
+   * Get details for a Hugging Face model
+   * @description Retrieves detailed information for a specific Hugging Face model by its ID.
+   */
+  get_hf_model_details_api_v1_graph_models__model_id__get: {
+    parameters: {
+      path: {
+        /** @description The Hugging Face model ID (e.g., 'google/flan-t5-base'). */
+        model_id: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["HFModelDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /**
+   * Get related entities
+   * @description Retrieves related entities connected by a specific relationship type and direction.
+   */
+  get_related_entities_endpoint_api_v1_graph_related__start_node_label___start_node_prop___start_node_val__get: {
+    parameters: {
+      query: {
+        /** @description The type of relationship to traverse (e.g., 'HAS_TASK', 'AUTHORED'). */
+        relationship_type: string;
+        /** @description The label of the target nodes to retrieve (e.g., 'Paper', 'Author'). */
+        target_node_label: string;
+        /** @description Direction of the relationship relative to the start node. */
+        direction?: "IN" | "OUT" | "BOTH";
+        /** @description Maximum number of related entities to return. */
+        limit?: number;
+      };
+      path: {
+        /** @description Label of the starting node (e.g., 'Paper', 'Task'). */
+        start_node_label: string;
+        /** @description Property name used to identify the start node (e.g., 'pwc_id', 'name'). */
+        start_node_prop: string;
+        /** @description Value of the identifying property for the start node. */
+        start_node_val: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": {
+              [key: string]: unknown;
+            }[];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
 }

@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { useModelDetail } from '../api/apiQueries'; // 引入 Hook
 import Spinner from '../components/common/Spinner'; // 引入 Spinner
 import { ArrowDownTrayIcon, HeartIcon } from '@heroicons/react/24/outline'; // 引入图标
+import ReactMarkdown from 'react-markdown'; // ADDED
+import remarkGfm from 'remark-gfm'; // ADDED
 
 const ModelDetailPage: React.FC = () => {
   const { modelId } = useParams<{ modelId: string }>();
@@ -82,6 +84,9 @@ const ModelDetailPage: React.FC = () => {
       return <span className="text-red-500">渲染错误</span>;
     }
   };
+
+  // Preprocess readme_content to remove HTML-like comments
+  const cleanReadmeContent = model?.readme_content?.replace(/<!--.*?-->/gs, '') || "";
 
   // --- 渲染从 API 获取的模型数据 ---
   // 注意：这里的字段需要匹配 useModelDetail 返回的 ModelDetailResponse 类型
@@ -165,6 +170,51 @@ const ModelDetailPage: React.FC = () => {
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ADDED: Readme Content Section */}
+          {model.readme_content && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">README</h3>
+              <div className="bg-gray-50 p-4 rounded-md overflow-x-auto">
+                <div className="prose prose-base max-w-none text-gray-700">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({node, ...props}) => <table className="w-full text-sm border-collapse border border-gray-300" {...props} />,
+                      thead: ({node, ...props}) => <thead className="bg-gray-100" {...props} />,
+                      th: ({node, ...props}) => <th className="p-2 border border-gray-300 !text-center font-semibold" {...props} />,
+                      td: ({node, ...props}) => <td className="p-2 border border-gray-300 !text-center" {...props} />,
+                      // You can add more custom renderers for tr, tbody, etc. if needed
+                    }}
+                  >
+                    {cleanReadmeContent}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ADDED: Dataset Links Section */}
+          {model.dataset_links && Array.isArray(model.dataset_links) && model.dataset_links.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">相关数据集</h3>
+              <ul className="list-disc list-inside space-y-1 pl-2">
+                {model.dataset_links.map((link, index) => (
+                  <li key={index} className="text-sm">
+                    <a 
+                      href={link} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                      title={link}
+                    >
+                      {link}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

@@ -47,17 +47,17 @@
     -   所有过滤、排序、分页状态需要反映在 API 请求的参数中。
 -   **结果展示:**
     -   以列表形式清晰展示搜索结果。
-    -   **论文列表项 (`SearchResultItem`):** 应包含 `pwc_id` (可用于链接详情), `title`, `summary`, `area`, `published_date`, `authors`, `pdf_url`，以及可选的 `score` (混合/语义搜索有值，关键词可能为 `null`)。**UI优化:** 卡片信息展示更清晰、丰富，并高亮匹配关键词。
-    -   **模型列表项 (`HFSearchResultItem`):** 应包含 `model_id` (可用于链接详情), `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified`，以及 `score` (混合/语义搜索有值)。**UI优化:** 卡片信息展示更清晰、丰富，并高亮匹配关键词。
+    -   **论文列表项 (`SearchResultItem`):** 应包含 `pwc_id` (可用于链接详情), `title`, `summary`, `area`, `conference`, `published_date`, `authors`, `pdf_url`，以及可选的 `score` (混合/语义搜索有值，关键词可能为 `null`)。**UI优化:** 卡片信息展示更清晰、丰富，并高亮匹配关键词。
+    -   **模型列表项 (`HFSearchResultItem`):** 应包含 `model_id` (可用于链接详情), `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified`, `readme_content` (可能需要截断或预览), `dataset_links` (可作为链接列表), 以及 `score` (混合/语义搜索有值)。**UI优化:** 卡片信息展示更清晰、丰富，并高亮匹配关键词。
     -   提供加载中 (Loading)、无结果 (No Results)、错误 (Error) 以及当前生效的搜索模式/过滤/排序条件的清晰反馈。
 -   **详情查看与关联探索:**
     -   点击搜索结果项能导航到对应的详情页面 (e.g., `/papers/{pwc_id}`, `/models/{model_id}`)。
     -   **论文详情页面 (`PaperDetailResponse`):**
-        -   展示从 `GET /api/v1/graph/papers/{pwc_id}` 获取的结构化元数据: `pwc_id`, `title`, `abstract`, `arxiv_id`, `url_abs` (PWC 页面), `url_pdf`, `published_date`, `authors`, `frameworks`, `number_of_stars`, `area`。
+        -   展示从 `GET /api/v1/graph/papers/{pwc_id}` 获取的结构化元数据: `pwc_id`, `title`, `abstract`, `arxiv_id`, `url_abs` (PWC 页面), `url_pdf`, `published_date`, `authors`, `frameworks`, `number_of_stars`, `area`, `conference`。
         -   **展示关联实体:** 清晰地列出从 Neo4j 获取的信息 (包含在 `PaperDetailResponse` 中): `tasks`, `datasets`, `methods`。这些应作为可点击的链接（如果目标实体也有详情页或搜索功能）。
         -   **展示图邻接信息:** 提供一个区域（可能是 Tab 或独立板块）用于展示从 `GET /api/v1/graph/papers/{pwc_id}/graph` 获取的 `GraphData`。**初期**可以是一个简单的列表，展示邻接 `Node` 的 `label` 和 `type` (如 'Task: Image Classification', 'Dataset: ImageNet')。
     -   **模型详情页面 (`HFModelDetail`):**
-        -   展示从 `GET /api/v1/graph/models/{model_id}` 获取的结构化元数据: `model_id`, `author`, `sha`, `last_modified`, `tags`, `pipeline_tag`, `downloads`, `likes`, `library_name`, `created_at`, `updated_at`。
+        -   展示从 `GET /api/v1/graph/models/{model_id}` 获取的结构化元数据: `model_id`, `author`, `sha`, `last_modified`, `tags`, `pipeline_tag`, `downloads`, `likes`, `library_name`, `readme_content` (可能需要Markdown渲染或折叠显示), `dataset_links` (可作为链接列表), `created_at`, `updated_at`。
         -   **(可选/未来):** 调用 `GET /api/v1/graph/related` 端点获取与该模型相关的论文、数据集等，并展示。
 
 **3. 简化架构**
@@ -201,12 +201,12 @@ aigraphx-frontend/
     * **侧边栏/可折叠面板:** **过滤器区域**，包含：
         *   **论文过滤器** (日期范围 `published_after`/`published_before`, 领域 `filter_area` (支持多选/模糊), 作者 `filter_author`)。
         *   **模型过滤器** (`pipeline_tag` (多选/下拉), 库 `filter_library`, 标签 `filter_tags`, 作者 `filter_author`)。
-        *   提供\"清除筛选\"按钮。
+        *   提供"清除筛选"按钮。
     * **结果列表上方:** 显示当前结果数量 (`total` from pagination), **排序方式下拉菜单 (`sort_by`, `sort_order` - 根据 target 和 search_type 显示可用选项)**, **分页控件 (`page`, `page_size`)**。
-    * **结果列表项:** 显示核心信息 (根据 `SearchResultItem` / `HFSearchResultItem` 字段)，突出显示**匹配关键词 (若可能)** 或 **相关性分数 (`score`)** (注意 score 可能为 null)。**优化卡片设计，提升信息密度和可读性。**
+    * **结果列表项:** 显示核心信息 (根据 `SearchResultItem` / `HFSearchResultItem` 字段，包括论文的 `conference`、模型的 `readme_content` 和 `dataset_links`)，突出显示**匹配关键词 (若可能)** 或 **相关性分数 (`score`)** (注意 score 可能为 null)。**优化卡片设计，提升信息密度和可读性。**
 * **详情页面:**
-    * **主区域 (论文 - `PaperDetailResponse`):** 清晰展示核心元数据（`title`, `abstract`, `authors`, `published_date`, `area`, `arxiv_id`, `url_abs`, `url_pdf`, `frameworks`, `number_of_stars` 等）。
-    * **主区域 (模型 - `HFModelDetail`):** 清晰展示核心元数据 (`model_id`, `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified` 等)。
+    * **主区域 (论文 - `PaperDetailResponse`):** 清晰展示核心元数据（`title`, `abstract`, `authors`, `published_date`, `area`, `conference`, `arxiv_id`, `url_abs`, `url_pdf`, `frameworks`, `number_of_stars` 等）。
+    * **主区域 (模型 - `HFModelDetail`):** 清晰展示核心元数据 (`model_id`, `author`, `pipeline_tag`, `library_name`, `tags`, `likes`, `downloads`, `last_modified`, `readme_content`, `dataset_links` 等）。
     * **侧边栏/下方区域:**
         - **关联实体列表 (论文):** 分组展示 `tasks`, `datasets`, `methods`，列表项应为**可点击链接**。
         - **图谱邻接视图 (论文 - `GraphData`):** 一个专门的区域（可能是 Tab），**初期**展示关联 `Node` 的简单列表 (e.g., "Task: Text Classification (ID: task_123)", "Dataset: GLUE (ID: dataset_abc)")。**后期**可升级为交互式图表。

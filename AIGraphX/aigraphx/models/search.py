@@ -22,6 +22,7 @@ class SearchResultItem(BaseModel):
     published_date: Optional[date] = None
     authors: Optional[List[str]] = None  # Assuming decoded list
     area: Optional[str] = None  # Add area field
+    conference: Optional[str] = None
 
 
 class HFSearchResultItem(BaseModel):
@@ -46,6 +47,8 @@ class HFSearchResultItem(BaseModel):
     score: Optional[float] = Field(
         None, description="Relevance score from the search (0.0 to 1.0)."
     )
+    readme_content: Optional[str] = None
+    dataset_links: Optional[List[str]] = None
 
     @field_validator("last_modified", mode="before")
     @classmethod
