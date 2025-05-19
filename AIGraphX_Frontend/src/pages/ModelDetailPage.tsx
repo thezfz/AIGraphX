@@ -139,100 +139,106 @@ const ModelDetailPage: React.FC = () => {
     if (!modelGraphData || !modelGraphData.nodes || !modelGraphData.relationships) {
       return { nodes: [], edges: [] };
     }
-
-    const currentModelNodeId = modelId; // 从 useParams
-
+    const currentModelNodeId = modelId;
     const nodes = modelGraphData.nodes.map(node => {
-      let color = '#D3D3D3'; // Default color
+      let color = '#CBD5E1'; // 默认浅灰蓝
       let shape = 'dot';
       let borderWidth = 2;
       let size = 16;
-
+      let fontColor = '#F3F4F6'; // 浅色字体
       if (node.type === 'HFModel') {
         if (node.id === currentModelNodeId) {
-          color = '#FF4500'; // 当前模型 - 橙红色突出
-          shape = 'star';    // 星形
-          size = 30;         // 更大
-          borderWidth = 3;
+          color = '#38BDF8'; // 天蓝
+          shape = 'diamond';
+          size = 32;
+          borderWidth = 4;
         } else if (parentModels.some(p => p.id === node.id)) {
-          color = '#87CEEB'; // 父模型 - 天蓝色
-          shape = 'triangle'; // 三角形向上
-          size = 20;
+          color = '#F472B6'; // 粉色
+          shape = 'triangle';
+          size = 22;
         } else if (derivedModels.some(d => d.id === node.id)) {
-          color = '#98FB98'; // 派生模型 - 淡绿色
-          shape = 'triangleDown'; // 三角形向下
-          size = 20;
+          color = '#A7F3D0'; // 浅绿色
+          shape = 'triangleDown';
+          size = 22;
         } else {
-          color = '#FFD700'; // 其他 HFModel - 金色 (原HFModel颜色)
-          shape = 'star'; // 其他HFModel保持星形
+          color = '#FBBF24'; // 金色
+          shape = 'dot';
         }
       } else if (node.type === 'Paper') {
-        color = '#ADD8E6'; // Paper - 淡蓝色
+        color = '#818CF8'; // 紫色
+        shape = 'box';
       } else if (node.type === 'Task') {
-        color = '#90EE90'; // Task - 浅绿色
+        color = '#FDE68A'; // 浅黄
+        shape = 'square';
+      } else if (node.type === 'Dataset') {
+        color = '#6EE7B7'; // 青绿色
+        shape = 'database';
+      } else if (node.type === 'Method') {
+        color = '#FCA5A5'; // 浅红
+        shape = 'hexagon';
       }
-      // 可以为其他类型如 Dataset, Method 等添加颜色
-
       return {
-      id: node.id,
+        id: node.id,
         label: node.label || node.id,
-      title: `Type: ${node.type}\nID: ${node.id}${node.label ? '\nLabel: ' + node.label : ''}`,
+        title: `Type: ${node.type}\nID: ${node.id}${node.label ? '\nLabel: ' + node.label : ''}`,
         color: color,
         shape: shape,
         size: size,
-        font: { size: 12, color: '#333' },
+        font: { size: 13, color: fontColor },
         borderWidth: borderWidth,
       };
     });
-
-    const edges = modelGraphData.relationships.map((rel: ApiRelationship) => ({ // 添加类型提示，并为边添加唯一ID
-      id: `${rel.source}|${rel.target}|${rel.type}`, // 使用 source|target|type 作为唯一 ID
+    const edges = modelGraphData.relationships.map((rel: ApiRelationship) => ({
+      id: `${rel.source}|${rel.target}|${rel.type}`,
       from: rel.source,
       to: rel.target,
-      label: rel.type, // 显示关系类型
-      // arrows: 'to',
+      label: rel.type,
+      color: { color: '#E5E7EB', opacity: 0.7 }, // 浅灰
+      font: { size: 10, color: '#F3F4F6', background: 'rgba(30,41,59,0.7)', strokeWidth:0 },
+      dashes: rel.type === 'DERIVED_FROM', // DERIVED_FROM 用虚线
+      smooth: { type: 'dynamic' }, // 曲线
     }));
-
     return { nodes, edges };
   }, [modelGraphData, modelId, parentModels, derivedModels]);
 
   // --- 图表选项 ---
   const graphOptions = {
     layout: {
-      hierarchical: false, // 可以尝试 true 实现层级布局
-      // randomSeed: undefined,
-      // improvedLayout:true,
+      hierarchical: false,
     },
     edges: {
-      color: '#848484',
+      color: '#E5E7EB',
       arrows: {
         to: { enabled: true, scaleFactor: 0.5 }
       },
       smooth: {
-        type: 'continuous' // 'dynamic', 'continuous', 'discrete', 'curvedCW', 'curvedCCW', 'straightCross'
-      }
+        type: 'dynamic',
+      },
+      width: 1.2,
+      shadow: true,
     },
     nodes: {
       shape: 'dot',
       size: 16,
       font: {
-        size: 12,
-        color: '#333'
+        size: 13,
+        color: '#F3F4F6',
       },
       borderWidth: 2,
+      shadow: true,
     },
     physics: {
-      enabled: true, // 启用物理引擎以获得更好的力导向布局
+      enabled: true,
       forceAtlas2Based: {
-        gravitationalConstant: -50,
-        centralGravity: 0.01,
-        springLength: 100,
-        springConstant: 0.08,
-        avoidOverlap: 0.5 // 增加此值以减少重叠
+        gravitationalConstant: -60,
+        centralGravity: 0.02,
+        springLength: 120,
+        springConstant: 0.09,
+        avoidOverlap: 1.2,
       },
-      solver: 'forceAtlas2Based', // 'barnesHut', 'repulsion', 'hierarchicalRepulsion', 'forceAtlas2Based'
+      solver: 'forceAtlas2Based',
       stabilization: {
-        iterations: 1000, // 稳定迭代次数
+        iterations: 1200,
       }
     },
     interaction: {
@@ -242,7 +248,7 @@ const ModelDetailPage: React.FC = () => {
       zoomView: true,
       tooltipDelay: 200,
     },
-    height: '600px', // 设置图表高度
+    height: '600px',
   };
 
   // --- 事件处理 (示例) ---
@@ -447,10 +453,10 @@ const ModelDetailPage: React.FC = () => {
           )}
 
           {/* --- Knowledge Graph Section --- */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">知识图谱关联</h3>
+          <div className="mt-6 pt-6 border-t border-gray-200 bg-gray-800 rounded-lg shadow-lg p-4"> {/* 深色背景+圆角+阴影 */}
+            <h3 className="text-lg font-semibold text-gray-100 mb-3">知识图谱关联</h3>
             {isLoadingGraph && !isErrorGraph && (
-              <div className="flex items-center text-gray-500">
+              <div className="flex items-center text-gray-300">
                 <Spinner />
                 <span className="ml-2">正在加载图谱数据...</span>
               </div>
@@ -461,18 +467,18 @@ const ModelDetailPage: React.FC = () => {
               </div>
             )}
             {!isLoadingGraph && !isErrorGraph && modelGraphData && graph.nodes.length > 0 && (
-              <div className="border rounded-md overflow-hidden"> {/* 添加边框和圆角 */}
-                 <Graph
+              <div className="border rounded-md overflow-hidden bg-gray-900"> {/* 图区域更深色 */}
+                <Graph
                   key={modelId}
-                  graph={graph} // useMemoized graph data
+                  graph={graph}
                   options={graphOptions}
                   events={graphEvents}
-                  style={{ width: '100%', height: graphOptions.height }} // 确保应用高度
+                  style={{ width: '100%', height: graphOptions.height, background: '#1a202c' }} // 深色背景
                 />
               </div>
             )}
             {!isLoadingGraph && !isErrorGraph && (!modelGraphData || graph.nodes.length === 0) && (
-                 <p className="text-gray-500 text-sm">未找到该模型的图谱关联数据。</p>
+              <p className="text-gray-400 text-sm">未找到该模型的图谱关联数据。</p>
             )}
           </div>
 
