@@ -131,49 +131,127 @@ graph TD
 | **包管理器** | **pnpm** (推荐) 或 yarn             | 更高效的依赖管理。                                                                 |
 | **Node 版本管理** | **nvm** (或 volta, asdf)          | 管理本地 Node.js 版本 (容器化环境已指定)。                                           |
 
-**5. 目录结构 (建议)**
+**5. 目录结构 (实际)**
 
 ```
 aigraphx-frontend/
-├── public/
+├── public/                   # (空) - 静态资源，如 favicons, robots.txt
 ├── src/
-│   ├── App.tsx
-│   ├── main.tsx
-│   ├── assets/
-│   │   ├── common/       # Button, Input, Spinner, Pagination, DatePicker, MultiSelect...
-│   │   ├── layout/       # Header, Footer, FilterSidebar...
-│   │   ├── search/       # SearchBar, SearchModeToggle, FilterPanel(包含论文/模型过滤器), SortDropdown, ResultList, ResultItem(区分Paper/Model)...
-│   │   ├── details/      # PaperDetailCard, ModelDetailCard, MetadataSection, RelatedEntitiesList...
-│   │   └── graph/        # (可选/未来) GraphVisualizationComponent...
-│   ├── config/
-│   ├── constants/      # 如搜索类型、排序选项常量
-│   ├── hooks/          # useSearchParameters (管理 URL 同步), useDebounce...
-│   ├── pages/          # SearchPage, ModelDetailPage, PaperDetailPage, NotFoundPage...
-│   ├── services/
-│   │   ├── apiClient.ts
-│   │   └── apiQueries.ts # 定义各种 useQuery/useMutation hooks (e.g., useSemanticPaperSearch, useKeywordModelSearch, useHybridPaperSearch, usePaperDetails, useModelDetails, usePaperGraph, useRelatedEntities...)
-│   ├── store/          # (可选) Context providers/hooks
-│   ├── styles/
-│   ├── types/
-│   │   └── api.ts      # !!! 极其重要: 必须与后端 /docs 严格同步的类型 (SearchResultItem, HFSearchResultItem, PaginatedPaperSearchResult, PaginatedHFModelSearchResult, SearchFilterModel, PaperDetailResponse, HFModelDetail, GraphData, Node, Relationship 等), 强烈推荐使用 openapi-typescript 自动生成 !!!
-│   ├── utils/
-│   └── router/         # 路由配置, 可能包含 URL 参数解析逻辑
-├── tests/
-│   └── (结构镜像 src/)   # 重点测试 SearchPage(带参数), DetailPage, apiQueries mocks
-├── .env*
-├── .eslintrc.cjs
-├── .gitignore
-├── .prettierrc.json
-├── index.html
-├── package.json
-├── pnpm-lock.yaml
-├── tailwind.config.js
-├── tsconfig*.json
-├── vite.config.ts
-└── Containerfile       # (保持不变)
+│   ├── App.tsx               # 应用主组件，设置路由
+│   ├── main.tsx              # 应用入口，渲染 App 组件
+│   ├── index.css             # 全局 CSS 样式
+│   ├── vite-env.d.ts         # Vite 环境变量类型定义
+│   ├── api/                  # API 相关封装 (注意: services/ 目录也存在类似文件)
+│   │   ├── apiClient.ts      # API 客户端实例 (Axios/Fetch)
+│   │   └── apiQueries.ts     # TanStack Query hooks (针对 api/ 目录)
+│   ├── components/           # UI 组件
+│   │   ├── common/           # 通用可复用组件
+│   │   │   ├── Button.tsx
+│   │   │   ├── Input.tsx
+│   │   │   ├── Pagination.tsx
+│   │   │   └── Spinner.tsx
+│   │   ├── details/          # 详情页特定组件 (当前为空)
+│   │   ├── layout/           # 布局组件 (如 Header, Footer) (当前为空)
+│   │   └── search/           # 搜索页面相关组件
+│   │       ├── FilterPanel.tsx
+│   │       ├── ResultList.tsx
+│   │       ├── SearchBar.tsx
+│   │       ├── SearchModeToggle.tsx
+│   │       ├── SortDropdown.tsx
+│   │       └── TargetSelector.tsx
+│   ├── constants/            # 应用常量 (当前为空)
+│   ├── hooks/                # 自定义 React Hooks
+│   │   └── useDebounce.ts
+│   ├── pages/                # 页面级组件
+│   │   ├── FocusGraphPage.tsx # 焦点图展示页
+│   │   ├── GlobalGraphPage.tsx# 全局图谱概览页
+│   │   ├── ModelDetailPage.tsx # 模型详情页
+│   │   ├── PaperDetailPage.tsx # 论文详情页
+│   │   └── SearchPage.tsx      # 搜索主页
+│   ├── router/               # 路由配置
+│   │   └── index.tsx
+│   ├── services/             # 服务层，API 调用封装 (注意: api/ 目录也存在类似文件)
+│   │   ├── apiClient.ts      # API 客户端实例 (针对 services/ 目录)
+│   │   └── apiQueries.ts     # TanStack Query hooks (针对 services/ 目录)
+│   ├── styles/               # 特定组件或页面的样式文件 (当前为空)
+│   ├── types/                # TypeScript 类型定义
+│   │   ├── api.ts            # 后端 API 相关的类型定义 (极其重要，需与后端 /docs 同步)
+│   │   └── react-graph-vis.d.ts # react-graph-vis 类型声明
+│   └── utils/                # 工具函数 (当前为空)
+├── .cursorindexingignore     # Cursor AI 索引忽略配置
+├── .eslintrc.cjs             # ESLint 配置文件 (建议添加)
+├── .gitignore                # Git 忽略文件 (建议添加)
+├── .prettierrc.json          # Prettier 配置文件 (建议添加)
+├── Containerfile             # 用于 Podman/Docker 构建镜像
+├── index.html                # SPA 的 HTML 入口文件
+├── install_heroicons.log     # heroicons 安装日志
+├── frontend_log.txt          # 前端日志文件
+├── package.json              # 项目元数据和依赖管理
+├── package-lock.json         # 锁定依赖版本
+├── postcss.config.js         # PostCSS 配置文件 (通常用于 Tailwind CSS)
+├── README.md                 # 项目说明文档 (本文档)
+├── tailwind.config.js        # Tailwind CSS 配置文件
+├── tsconfig.json             # TypeScript 编译器配置 (主)
+├── tsconfig.node.json        # TypeScript 编译器配置 (Node.js 环境，如 Vite 配置)
+└── vite.config.ts            # Vite 构建和开发服务器配置
 ```
 
-**6. API 交互策略**
+*注: `src/api/` 和 `src/services/` 目录中均包含 `apiClient.ts` 和 `apiQueries.ts`，建议检查并统一。部分在原 "建议" 结构中提及的目录 (如 `src/assets/`, `src/config/`, `src/store/`, `tests/`) 在当前实际结构中未找到或为空，可按需创建或移除。建议添加 `.eslintrc.cjs`, `.gitignore`, `.prettierrc.json` 等配置文件以规范开发。*
+
+**6. 主要代码文件概览**
+
+基于对 `src` 目录下主要代码文件的审查，各项功能和职责总结如下：
+
+*   **应用入口与配置:**
+    *   `src/main.tsx`: 应用的启动入口，负责初始化 React、React Router、TanStack Query 客户端，并渲染根组件 `App`。
+    *   `src/App.tsx`: 应用的根组件，定义了整体页面布局（例如，可能包含页眉、页脚）和路由出口 (`<Outlet />`)。
+    *   `src/index.css`: 全局 CSS 样式表，引入了 Tailwind CSS 的基础、组件和功能类，并可包含自定义的全局样式。
+    *   `src/vite-env.d.ts`: 为 Vite 特有的环境变量（如 `import.meta.env`）和客户端 API 提供 TypeScript 类型定义。
+
+*   **API 通信与数据管理:**
+    *   `src/api/apiClient.ts` (及 `src/services/apiClient.ts` - 功能重复): 创建并配置 Axios 实例，作为 API 请求的 HTTP 客户端，统一处理基础 URL、请求头等。
+    *   `src/api/apiQueries.ts` (及 `src/services/apiQueries.ts` - 功能重复): 使用 TanStack Query (`useQuery`, `useMutation`) 封装对后端 API 的数据获取和状态管理逻辑，提供自定义 hooks（如 `useSearchPapers`, `useGetModelDetails` 等），处理加载、错误、缓存等。
+        * *注: `src/api/` 和 `src/services/` 目录存在功能重复的 `apiClient.ts` 和 `apiQueries.ts` 文件，建议整合。*
+
+*   **UI 组件 (`src/components/`):**
+    *   `src/components/common/`: 包含通用的、可在应用内多处复用的基础 UI 组件：
+        *   `Button.tsx`: 标准按钮组件。
+        *   `Input.tsx`: 表单输入框组件。
+        *   `Pagination.tsx`: 分页导航组件。
+        *   `Spinner.tsx`: 加载指示器组件。
+    *   `src/components/search/`: 包含专门用于搜索页面的 UI 组件：
+        *   `FilterPanel.tsx`: 实现搜索结果的过滤功能面板，提供多种过滤条件选项。
+        *   `ResultList.tsx`: 展示搜索结果（论文或模型）的列表。
+        *   `SearchBar.tsx`: 提供搜索词输入框和提交功能，包含搜索历史建议。
+        *   `SearchModeToggle.tsx`: 允许用户切换搜索模式（关键词、语义、混合）。
+        *   `SortDropdown.tsx`: 提供搜索结果排序选项的下拉菜单。
+        *   `TargetSelector.tsx`: 允许用户选择搜索目标（论文或模型）。
+    *   `src/components/details/`: (当前为空) 预期用于存放详情页特定的子组件。
+    *   `src/components/layout/`: (当前为空) 预期用于存放整体布局相关的组件（如页眉、页脚、侧边栏）。
+
+*   **自定义 Hooks (`src/hooks/`):**
+    *   `src/hooks/useDebounce.ts`: 提供一个 `useDebounce` Hook，用于对值进行防抖处理，常用于优化输入框的 API 请求频率。
+
+*   **页面级组件 (`src/pages/`):**
+    *   `FocusGraphPage.tsx`: 展示特定模型为中心的焦点知识图谱页面。
+    *   `GlobalGraphPage.tsx`: 展示全局 3D 知识图谱概览的页面。
+    *   `ModelDetailPage.tsx`: 显示 Hugging Face 模型详细信息的页面，包括元数据和局部图。
+    *   `PaperDetailPage.tsx`: 显示论文详细信息的页面，包括元数据和局部图。
+    *   `SearchPage.tsx`: 应用的核心搜索页面，整合了搜索栏、模式选择、目标选择、过滤器、排序和结果列表。
+
+*   **路由配置 (`src/router/`):**
+    *   `src/router/index.tsx`: 使用 React Router (`createBrowserRouter`) 定义应用的所有页面路由及其对应的组件。
+
+*   **类型定义 (`src/types/`):**
+    *   `src/types/api.ts`: 包含从后端 OpenAPI 规范自动生成的 TypeScript 类型，用于确保前后端数据结构的一致性。
+    *   `src/types/react-graph-vis.d.ts`: 为 `react-graph-vis` 图形库提供的 TypeScript 模块声明，以便在项目中使用。
+
+*   **其他目录 (当前内容较少或为空):**
+    *   `src/constants/`: (当前为空) 预期用于存放应用级别的不变常量。
+    *   `src/styles/`: (当前为空) 预期用于存放特定组件或页面的 CSS Module 文件或其他样式文件。
+    *   `src/utils/`: (当前为空) 预期用于存放通用的工具函数。
+
+**7. API 交互策略**
 
 * **权威来源:** **必须**以后端运行实例的 **Swagger UI (`/docs`)** 作为所有 API 端点 (如 `/api/v1/search/...`, `/api/v1/graph/...`)、请求参数 (`q`, `target`, `search_type`, `page`, `page_size`, `published_after`, `published_before`, `filter_area`, `sort_by`, `sort_order` 等)、响应结构和可用选项的**唯一权威参考**。
 * **封装:** 在 `src/services/apiQueries.ts` 中使用 TanStack Query 的 `useQuery`, `useInfiniteQuery` (适合分页) 和 `useMutation` 封装所有 API 调用。函数命名应清晰反映操作 (e.g., `useSemanticPaperSearch`).
@@ -187,14 +265,14 @@ aigraphx-frontend/
     * **开发环境 (容器化):** 使用 `vite.config.ts` 中的代理将 `/api/*` 请求转发到后端容器 (e.g., `http://backend:8000`)。API 调用使用相对路径 (`/api/v1/...`)。
     * **生产环境:** API 基础 URL 通过构建时环境变量 `VITE_API_BASE_URL` 注入 (`import.meta.env.VITE_API_BASE_URL`)。
 
-**7. 状态管理策略 (强化)**
+**8. 状态管理策略 (强化)**
 
 * **服务器状态 (数据缓存):** **核心由 TanStack Query 管理**。利用其缓存能力优化性能，减少不必要的请求。
 * **URL 状态 (搜索/过滤参数):** **强烈推荐**使用 React Router 的 `useSearchParams` Hook 将当前的搜索词 (`q`), 搜索模式 (`search_type`), 目标 (`target`), 过滤器 (`published_after`, `published_before`, `filter_area`), 排序选项 (`sort_by`, `sort_order`) 和页码 (`page`) 同步到 URL 查询参数。这使得状态可分享、可收藏，并支持浏览器前进/后退。可以封装一个自定义 Hook (`useSearchParameters`) 来简化读写 URL 状态并将其提供给组件。
 * **全局 UI 状态 (少量):** 如有必要（例如，全局通知、用户偏好），使用 React Context API。
 * **局部 UI 状态:** 组件内部状态（如下拉菜单是否打开）使用 `useState`。
 
-**8. UI/UX 初步概念 (扩展)**
+**9. UI/UX 初步概念 (扩展)**
 
 * **搜索页面:**
     * **顶部/显眼位置:** 搜索输入框 (`q`), **搜索模式选择器 (Tabs/Radio - `search_type`)**, **目标实体选择器 (Dropdown/Tabs - `target`)**, 触发按钮。
@@ -212,17 +290,17 @@ aigraphx-frontend/
         - **图谱邻接视图 (论文 - `GraphData`):** 一个专门的区域（可能是 Tab），**初期**展示关联 `Node` 的简单列表 (e.g., "Task: Text Classification (ID: task_123)", "Dataset: GLUE (ID: dataset_abc)")。**后期**可升级为交互式图表。
 * **整体:** 保持界面干净，提供清晰的视觉层次。加载、错误、空状态反馈要明确。响应式设计确保在桌面端良好可用。
 
-**9. 开发环境设置 (容器化优先)**
+**10. 开发环境设置 (容器化优先)**
 
 * (保持 v1.1 中的内容不变，重点是 Podman Compose 配置和启动流程)
     * 确保 `compose.yml` 中的 `frontend` 服务配置正确（context, volumes, port, network）。
     * 确保 `vite.config.ts` 中的 `server.proxy` 配置正确指向后端服务名 (e.g., `target: 'http://backend:8000'`)。
 
-**10. 代码规范与质量 (!!! 关键 !!!)**
+**11. 代码规范与质量 (!!! 关键 !!!)**
 
 * (保持 v1.1 中的严格要求不变: 强制 TS, ESLint, Prettier, 命名规范, 类型提示, Props 定义, 显式导入, 注释)
 
-**11. 测试策略 (适配扩展功能)**
+**12. 测试策略 (适配扩展功能)**
 
 * **核心:** 继续使用 **RTL + Vitest + MSW**。
 * **扩展测试范围:**
@@ -235,11 +313,11 @@ aigraphx-frontend/
     * **Mocking:** 使用 MSW 模拟后端 API，覆盖不同的搜索结果 (`PaginatedPaperSearchResult`, `PaginatedHFModelSearchResult`)、详情数据 (`PaperDetailResponse`, `HFModelDetail`)、图数据 (`GraphData`) 以及错误情况。
 * **CI 强制:** (保持 v1.1 要求不变) `tsc --noEmit`, `eslint .`, `prettier --check .`, `vitest run` 必须通过。
 
-**12. 构建与部署**
+**13. 构建与部署**
 
 * (保持 v1.1 中的内容不变: `pnpm build`, 静态托管部署, 构建时环境变量注入, CI/CD)
 
-**13. 未来增强功能 (修订)**
+**14. 未来增强功能 (修订)**
 
 *   **交互式图谱可视化:** 在详情页提供可交互、可探索的图谱视图（缩放、平移、节点点击、邻居展开）。包括展示模型的父模型和派生模型（基于 `:DERIVED_FROM` 关系）。
 *   **跨实体链接:** 在 UI 中实现更丰富的交叉链接，例如从论文详情页直接跳转到其提及的任务的详情页（如果任务也有详情页）。
@@ -249,36 +327,73 @@ aigraphx-frontend/
 *   **端到端测试:** 使用 Playwright/Cypress 覆盖核心用户流程（多模式搜索+过滤+排序+查看详情+查看关联）。
 *   **论文领域 (Area) 过滤器增强**: 实现领域的多选或模糊匹配，并提供可选的领域列表。
 
-**14. 结论**
+**15. 结论**
 
 这份更新后的前端设计文档 (v1.1 - Expanded Scope - Iteration 2) 旨在指导开发一个能充分利用 AIGraphX 后端强大功能的用户界面。通过实现**支持模型和论文的混合搜索、增加核心过滤器（如 pipeline_tag、作者、库、标签）、优化 UI/UX**，并继续采用 **React + Vite + TypeScript + Tailwind CSS + TanStack Query** 的技术栈和**容器化开发环境**，我们可以构建一个功能更强大、用户体验良好且可维护的前端应用。**严格遵守代码规范、测试策略，并始终以后端 `/docs` 作为 API 的最终事实依据**，是项目成功的关键。
 
 ---
 
-**下一步建议:**
+**当前进展 (基于代码审查)**
 
-* (保持 v1.1 中的建议不变，重点是设置和启动容器化环境)
-
-* **当前进展:**
-    * **后端 Pydantic 模型 (`graph.py`, `search.py`) 已更新：**
-        *   `HFModelDetail` 增加了 `related_papers` (关联论文) 和 `related_tasks_graph` (关联任务 - 图谱数据) 字段。
-        *   `SearchResultItem` (论文搜索结果) 增加了 `tasks` (关联任务) 字段。
-    * **后端 `GraphService` (`Backend/aigraphx/services/graph_service.py`) 已增强：**
-        *   `get_model_details` 方法现在会从 Neo4j 获取并填充模型的关联论文 (`related_papers`) 和关联任务 (`related_tasks_graph`)。
-    * **后端 `SearchService` (`Backend/aigraphx/services/search_service.py`) 已增强：**
-        *   `_get_paper_details_for_ids` 方法现在会从 Neo4j 获取并填充论文的关联任务 (`tasks`) 和领域信息 (用于补充 `area` 字段)。
-    * 已完成模型混合搜索支持。
-    * 已添加 `pipeline_tag`, 作者, 库, 标签等过滤器。
-    * 已完成初步的 UI/UX 优化（结果卡片）。
-    * 论文 `area` 过滤器已支持基础功能，可进一步细化（多选/模糊）。
-
-* **后续工作:**
-    * **后端API验证**: 确认 `/api/v1/graph/...` 和 `/api/v1/search/...` 端点响应是否按预期包含了新添加的字段 (例如，模型详情中的 `related_papers` 和 `related_tasks_graph`，论文搜索结果中的 `tasks`)。
-    * **前端类型定义更新**: 更新 TypeScript 类型 (`src/types/api.ts`) 以匹配后端 Pydantic 模型的更改 (特别是 `HFModelDetail` 和 `SearchResultItem`)。
-    * **前端模型详情页更新 (`ModelDetailPage.tsx`)**: 在模型详情页中渲染新增的 `related_papers` (关联论文列表) 和 `related_tasks_graph` (关联任务列表)。
-    * **前端论文搜索结果卡片更新**: 在论文搜索结果卡片上显示新增的 `tasks` (任务列表) 和更新后的 `area` (领域信息)。
-    * **完善论文领域 (Area) 过滤器**: 实现多选或模糊匹配，提供领域列表。
-
-使用 openapi-typescript 或类似工具，基于后端 /openapi.json 初始化/更新 src/types/api.ts 文件。
+*   **核心前端架构已搭建:**
+    *   项目已成功使用 Vite、React、TypeScript 和 Tailwind CSS 初始化和配置。
+    *   使用 React Router DOM 实现了客户端路由，定义了主要页面的访问路径。
+    *   全局样式 (`src/index.css`) 和 Tailwind CSS 已集成。
+    *   应用入口 (`src/main.tsx`)、根组件 (`src/App.tsx`) 及 QueryClientProvider 已正确设置。
+*   **API 服务层:**
+    *   已创建 Axios 实例 (`src/api/apiClient.ts` 及 `src/services/apiClient.ts` - 功能重复) 用于 HTTP 请求。
+    *   已全面使用 TanStack Query (`src/api/apiQueries.ts` 及 `src/services/apiQueries.ts` - 功能重复) 封装了对论文、模型、焦点图、全局图等数据的获取逻辑，并提供了相应的自定义 Hooks。
+    *   `src/types/api.ts` 中包含了 API 相关的 TypeScript 类型定义。
+*   **主要功能与页面组件实现:**
+    *   **搜索页面 (`src/pages/SearchPage.tsx`):**
+        *   包含搜索栏 (`SearchBar.tsx`)，支持输入和搜索历史。
+        *   支持搜索模式切换 (关键词、语义、混合 - `SearchModeToggle.tsx`)。
+        *   支持搜索目标切换 (论文、模型 - `TargetSelector.tsx`)。
+        *   实现了过滤器面板 (`FilterPanel.tsx`)，提供年份、领域、作者、模型任务 (pipeline_tag)、库、标签等多种过滤条件。
+        *   实现了排序下拉菜单 (`SortDropdown.tsx`)。
+        *   实现了结果列表 (`ResultList.tsx`) 用于展示搜索项。
+        *   集成了分页组件 (`src/components/common/Pagination.tsx`)。
+    *   **详情页面:**
+        *   论文详情页 (`src/pages/PaperDetailPage.tsx`)：展示论文元数据和基于 `react-graph-vis` 的局部知识图谱。
+        *   模型详情页 (`src/pages/ModelDetailPage.tsx`)：展示模型元数据和基于 `react-graph-vis` 的局部知识图谱。
+    *   **图谱展示页面:**
+        *   焦点图页面 (`src/pages/FocusGraphPage.tsx`)：展示以特定实体为中心的图。
+        *   全局图页面 (`src/pages/GlobalGraphPage.tsx`)：展示三维全局知识图谱。
+    *   **通用组件 (`src/components/common/`):** 已创建并使用如按钮 (`Button.tsx`)、输入框 (`Input.tsx`)、加载指示器 (`Spinner.tsx`) 等。
+*   **自定义 Hooks:**
+    *   `useDebounce.ts` 已实现，用于优化高频触发的函数调用。
+*   **文档状态:**
+    *   `README.md` 中的目录结构已更新。
+    *   `README.md` 中已添加主要代码文件概览。
 
 ---
+
+**后续工作与建议**
+
+1.  **代码库整合与优化:**
+    *   **合并API服务逻辑:** 解决 `src/api/` 和 `src/services/` 目录下 `apiClient.ts` 和 `apiQueries.ts` 的功能重复问题。建议将所有 API 相关逻辑统一到 `src/api/` 目录下，并更新所有引用。
+    *   **清理空目录:** 评估 `src/components/details/`, `src/components/layout/`, `src/constants/`, `src/styles/`, `src/utils/` 等目前为空或内容较少的目录的用途，根据实际需求填充内容或进行清理。
+
+2.  **功能增强与完善 (依据 README 目标):**
+    *   **前端类型定义更新 (`src/types/api.ts`):** 强烈建议使用 `openapi-typescript` 或类似工具，基于后端最新的 `/openapi.json` 重新生成或更新类型定义，确保与后端 Pydantic 模型 (特别是 `HFModelDetail` 中新增的 `related_papers`, `related_tasks_graph` 和 `SearchResultItem` 中新增的 `tasks`) 完全同步。
+    *   **模型详情页内容增强 (`ModelDetailPage.tsx`):**
+        *   获取并展示模型关联的论文列表 (`related_papers`)。
+        *   获取并展示模型关联的任务图谱数据 (`related_tasks_graph`)。
+    *   **论文搜索结果卡片增强 (`ResultList.tsx` 中的条目):**
+        *   在论文卡片上显示其关联的任务列表 (`tasks`)。
+        *   确保 `area` (领域信息) 的正确显示。
+    *   **论文领域 (Area) 过滤器高级功能:**
+        *   在 `FilterPanel.tsx` 中，针对论文的 `area` 过滤器，实现多选、模糊匹配逻辑，并考虑提供一个可选的领域列表。
+    *   **结果高亮:** 在 `ResultList.tsx` 中，如果后端支持，实现对搜索结果中匹配关键词的高亮显示。
+
+3.  **后端 API 验证:**
+    *   在前端进行上述功能对接前，务必与后端确认 `/api/v1/graph/...` 和 `/api/v1/search/...` 端点的响应中已按预期包含了新添加的字段和数据。
+
+4.  **测试覆盖:**
+    *   按照 `README.md` 中 "12. 测试策略 (适配扩展功能)" 部分的规划，逐步为核心组件、页面交互和 API 调用添加单元测试和集成测试（使用 Vitest, RTL, MSW）。
+
+5.  **UI/UX 持续打磨:**
+    *   根据实际使用体验，持续优化各个页面的信息布局、交互流程和视觉反馈。
+
+---
+

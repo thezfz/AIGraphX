@@ -177,7 +177,7 @@ AIGraphX/
 │   ├── sync_pg_to_models_faiss.py # 从 PG 同步模型数据到 Faiss 索引 (文本嵌入与索引构建)
 │   ├── sync_pg_to_neo4j.py      # 从 PG 同步数据到 Neo4j 图数据库
 │   ├── verify_data_counts.py    # 验证数据在 PostgreSQL, Neo4j, Faiss 中的数量一致性
-│   ├── init_neo4j_schema.py # (推荐) 初始化 Neo4j 约束/索引脚本
+│   ├── init_neo4j_schema.py     # 初始化 Neo4j 约束/索引脚本
 │   └── ...
 ├── tests/             # 测试 (!!! 结构镜像代码, 命名 test_*.py !!!)
 │   ├── conftest.py    # Pytest Fixtures (管理测试环境/数据库/数据)
