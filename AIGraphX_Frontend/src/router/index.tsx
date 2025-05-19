@@ -7,6 +7,7 @@ const SearchPage = lazy(() => import('../pages/SearchPage'));
 const PaperDetailPage = lazy(() => import('../pages/PaperDetailPage'));
 const ModelDetailPage = lazy(() => import('../pages/ModelDetailPage'));
 const FocusGraphPage = lazy(() => import('../pages/FocusGraphPage'));
+const GlobalGraphPage = lazy(() => import('../pages/GlobalGraphPage'));
 
 // 路由配置
 const routes: RouteObject[] = [
@@ -30,6 +31,11 @@ const routes: RouteObject[] = [
         path: 'focus-graph/*',
         element: <FocusGraphPage />,
         errorElement: <div>Oops! Focus graph encountered an error.</div>,
+      },
+      {
+        path: 'global-graph',
+        element: <GlobalGraphPage />,
+        errorElement: <div>Oops! Global graph encountered an error.</div>,
       },
     ],
   },
