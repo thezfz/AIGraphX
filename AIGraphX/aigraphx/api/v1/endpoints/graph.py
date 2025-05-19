@@ -244,3 +244,31 @@ async def get_model_radial_focus_graph_data(
     except Exception as e:
         logger.error(f"Error in get_model_radial_focus_graph_data for {model_id}: {{e}}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error retrieving radial focus graph for model {model_id}.")
+
+@router.get(
+    "/all-data",
+    response_model=GraphData,
+    summary="Get All Graph Data",
+    description="Retrieves all nodes and relationships from the Neo4j database.",
+    tags=["Graph"]
+)
+async def get_all_graph_data_endpoint(
+    neo4j_repo: Neo4jRepository = Depends(deps.get_neo4j_repository)
+) -> GraphData:
+    logger.info("Received request for all graph data.")
+    try:
+        graph_data_dict = await neo4j_repo.get_all_graph_data()
+        
+        if graph_data_dict is None:
+            logger.warning("No data returned from get_all_graph_data repository method. Returning empty graph.")
+            return GraphData(nodes=[], relationships=[]) 
+
+        # Ensure the dictionary contains 'nodes' and 'relationships' keys
+        if "nodes" not in graph_data_dict or "relationships" not in graph_data_dict:
+            logger.error("Graph data from repository is malformed. Missing 'nodes' or 'relationships'. Returning empty graph.")
+            return GraphData(nodes=[], relationships=[])
+
+        return GraphData(**graph_data_dict)
+    except Exception as e:
+        logger.error(f"Error in get_all_graph_data_endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving all graph data.")

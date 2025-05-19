@@ -1199,22 +1199,14 @@ class Neo4jRepository:
                                    WHEN 'HFModel' IN labels(startNode(r_obj)) THEN startNode(r_obj).modelId
                                    WHEN 'Paper'   IN labels(startNode(r_obj)) THEN COALESCE(startNode(r_obj).pwc_id, startNode(r_obj).arxiv_id_base)
                                    WHEN 'Task'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
-                                   WHEN 'Dataset' IN labels(startNode(r_obj)) THEN startNode(r_obj).name
-                                   WHEN 'Method'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
-                                   WHEN 'Author'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
-                                   WHEN 'Area'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
-                                   WHEN 'Repository' IN labels(startNode(r_obj)) THEN startNode(r_obj).url
+                                   // Removed Dataset, Method, Author, Area, Repository, Framework, ArxivCategory from here for get_model_neighborhood
                                    ELSE toString(elementId(startNode(r_obj)))
                                  END,
                  target: CASE
                                  WHEN 'HFModel' IN labels(endNode(r_obj)) THEN endNode(r_obj).modelId
                                  WHEN 'Paper'   IN labels(endNode(r_obj)) THEN COALESCE(endNode(r_obj).pwc_id, endNode(r_obj).arxiv_id_base)
                                  WHEN 'Task'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
-                                 WHEN 'Dataset' IN labels(endNode(r_obj)) THEN endNode(r_obj).name
-                                 WHEN 'Method'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
-                                 WHEN 'Author'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
-                                 WHEN 'Area'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
-                                 WHEN 'Repository' IN labels(endNode(r_obj)) THEN endNode(r_obj).url
+                                 // Removed Dataset, Method, Author, Area, Repository, Framework, ArxivCategory from here for get_model_neighborhood
                                  ELSE toString(elementId(endNode(r_obj)))
                                END,
                  type: type(r_obj),
@@ -1363,12 +1355,26 @@ class Neo4jRepository:
                            WHEN 'HFModel' IN labels(startNode(r_obj)) THEN startNode(r_obj).modelId
                            WHEN 'Paper'   IN labels(startNode(r_obj)) THEN COALESCE(startNode(r_obj).pwc_id, startNode(r_obj).arxiv_id_base)
                            WHEN 'Task'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Dataset' IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Method'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Author'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Area'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Repository' IN labels(startNode(r_obj)) THEN startNode(r_obj).url
+                           WHEN 'Framework' IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'ArxivCategory' IN labels(startNode(r_obj)) THEN startNode(r_obj).name
                            ELSE toString(elementId(startNode(r_obj)))
                          END,
                  target: CASE
                            WHEN 'HFModel' IN labels(endNode(r_obj)) THEN endNode(r_obj).modelId
                            WHEN 'Paper'   IN labels(endNode(r_obj)) THEN COALESCE(endNode(r_obj).pwc_id, endNode(r_obj).arxiv_id_base)
                            WHEN 'Task'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Dataset' IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Method'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Author'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Area'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Repository' IN labels(endNode(r_obj)) THEN endNode(r_obj).url
+                           WHEN 'Framework' IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'ArxivCategory' IN labels(endNode(r_obj)) THEN endNode(r_obj).name
                            ELSE toString(elementId(endNode(r_obj)))
                          END,
                  type: type(r_obj),
@@ -1442,3 +1448,126 @@ class Neo4jRepository:
             logger.error(f"Failed to link models (derived_from) in batch: {e}")
             logger.error(traceback.format_exc())
             raise
+
+    async def get_all_graph_data(self) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves all nodes and relationships from the graph.
+        Formats them for graph visualization.
+
+        Returns:
+            A dictionary containing 'nodes' and 'relationships' for the entire graph,
+            or None if an error occurs.
+        """
+        logger.info("Fetching all graph data from Neo4j.")
+        if not self.driver:
+            logger.error("Neo4j driver not available for get_all_graph_data.")
+            return None
+
+        query = """
+        // Collect all distinct nodes and format them
+        MATCH (n)
+        WITH collect(DISTINCT {
+            id: CASE
+                  WHEN 'HFModel'       IN labels(n) THEN n.modelId
+                  WHEN 'Paper'         IN labels(n) THEN COALESCE(n.pwc_id, n.arxiv_id_base)
+                  WHEN 'Task'          IN labels(n) THEN n.name
+                  WHEN 'Dataset'       IN labels(n) THEN n.name
+                  WHEN 'Method'        IN labels(n) THEN n.name
+                  WHEN 'Author'        IN labels(n) THEN n.name
+                  WHEN 'Area'          IN labels(n) THEN n.name
+                  WHEN 'Repository'    IN labels(n) THEN n.url
+                  WHEN 'Framework'     IN labels(n) THEN n.name
+                  WHEN 'ArxivCategory' IN labels(n) THEN n.name
+                  ELSE toString(elementId(n))
+                END,
+            label: CASE
+                     WHEN 'HFModel'       IN labels(n) THEN n.modelId
+                     WHEN 'Paper'         IN labels(n) THEN n.title
+                     WHEN 'Task'          IN labels(n) THEN n.name
+                     WHEN 'Dataset'       IN labels(n) THEN n.name
+                     WHEN 'Method'        IN labels(n) THEN n.name
+                     WHEN 'Author'        IN labels(n) THEN n.name
+                     WHEN 'Area'          IN labels(n) THEN n.name
+                     WHEN 'Repository'    IN labels(n) THEN COALESCE(n.name, n.url)
+                     WHEN 'Framework'     IN labels(n) THEN n.name
+                     WHEN 'ArxivCategory' IN labels(n) THEN n.name
+                     ELSE COALESCE(n.name, toString(elementId(n)))
+                   END,
+            type: labels(n)[0],
+            properties: properties(n)
+        }) AS final_nodes
+
+        // Collect all distinct relationships and format them
+        MATCH ()-[r]->() // Match all relationships
+        WITH final_nodes, collect(DISTINCT {
+            id: toString(elementId(r)),
+            source: CASE
+                      WHEN 'HFModel'       IN labels(startNode(r)) THEN startNode(r).modelId
+                      WHEN 'Paper'         IN labels(startNode(r)) THEN COALESCE(startNode(r).pwc_id, startNode(r).arxiv_id_base)
+                      WHEN 'Task'          IN labels(startNode(r)) THEN startNode(r).name
+                      WHEN 'Dataset'       IN labels(startNode(r)) THEN startNode(r).name
+                      WHEN 'Method'        IN labels(startNode(r)) THEN startNode(r).name
+                      WHEN 'Author'        IN labels(startNode(r)) THEN startNode(r).name
+                      WHEN 'Area'          IN labels(startNode(r)) THEN startNode(r).name
+                      WHEN 'Repository'    IN labels(startNode(r)) THEN startNode(r).url
+                      WHEN 'Framework'     IN labels(startNode(r)) THEN startNode(r).name
+                      WHEN 'ArxivCategory' IN labels(startNode(r)) THEN startNode(r).name
+                      ELSE toString(elementId(startNode(r)))
+                    END,
+            target: CASE
+                      WHEN 'HFModel'       IN labels(endNode(r)) THEN endNode(r).modelId
+                      WHEN 'Paper'         IN labels(endNode(r)) THEN COALESCE(endNode(r).pwc_id, endNode(r).arxiv_id_base)
+                      WHEN 'Task'          IN labels(endNode(r)) THEN endNode(r).name
+                      WHEN 'Dataset'       IN labels(endNode(r)) THEN endNode(r).name
+                      WHEN 'Method'        IN labels(endNode(r)) THEN endNode(r).name
+                      WHEN 'Author'        IN labels(endNode(r)) THEN endNode(r).name
+                      WHEN 'Area'          IN labels(endNode(r)) THEN endNode(r).name
+                      WHEN 'Repository'    IN labels(endNode(r)) THEN endNode(r).url
+                      WHEN 'Framework'     IN labels(endNode(r)) THEN endNode(r).name
+                      WHEN 'ArxivCategory' IN labels(endNode(r)) THEN endNode(r).name
+                      ELSE toString(elementId(endNode(r)))
+                    END,
+            type: type(r),
+            properties: properties(r)
+        }) AS final_relationships
+
+        RETURN final_nodes, final_relationships
+        """
+
+        async with self.driver.session(database=self.db_name) as session:
+            try:
+                result = await session.run(query)
+                record = await result.single()
+
+                if not record:
+                    logger.warning("No data returned from get_all_graph_data query.")
+                    return {"nodes": [], "relationships": []} # Return empty structure if no record
+
+                raw_nodes = record["final_nodes"] if record["final_nodes"] is not None else []
+                raw_relationships = record["final_relationships"] if record["final_relationships"] is not None else []
+                
+                # Convert Neo4j specific types in properties
+                final_nodes_list = []
+                for node_data in raw_nodes:
+                    if isinstance(node_data.get("properties"), dict):
+                        node_data["properties"] = _convert_neo4j_temporal_types(node_data["properties"])
+                    final_nodes_list.append(node_data)
+                
+                final_relationships_list = []
+                for rel_data in raw_relationships:
+                    if isinstance(rel_data.get("properties"), dict):
+                        rel_data["properties"] = _convert_neo4j_temporal_types(rel_data["properties"])
+                    final_relationships_list.append(rel_data)
+                
+                logger.info(f"Successfully fetched {len(final_nodes_list)} nodes and {len(final_relationships_list)} relationships for the entire graph.")
+                return {"nodes": final_nodes_list, "relationships": final_relationships_list}
+
+            except Exception as e:
+                logger.error(
+                    f"Error fetching all graph data: {e}",
+                    exc_info=True,
+                )
+                logger.error(f"Query attempted: \\n{query}")
+                return None
+            finally:
+                logger.debug("Finished get_all_graph_data method.")

@@ -174,9 +174,9 @@ const ModelDetailPage: React.FC = () => {
       // 可以为其他类型如 Dataset, Method 等添加颜色
 
       return {
-        id: node.id,
+      id: node.id,
         label: node.label || node.id,
-        title: `Type: ${node.type}\nID: ${node.id}${node.label ? '\nLabel: ' + node.label : ''}`,
+      title: `Type: ${node.type}\nID: ${node.id}${node.label ? '\nLabel: ' + node.label : ''}`,
         color: color,
         shape: shape,
         size: size,

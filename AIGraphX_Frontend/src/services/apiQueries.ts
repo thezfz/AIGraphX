@@ -197,4 +197,20 @@ export const usePaperDetail = (pwcId?: string, enabled: boolean = true) => { // 
       enabled: !!pwcId && enabled, // 仅当 pwcId 存在且外部允许时才执行查询
     }
   );
+};
+
+// New hook to fetch all graph data
+export const useAllGraphData = () => {
+  const fetchAllGraphData = async (): Promise<GraphData> => {
+    const response = await apiClient.get<GraphData>('/graph/all-data');
+    return response.data;
+  };
+
+  return useQuery<GraphData, Error>({
+    queryKey: ['allGraphData'], 
+    queryFn: fetchAllGraphData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
+    // Add other options like onError, onSuccess, enabled, etc. as needed
+  });
 }; 
