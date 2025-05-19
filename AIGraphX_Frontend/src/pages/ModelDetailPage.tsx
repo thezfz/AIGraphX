@@ -59,26 +59,28 @@ const ModelDetailPage: React.FC = () => {
           console.log(`[Debug DERIVED_FROM] Inspecting relationship: source=${rel.source}, target=${rel.target}, type=${rel.type}`);
           if (rel.type === 'DERIVED_FROM') {
             console.log(`[Debug DERIVED_FROM] Found DERIVED_FROM: source=${rel.source}, target=${rel.target}`);
-            // 如果当前模型是目标，则 rel.source 是父模型
+            // 如果当前模型是目标 (B in A->B), 意味着 A (source) 是从 B (target/currentModel) 派生出来的。
+            // 所以 A (rel.source) 是派生模型。
             if (rel.target === currentModelNodeId) {
-              console.log(`[Debug DERIVED_FROM] Match for Parent: ${rel.source} -> ${currentModelNodeId}`);
-              const parentNode = modelGraphData.nodes.find(n => n.id === rel.source);
-              if (parentNode) {
-                parents.push(parentNode);
-                console.log(`[Debug DERIVED_FROM] Added Parent Node:`, parentNode);
-              } else {
-                console.warn(`[Debug DERIVED_FROM] Parent node with id ${rel.source} not found in modelGraphData.nodes`);
-              }
-            }
-            // 如果当前模型是源，则 rel.target 是派生模型
-            else if (rel.source === currentModelNodeId) {
-              console.log(`[Debug DERIVED_FROM] Match for Derived: ${currentModelNodeId} -> ${rel.target}`);
-              const derivedNode = modelGraphData.nodes.find(n => n.id === rel.target);
+              console.log(`[Debug DERIVED_FROM] Match for Derived: ${rel.source} -> ${currentModelNodeId}`);
+              const derivedNode = modelGraphData.nodes.find(n => n.id === rel.source);
               if (derivedNode) {
                 derived.push(derivedNode);
                 console.log(`[Debug DERIVED_FROM] Added Derived Node:`, derivedNode);
               } else {
-                console.warn(`[Debug DERIVED_FROM] Derived node with id ${rel.target} not found in modelGraphData.nodes`);
+                console.warn(`[Debug DERIVED_FROM] Derived node with id ${rel.source} not found in modelGraphData.nodes`);
+              }
+            }
+            // 如果当前模型是源 (A in A->B), 意味着 A (source/currentModel) 是从 B (target) 派生出来的。
+            // 所以 B (rel.target) 是父模型。
+            else if (rel.source === currentModelNodeId) {
+              console.log(`[Debug DERIVED_FROM] Match for Parent: ${currentModelNodeId} -> ${rel.target}`);
+              const parentNode = modelGraphData.nodes.find(n => n.id === rel.target);
+              if (parentNode) {
+                parents.push(parentNode);
+                console.log(`[Debug DERIVED_FROM] Added Parent Node:`, parentNode);
+              } else {
+                console.warn(`[Debug DERIVED_FROM] Parent node with id ${rel.target} not found in modelGraphData.nodes`);
               }
             }
           }
@@ -461,6 +463,7 @@ const ModelDetailPage: React.FC = () => {
             {!isLoadingGraph && !isErrorGraph && modelGraphData && graph.nodes.length > 0 && (
               <div className="border rounded-md overflow-hidden"> {/* 添加边框和圆角 */}
                  <Graph
+                  key={modelId}
                   graph={graph} // useMemoized graph data
                   options={graphOptions}
                   events={graphEvents}

@@ -113,8 +113,11 @@ async def sync_hf_models(
                     )
                     model_data["hf_tags"] = None
 
-            model_data = {
-                "model_id": model_data.get("hf_model_id"),
+            # Prepare data for Neo4j
+            # The neo4j_repo.save_hf_models_batch expects the ID key in the dictionary to be 'model_id' (lowercase)
+            # which it then uses for the 'modelId' (camelCase) property in Cypher.
+            model_data_for_neo4j = {
+                "model_id": model_data.get("hf_model_id"), # Key for the repo method
                 "author": model_data.get("hf_author"),
                 "sha": model_data.get("hf_sha"),
                 "last_modified": model_data.get("hf_last_modified"),
@@ -124,9 +127,14 @@ async def sync_hf_models(
                 "likes": model_data.get("hf_likes"),
                 "library_name": model_data.get("hf_library_name"),
                 "hf_readme_content": model_data.get("hf_readme_content"),
-                "hf_dataset_links": model_data.get("hf_dataset_links") or [],
+                "hf_dataset_links": json.loads(model_data["hf_dataset_links"])
+                                    if isinstance(model_data.get("hf_dataset_links"), str)
+                                    else (model_data.get("hf_dataset_links") or []),
             }
-            models_to_process.append(model_data)
+            
+            model_data_for_neo4j_cleaned = {k: v for k, v in model_data_for_neo4j.items() if v is not None}
+
+            models_to_process.append(model_data_for_neo4j_cleaned)
 
             if len(models_to_process) >= NEO4J_WRITE_BATCH_SIZE:
                 try:

@@ -6,6 +6,7 @@ import App from '../App';
 const SearchPage = lazy(() => import('../pages/SearchPage'));
 const PaperDetailPage = lazy(() => import('../pages/PaperDetailPage'));
 const ModelDetailPage = lazy(() => import('../pages/ModelDetailPage'));
+const FocusGraphPage = lazy(() => import('../pages/FocusGraphPage'));
 
 // 路由配置
 const routes: RouteObject[] = [
@@ -24,6 +25,11 @@ const routes: RouteObject[] = [
       {
         path: 'models/:modelId',
         element: <ModelDetailPage />,
+      },
+      {
+        path: 'focus-graph/*',
+        element: <FocusGraphPage />,
+        errorElement: <div>Oops! Focus graph encountered an error.</div>,
       },
     ],
   },

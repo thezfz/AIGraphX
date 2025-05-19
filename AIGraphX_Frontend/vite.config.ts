@@ -13,6 +13,9 @@ import { fileURLToPath } from 'node:url'
 // https://vitejs.dev/config/
 export default defineConfig({
   // logLevel: 'debug', // Removed due to type error, Vite's dev logging is usually verbose enough
+  define: {
+    global: 'window',
+  },
   plugins: [react()],
   server: {
     host: '0.0.0.0', // 允许外部访问

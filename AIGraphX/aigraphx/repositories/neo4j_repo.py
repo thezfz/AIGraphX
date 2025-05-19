@@ -1272,6 +1272,138 @@ class Neo4jRepository:
             finally:
                 logger.debug(f"Finished get_model_neighborhood for {model_id}")
 
+    async def get_radial_focus_graph(self, focus_model_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves the 1-hop graph for a given focus Hugging Face model ID,
+        optimized for a radial/focused display.
+        Includes:
+        - Center HFModel node.
+        - HFModels related by DERIVED_FROM (both directions).
+        - Papers related by MENTIONS.
+        - Tasks related by HAS_TASK.
+
+        Args:
+            focus_model_id: The modelId of the Hugging Face model to focus on.
+
+        Returns:
+            A dictionary containing 'nodes' and 'relationships' for the graph,
+            or None if the model is not found or an error occurs.
+        """
+        logger.info(f"Fetching radial focus graph for HFModel: {focus_model_id}")
+        if not self.driver:
+            logger.error("Neo4j driver not available for get_radial_focus_graph.")
+            return None
+
+        # Cypher query to get the center model and its 1-hop relevant neighbors
+        query = """
+        MATCH (center_model:HFModel {modelId: $focus_model_id})
+
+        // DERIVED_FROM relationships (incoming and outgoing)
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (center_model)-[r_derived:DERIVED_FROM]-(related_model:HFModel)
+            RETURN collect(DISTINCT related_model) AS derived_related_models_nodes,
+                   collect(DISTINCT r_derived) AS derived_rels
+        }
+        // MENTIONS relationships (models mentioning papers)
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (center_model)-[r_mentions:MENTIONS]->(paper:Paper)
+            RETURN collect(DISTINCT paper) AS mentioned_papers_nodes,
+                   collect(DISTINCT r_mentions) AS mentions_rels
+        }
+        // HAS_TASK relationships (models having tasks)
+        CALL {
+            WITH center_model
+            OPTIONAL MATCH (center_model)-[r_has_task:HAS_TASK]->(task:Task)
+            RETURN collect(DISTINCT task) AS task_nodes,
+                   collect(DISTINCT r_has_task) AS has_task_rels
+        }
+
+        // Combine all distinct nodes and relationships
+        WITH center_model,
+             COALESCE(derived_related_models_nodes, []) AS derived_related_models_nodes,
+             COALESCE(mentioned_papers_nodes, []) AS mentioned_papers_nodes,
+             COALESCE(task_nodes, []) AS task_nodes,
+             COALESCE(derived_rels, []) AS derived_rels,
+             COALESCE(mentions_rels, []) AS mentions_rels,
+             COALESCE(has_task_rels, []) AS has_task_rels
+
+        // Create a single list of all unique nodes involved
+        WITH derived_related_models_nodes + mentioned_papers_nodes + task_nodes + [center_model] AS all_nodes_intermediate,
+             derived_rels + mentions_rels + has_task_rels AS all_rels_intermediate
+
+        // Unwind nodes to format them and collect distinct formatted nodes
+        UNWIND all_nodes_intermediate AS n_obj
+        WITH all_rels_intermediate,
+             collect(DISTINCT {
+                 id: CASE
+                       WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
+                       WHEN 'Paper'      IN labels(n_obj) THEN COALESCE(n_obj.pwc_id, n_obj.arxiv_id_base)
+                       WHEN 'Task'       IN labels(n_obj) THEN n_obj.name
+                       ELSE toString(elementId(n_obj))
+                     END,
+                 label: CASE
+                          WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
+                          WHEN 'Paper'      IN labels(n_obj) THEN n_obj.title
+                          WHEN 'Task'       IN labels(n_obj) THEN n_obj.name
+                          ELSE COALESCE(n_obj.name, toString(elementId(n_obj)))
+                        END,
+                 type: labels(n_obj)[0],
+                 properties: properties(n_obj)
+             }) AS final_nodes
+
+        // Unwind relationships to format them and collect distinct formatted relationships
+        UNWIND all_rels_intermediate AS r_obj
+        WITH final_nodes, r_obj WHERE r_obj IS NOT NULL
+        WITH final_nodes,
+             collect(DISTINCT {
+                 id: toString(elementId(r_obj)),
+                 source: CASE
+                           WHEN 'HFModel' IN labels(startNode(r_obj)) THEN startNode(r_obj).modelId
+                           WHEN 'Paper'   IN labels(startNode(r_obj)) THEN COALESCE(startNode(r_obj).pwc_id, startNode(r_obj).arxiv_id_base)
+                           WHEN 'Task'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           ELSE toString(elementId(startNode(r_obj)))
+                         END,
+                 target: CASE
+                           WHEN 'HFModel' IN labels(endNode(r_obj)) THEN endNode(r_obj).modelId
+                           WHEN 'Paper'   IN labels(endNode(r_obj)) THEN COALESCE(endNode(r_obj).pwc_id, endNode(r_obj).arxiv_id_base)
+                           WHEN 'Task'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           ELSE toString(elementId(endNode(r_obj)))
+                         END,
+                 type: type(r_obj),
+                 properties: properties(r_obj)
+             }) AS final_relationships
+
+        RETURN final_nodes, final_relationships
+        """
+
+        async with self.driver.session(database=self.db_name) as session:
+            try:
+                result = await session.run(query, {"focus_model_id": focus_model_id})
+                record = await result.single()
+
+                if not record or not record["final_nodes"]:
+                    logger.warning(f"No graph data or no nodes found for focus model {focus_model_id} in get_radial_focus_graph.")
+                    return None # Return None if center model or its neighborhood is empty
+
+                raw_nodes = record["final_nodes"]
+                raw_relationships = record["final_relationships"]
+                
+                final_nodes_list = [_convert_neo4j_temporal_types(node_data) for node_data in raw_nodes]
+                final_relationships_list = [_convert_neo4j_temporal_types(rel_data) for rel_data in raw_relationships]
+
+                return {"nodes": final_nodes_list, "relationships": final_relationships_list}
+
+            except Exception as e:
+                logger.error(
+                    f"Error fetching radial focus graph for {focus_model_id}: {e}",
+                    exc_info=True,
+                )
+                return None
+            finally:
+                logger.debug(f"Finished get_radial_focus_graph for {focus_model_id}")
+
     async def link_models_derived_from_batch(self, links: List[Dict[str, str]]) -> None:
         """
         Creates DERIVED_FROM relationships between HFModels using UNWIND.

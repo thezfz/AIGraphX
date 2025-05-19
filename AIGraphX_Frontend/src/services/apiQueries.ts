@@ -96,22 +96,47 @@ export const usePaperGraphData = (pwcId: string, enabled: boolean = true) => {
  * @param enabled - 是否启用查询，默认为 true。如果 modelId 为空则通常不启用。
  * @returns React Query 查询结果对象，包含图数据。
  */
-export const useModelGraphData = (modelId: string, enabled: boolean = true) => {
+export const useModelGraphData = (
+  modelId: string,
+  enabled: boolean = true // Allow enabling/disabling the query
+) => {
+  return useQuery<
+    GraphData,
+    Error // Specify Error type for TanStack Query v5
+  >({ 
+    queryKey: ['modelGraph', modelId],
+    queryFn: () => fetchModelGraphData(modelId),
+    enabled: enabled && !!modelId, // Only enable if modelId is truthy and enabled prop is true
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+};
+
+// New fetch function for radial focus graph data
+export const fetchModelGraphData = async (modelId: string): Promise<GraphData> => {
+  const response = await apiClient.get(`/graph/hf_models/${modelId}/graph`);
+  return response.data;
+};
+
+// New fetch function for radial focus graph data
+export const fetchModelRadialFocusGraphData = async (modelId: string): Promise<GraphData> => {
+  const response = await apiClient.get(`/graph/hf_models/${modelId}/radial_focus`); // Correct endpoint
+  return response.data;
+};
+
+// New hook for fetching radial focus graph data
+export const useModelRadialFocusGraphData = (
+  modelId: string,
+  enabled: boolean = true
+) => {
   return useQuery<
     GraphData, 
     Error
-  >(
-    {
-      queryKey: ['modelGraph', modelId],
-      queryFn: async () => {
-        // 注意：model_id 在路径中可能包含斜杠，Axios 默认会自动编码它们。
-        // 如果后端API期望未编码的路径参数（FastAPI通常能处理编码的），则无需特殊处理。
-        const response = await apiClient.get<GraphData>(`/graph/hf_models/${modelId}/graph`);
-        return response.data;
-      },
-      enabled: !!modelId && enabled, // 仅当 modelId 存在且外部允许时才执行查询
-    }
-  );
+  >({
+    queryKey: ['modelRadialFocusGraph', modelId],
+    queryFn: () => fetchModelRadialFocusGraphData(modelId), // Correctly calls its own fetcher
+    enabled: enabled && !!modelId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 };
 
 // --- Detail Hooks ---

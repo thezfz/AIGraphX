@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any, Literal
 # Core components and dependencies - Removed incorrect db imports
 # from aigraphx.core.db import get_postgres_repo
 # from aigraphx.repositories.postgres_repo import PostgresRepository
-# from aigraphx.repositories.neo4j_repo import Neo4jRepository
+from aigraphx.repositories.neo4j_repo import Neo4jRepository
 
 # Service layer
 from aigraphx.services.graph_service import GraphService
@@ -219,3 +219,28 @@ async def get_related_entities_endpoint(
         raise HTTPException(
             status_code=500, detail="Internal server error retrieving related entities."
         )
+
+@router.get(
+    "/hf_models/{model_id:path}/radial_focus",
+    response_model=GraphData,
+    summary="Get 1-hop Radial Focus Graph for a Hugging Face Model",
+    description="Fetches the 1-hop neighborhood graph for a specified Hugging Face model ID, optimized for a radial/focused display. Includes DERIVED_FROM models, MENTIONED papers, and HAS_TASK tasks.",
+    tags=["Graph"]
+)
+async def get_model_radial_focus_graph_data(
+    model_id: str = Path(..., description="The Hugging Face model ID (e.g., 'deepseek-ai/DeepSeek-R1') to get the focus graph for."),
+    neo4j_repo: Neo4jRepository = Depends(deps.get_neo4j_repository)
+) -> GraphData:
+    logger.info(f"---> ENTERED get_model_radial_focus_graph_data for model_id: {model_id}")
+    logger.info(f"Received request for radial focus graph for model_id: {model_id}")
+    try:
+        graph_data_dict = await neo4j_repo.get_radial_focus_graph(focus_model_id=model_id)
+        
+        if graph_data_dict is None:
+            logger.warning(f"No radial focus graph data found for model {model_id}. Returning empty graph.")
+            return GraphData(nodes=[], relationships=[]) 
+
+        return GraphData(**graph_data_dict)
+    except Exception as e:
+        logger.error(f"Error in get_model_radial_focus_graph_data for {model_id}: {{e}}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error retrieving radial focus graph for model {model_id}.")
