@@ -27,6 +27,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "tests"], // 包含 src 和 vite 配置
+  "include": ["src", "tests"], // <--- 修改后的行：移除了 "vite.config.ts"
   "references": [{ "path": "./tsconfig.node.json" }] // 用于 vite.config.ts 等 Node 环境
-} 
+}
