@@ -12,7 +12,7 @@ import 'vis-network/styles/vis-network.css';
 
 // 修改导入以正确指向 components.schemas 下的类型
 import type { components } from '../types/api'; 
-type GraphData = components['schemas']['GraphData'];
+// type GraphData = components['schemas']['GraphData']; // Removed as it's unused
 type ApiNode = components['schemas']['Node'];
 type ApiRelationship = components['schemas']['Relationship']; // 定义 Relationship 类型
 // 如果还需要 Relationship 类型，可以类似添加：

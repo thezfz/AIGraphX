@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePaperDetail, usePaperGraphData } from '../services/apiQueries';
 import Spinner from '../components/common/Spinner';
-import { DocumentTextIcon, LinkIcon, TagIcon, StarIcon, BeakerIcon, CircleStackIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, LinkIcon, TagIcon, BeakerIcon, CircleStackIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 
 // 导入 react-graph-vis 和其 CSS
 import Graph from 'react-graph-vis';

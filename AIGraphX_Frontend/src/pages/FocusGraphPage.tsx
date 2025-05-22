@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Graph from 'react-graph-vis';
 import 'vis-network/styles/vis-network.css';
