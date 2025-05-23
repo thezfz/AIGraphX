@@ -1728,7 +1728,11 @@ class SearchService:
                         library_name=details.get("hf_library_name", ""),
                         score=combined_scores.get(model_id),
                         readme_content=details.get("hf_readme_content", ""),
-                        dataset_links=details.get("hf_dataset_links", [])
+                        dataset_links=details.get("hf_dataset_links", []),
+                        likes=details.get("hf_likes"),
+                        downloads=details.get("hf_downloads"),
+                        last_modified=details.get("hf_last_modified"),
+                        tags=tags,
                     )
                     all_items.append(item)
                 except ValidationError as ve:
