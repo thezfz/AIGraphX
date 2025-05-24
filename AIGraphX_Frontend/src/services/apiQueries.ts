@@ -118,26 +118,26 @@ export const fetchModelGraphData = async (modelId: string): Promise<GraphData> =
 };
 
 // New fetch function for radial focus graph data
-export const fetchModelRadialFocusGraphData = async (modelId: string): Promise<GraphData> => {
-  const response = await apiClient.get(`/graph/hf_models/${modelId}/radial_focus`); // Correct endpoint
-  return response.data;
-};
+// export const fetchModelRadialFocusGraphData = async (modelId: string): Promise<GraphData> => {
+//   const response = await apiClient.get(`/graph/hf_models/${modelId}/radial_focus`); // Correct endpoint
+//   return response.data;
+// };
 
 // New hook for fetching radial focus graph data
-export const useModelRadialFocusGraphData = (
-  modelId: string,
-  enabled: boolean = true
-) => {
-  return useQuery<
-    GraphData, 
-    Error
-  >({
-    queryKey: ['modelRadialFocusGraph', modelId],
-    queryFn: () => fetchModelRadialFocusGraphData(modelId), // Correctly calls its own fetcher
-    enabled: enabled && !!modelId,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  });
-};
+// export const useModelRadialFocusGraphData = (
+//   modelId: string,
+//   enabled: boolean = true
+// ) => {
+//   return useQuery<
+//     GraphData, 
+//     Error
+//   >({
+//     queryKey: ['modelRadialFocusGraph', modelId],
+//     queryFn: () => fetchModelRadialFocusGraphData(modelId), // Correctly calls its own fetcher
+//     enabled: enabled && !!modelId,
+//     staleTime: 1000 * 60 * 5, // 5 minutes
+//   });
+// };
 
 // --- Detail Hooks ---
 /** ModelDetail 类型别名 */
