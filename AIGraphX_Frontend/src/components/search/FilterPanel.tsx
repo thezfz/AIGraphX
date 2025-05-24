@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { usePaperAreas } from '../../services/apiQueries'; // 引入 usePaperAreas hook
+import { usePaperAreas } from '../../api/apiQueries'; // 更新导入路径
 
 // 定义过滤参数类型 (根据需要扩展)
 export interface Filters {

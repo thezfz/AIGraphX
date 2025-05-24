@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { usePaperDetail, usePaperGraphData } from '../services/apiQueries';
+import { usePaperDetail, usePaperGraphData } from '../api/apiQueries';
 import Spinner from '../components/common/Spinner';
 import { DocumentTextIcon, LinkIcon, TagIcon, BeakerIcon, CircleStackIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 

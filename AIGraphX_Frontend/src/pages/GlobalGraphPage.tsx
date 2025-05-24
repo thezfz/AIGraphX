@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three'; // 导入 Three.js
-import { useAllGraphData } from '../services/apiQueries'; // Changed to useAllGraphData
+import { useAllGraphData } from '../api/apiQueries'; // 更新导入路径
 // import { useParams } from 'react-router-dom'; // 如果需要从URL获取初始modelId (已注释)
 
 // API返回的节点和关系类型 (与ModelDetailPage类似，可能需要调整)

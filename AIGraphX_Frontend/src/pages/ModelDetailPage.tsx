@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useModelDetail, useModelGraphData } from '../services/apiQueries'; // 修正导入路径
+import { useModelDetail, useModelGraphData } from '../api/apiQueries'; // 更新导入路径
 import Spinner from '../components/common/Spinner'; // 引入 Spinner
 import { ArrowDownTrayIcon, HeartIcon } from '@heroicons/react/24/outline'; // 引入图标
 import ReactMarkdown from 'react-markdown'; // ADDED
@@ -40,99 +40,32 @@ const ModelDetailPage: React.FC = () => {
     error: errorGraph,
   } = useModelGraphData(modelId!, !!modelId); // 使用 modelId! 断言，因为前面有检查
 
-  // 添加调试日志
+  // 解析父模型和派生模型
   useEffect(() => {
-    if (modelDetails) {
-      console.log('Model TEXT details received:', modelDetails);
-    }
-    if (modelGraphData) {
-      console.log('Model GRAPH data received:', modelGraphData);
+    if (modelGraphData && modelGraphData.nodes && modelGraphData.relationships && modelId) {
+      const parents: ApiNode[] = [];
+      const derived: ApiNode[] = [];
+      const currentModelNodeId = modelId;
 
-      // 解析父模型和派生模型
-      if (modelGraphData.nodes && modelGraphData.relationships && modelId) {
-        const parents: ApiNode[] = [];
-        const derived: ApiNode[] = [];
-        const currentModelNodeId = modelId; // 使用从 useParams 获取的 modelId 作为中心
-        console.log(`[Debug DERIVED_FROM] Processing relationships for currentModelNodeId: ${currentModelNodeId}`);
-
-        modelGraphData.relationships.forEach(rel => {
-          console.log(`[Debug DERIVED_FROM] Inspecting relationship: source=${rel.source}, target=${rel.target}, type=${rel.type}`);
-          if (rel.type === 'DERIVED_FROM') {
-            console.log(`[Debug DERIVED_FROM] Found DERIVED_FROM: source=${rel.source}, target=${rel.target}`);
-            // 如果当前模型是目标 (B in A->B), 意味着 A (source) 是从 B (target/currentModel) 派生出来的。
-            // 所以 A (rel.source) 是派生模型。
-            if (rel.target === currentModelNodeId) {
-              console.log(`[Debug DERIVED_FROM] Match for Derived: ${rel.source} -> ${currentModelNodeId}`);
-              const derivedNode = modelGraphData.nodes.find(n => n.id === rel.source);
-              if (derivedNode) {
-                derived.push(derivedNode);
-                console.log(`[Debug DERIVED_FROM] Added Derived Node:`, derivedNode);
-              } else {
-                console.warn(`[Debug DERIVED_FROM] Derived node with id ${rel.source} not found in modelGraphData.nodes`);
-              }
+      modelGraphData.relationships.forEach(rel => {
+        if (rel.type === 'DERIVED_FROM') {
+          if (rel.target === currentModelNodeId) {
+            const derivedNode = modelGraphData.nodes.find(n => n.id === rel.source);
+            if (derivedNode) {
+              derived.push(derivedNode);
             }
-            // 如果当前模型是源 (A in A->B), 意味着 A (source/currentModel) 是从 B (target) 派生出来的。
-            // 所以 B (rel.target) 是父模型。
-            else if (rel.source === currentModelNodeId) {
-              console.log(`[Debug DERIVED_FROM] Match for Parent: ${currentModelNodeId} -> ${rel.target}`);
-              const parentNode = modelGraphData.nodes.find(n => n.id === rel.target);
-              if (parentNode) {
-                parents.push(parentNode);
-                console.log(`[Debug DERIVED_FROM] Added Parent Node:`, parentNode);
-              } else {
-                console.warn(`[Debug DERIVED_FROM] Parent node with id ${rel.target} not found in modelGraphData.nodes`);
-              }
+          } else if (rel.source === currentModelNodeId) {
+            const parentNode = modelGraphData.nodes.find(n => n.id === rel.target);
+            if (parentNode) {
+              parents.push(parentNode);
             }
           }
-        });
-        setParentModels(parents);
-        setDerivedModels(derived);
-        console.log('Parent models:', parents);
-        console.log('Derived models:', derived);
-      }
-
-      // 主动检测重复NODE ID
-      if (modelGraphData.nodes) {
-        const nodeIds = modelGraphData.nodes.map(n => n.id);
-        const uniqueNodeIds = new Set(nodeIds);
-        if (nodeIds.length !== uniqueNodeIds.size) {
-            console.error('DUPLICATE NODE IDs DETECTED IN modelGraphData.nodes:', modelGraphData.nodes);
-            const idCounts: Record<string, number> = {};
-            nodeIds.forEach(id => {
-                idCounts[id] = (idCounts[id] || 0) + 1;
-            });
-            const duplicates = Object.entries(idCounts).filter(([/*id*/, count]) => count > 1);
-            console.error('Duplicate IDs and their counts:', duplicates);
-        } else {
-            console.log('No duplicate node IDs found in modelGraphData.nodes.');
         }
-      }
-
-      // 主动检测重复 RELATIONSHIP
-      if (modelGraphData.relationships) {
-        const relSignatures = modelGraphData.relationships.map(
-            r => `${r.source}|${r.target}|${r.type}`
-        );
-        const uniqueRelSignatures = new Set(relSignatures);
-        if (relSignatures.length !== uniqueRelSignatures.size) {
-            console.error(
-                'DUPLICATE RELATIONSHIPS DETECTED in modelGraphData.relationships:',
-                modelGraphData.relationships
-            );
-            const relCounts: Record<string, number> = {};
-            relSignatures.forEach(sig => {
-                relCounts[sig] = (relCounts[sig] || 0) + 1;
-            });
-            const duplicateRels = Object.entries(relCounts).filter(
-                ([/*sig*/, count]) => count > 1
-            );
-            console.error('Duplicate relationship signatures and their counts:', duplicateRels);
-        } else {
-            console.log('No duplicate relationships found in modelGraphData.relationships.');
-        }
-      }
+      });
+      setParentModels(parents);
+      setDerivedModels(derived);
     }
-  }, [modelDetails, modelGraphData, modelId]);
+  }, [modelGraphData, modelId]);
 
   // --- 数据转换为图表库所需的格式 ---
   const graph = useMemo(() => {

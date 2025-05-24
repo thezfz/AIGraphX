@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // Create an Axios instance
 const apiClient = axios.create({
-  // The base URL will be handled by the Vite proxy for /api requests
-  // baseURL: 'http://localhost:8000', // Set this if not using proxy or for other requests
+  baseURL: '/api/v1', // Set base URL from services/apiClient.ts
+  timeout: 10000, // Set timeout from services/apiClient.ts
   headers: {
     'Content-Type': 'application/json',
   },
