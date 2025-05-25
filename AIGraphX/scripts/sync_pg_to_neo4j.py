@@ -3,10 +3,11 @@ import asyncio
 import logging
 import os
 import traceback  # Import traceback
-from typing import Optional, Dict, Any, List, Union  # Import List and Union
+from typing import Optional, Dict, Any, List, Union, Set  # Import List, Union, and Set
 import json
 import sys  # Import sys for path manipulation
 import argparse  # Import argparse
+import re  # Import re for regex operations
 
 # Third-party imports
 from dotenv import load_dotenv
@@ -74,7 +75,7 @@ if not NEO4J_URI or not NEO4J_USER or not NEO4J_PASSWORD:
 
 # --- Logging Setup ---
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s",
     handlers=[logging.StreamHandler()],
 )
@@ -85,6 +86,195 @@ logger = logging.getLogger(__name__)
 PG_FETCH_BATCH_SIZE = 500  # How many records to fetch from PG at a time
 NEO4J_WRITE_BATCH_SIZE = 200  # How many records to write to Neo4j in one batch
 
+# --- Task Filtering Constants ---
+KNOWN_LANGUAGE_CODES = frozenset([
+    "aa", "ab", "ae", "af", "ak", "am", "an", "ar", "as", "av", "ay", "az", "ba", "be", "bg", "bh", "bi", "bm", "bn", "bo", "br", "bs",
+    "ca", "ce", "ch", "co", "cr", "cs", "cu", "cv", "cy", "da", "de", "dv", "dz", "ee", "el", "en", "eo", "es", "et", "eu", "fa", "ff",
+    "fi", "fj", "fo", "fr", "fy", "ga", "gd", "gl", "gn", "gu", "gv", "ha", "he", "hi", "ho", "hr", "ht", "hu", "hy", "hz", "ia", "id",
+    "ie", "ig", "ii", "ik", "io", "is", "it", "iu", "ja", "jv", "ka", "kg", "ki", "kj", "kk", "kl", "km", "kn", "ko", "kr", "ks", "ku",
+    "kv", "kw", "ky", "la", "lb", "lg", "li", "ln", "lo", "lt", "lu", "lv", "mg", "mh", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my",
+    "na", "nb", "nd", "ne", "ng", "nl", "nn", "no", "nr", "nv", "ny", "oc", "oj", "om", "or", "os", "pa", "pi", "pl", "ps", "pt", "qu",
+    "rm", "rn", "ro", "ru", "rw", "sa", "sc", "sd", "se", "sg", "si", "sk", "sl", "sm", "sn", "so", "sq", "sr", "ss", "st", "su", "sv",
+    "sw", "ta", "te", "tg", "th", "ti", "tk", "tl", "tn", "to", "tr", "ts", "tt", "tw", "ty", "ug", "uk", "ur", "uz", "ve", "vi", "vo",
+    "wa", "wo", "xh", "yi", "yo", "za", "zh", "zu"
+])
+
+KNOWN_LIBRARY_NAMES = frozenset([
+    "diffusers", "safetensors", "transformers", "pytorch", "tensorflow", "keras", "timm", "accelerate", 
+    "peft", "bitsandbytes", "sentence-transformers", "spacy", "stanza", "allennlp", "fairseq", 
+    "speechbrain", "espnet", "asteroid", "pyannote-audio", "openvino", "onnx", "tensorrt", 
+    "coremltools", "mlx", "jax", "unsloth", "tensorboard", "tf-keras", "transformers.js",
+    "mergekit", "trl", "vllm", "axolotl", "alignment-handbook", "ai-toolkit", "core-ml" # core-ml is a repeat but ok
+])
+
+KNOWN_FILE_TYPES_FORMATS = frozenset([
+    "gguf", "ggml", "bin", "pt", "h5", "json", "yaml", "zip", "tar.gz"
+])
+
+KNOWN_LICENSES = frozenset([
+    "mit", "apache-2.0", "gpl-3.0", "cc-by-sa-4.0", "openrail", "bigscience-openrail-m", "bsd", "cc0" # added bsd, cc0 from previous
+])
+
+KNOWN_ORGANIZATIONS_SET = frozenset([
+    "meta", "facebook", "google", "openai", "microsoft", "nvidia", "intel", "ibm", "amazon", "apple", 
+    "huggingface", "stabilityai", "deepmind", "anthropic", "mistralai", "cohere", "baai", "salesforce", 
+    "stanford", "berkeley", "cmu", "mit", "eleutherai", "togethercomputer", "tencent", "alibaba", "bytedance",
+    "thudm" # Added from your list
+])
+
+TRAINING_EVAL_DEPLOY_KEYWORDS = frozenset([
+    "training", "evaluation", "inference", "deployment", "optimization", "benchmark", "metrics", "loss", 
+    "optimizer", "checkpoint", "lora", "qlora", "adapter", "prompt-tuning", "few-shot", "zero-shot", 
+    "fine-tuning", "pre-training", "distilled", "pruned", "quantized", "converged"
+])
+
+HUGGINGFACE_HUB_NON_TASK_TAGS = frozenset([
+    "endpoints-compatible", "autotrain-compatible", "custom-code", "model-index", "generated-from-trainer", 
+    "pytorch-model-hub-mixin", "model-hub-mixin", "space-compatible", "gradio", "streamlit", "docker", 
+    "paperswithcode", "config", "tokenizer", "modelcard", "readme", "license", "gguf-my-repo" # Added from your list
+])
+
+HARDWARE_KEYWORDS = frozenset([
+    "gpu", "cpu", "tpu", "nvidia-a100", "cuda"
+])
+
+# More general non-task words, including broad/meta categories from before
+GENERAL_NON_TASK_WORDS = frozenset([
+    "vision", "audio", "speech", "chat", "code", "vision-language", "language-model", "multi-modal", "agent", 
+    "reinforcement-learning", "large language model", "function calling", "function-calling", "tool-use",
+    "multilingual", "uncensored", "experimental", "deprecated", "lite", "small", "base", "large", "tiny", 
+    "dev", "core", "full", "mini", "edition", "preview", "alpha", "beta", "official", "community", "research",
+    "example", "demo", "tool", "utility", "pipeline", "pytorch_model.bin", "tf_model.h5"
+])
+
+# Combine all keyword-based exclusion sets (after lowercasing them)
+EXCLUDED_KEYWORDS_RAW = (
+    KNOWN_LANGUAGE_CODES |
+    KNOWN_LIBRARY_NAMES |
+    KNOWN_FILE_TYPES_FORMATS |
+    KNOWN_LICENSES |
+    KNOWN_ORGANIZATIONS_SET |
+    TRAINING_EVAL_DEPLOY_KEYWORDS |
+    HUGGINGFACE_HUB_NON_TASK_TAGS |
+    HARDWARE_KEYWORDS |
+    GENERAL_NON_TASK_WORDS
+)
+# Normalize by replacing spaces, underscores, and colons with hyphens for keyword matching
+NORMALIZED_EXCLUDED_KEYWORDS = frozenset([kw.lower().replace(" ", "-").replace("_", "-").replace(":", "-") for kw in EXCLUDED_KEYWORDS_RAW])
+
+# Regex patterns for exclusion
+ARXIV_PATTERN = re.compile(r"arxiv:\s*\d{4}\.\d{4,5}(v\d+)?", re.IGNORECASE)
+QUANT_BIT_PATTERN = re.compile(r"^\d+-?bit$", re.IGNORECASE)
+QUANT_FP_INT_PATTERN = re.compile(r"^(fp|int)(4|8|16|32)$")
+QUANT_GGUF_PATTERN = re.compile(r"^q\\d+_[0-9a-z_]+$", re.IGNORECASE) # GGUF quant types e.g. q4_0, q8_k_m
+# More explicit pattern for base_model variations
+BASE_MODEL_PREFIX_PATTERN = re.compile(r"^base_model:", re.IGNORECASE) # Matches underscore version
+DIFFUSER_PREFIX_PATTERN = re.compile(r"^diffuser(s|:).*:?", re.IGNORECASE) # New pattern for diffuser/diffusers/diffuser: prefix
+VERSION_PATTERN = re.compile(r"^v\\d+(\\.\\d+)*[a-zA-Z]*$", re.IGNORECASE)
+NUMERIC_LIKE_PATTERN = re.compile(r"^\d+(\.\d+){0,2}$")
+# Pattern for license: or region: like tags (more flexible than just keyword list for these)
+PREFIX_COLON_PATTERN = re.compile(r"^(license|region|template|library|dataset):", re.IGNORECASE)
+
+
+# Function to check if a tag should be excluded (renamed and enhanced)
+def is_likely_not_a_task(tag_str: Union[str, None]) -> bool:
+    # --- START BYTE REPRESENTATION LOG ---
+    if isinstance(tag_str, str):
+        try:
+            bytes_repr = tag_str.encode('utf-8', 'surrogateescape')
+            hex_repr = bytes_repr.hex(' ')
+            logger.debug(f"BYTE_DEBUG: tag_str='{tag_str[:50]}', bytes={bytes_repr!r}, hex='{hex_repr}'")
+        except Exception as e:
+            logger.debug(f"BYTE_DEBUG: Error encoding tag_str='{tag_str[:50]}': {e}")
+    # --- END BYTE REPRESENTATION LOG ---
+
+    if not isinstance(tag_str, str) or not tag_str.strip():
+        return True # Exclude empty or non-string tags
+    
+    original_tag_for_logging = tag_str # For logging
+    normalized_tag_for_keywords = tag_str.lower().strip().replace(" ", "-").replace("_", "-").replace(":", "-")
+    tag_lower_original_form = tag_str.lower().strip() 
+
+    # Specific logging for base-model related tags and other problematic ones
+    is_problematic_tag_for_logging = (
+        "autotrain" in tag_lower_original_form or
+        "endpoints" in tag_lower_original_form or
+        tag_lower_original_form.startswith("base_model") # Covers base_model: and base_model_finetune: etc.
+    )
+
+    if is_problematic_tag_for_logging:
+        logger.debug(
+            f"DEBUG_FOCUS: Checking specific tag: Original='{original_tag_for_logging}', "
+            f"Normalized for Keywords='{normalized_tag_for_keywords}', "
+            f"Lower Original Form='{tag_lower_original_form}'"
+        )
+
+    if normalized_tag_for_keywords in NORMALIZED_EXCLUDED_KEYWORDS:
+        logger.debug(f"Tag '{original_tag_for_logging}' (normalized: '{normalized_tag_for_keywords}') found in NORMALIZED_EXCLUDED_KEYWORDS. Excluding.")
+        return True
+    
+    # Regex checks 
+    if ARXIV_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched ARXIV_PATTERN. Excluding.")
+        return True
+    if QUANT_BIT_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched QUANT_BIT_PATTERN. Excluding.")
+        return True
+    if QUANT_FP_INT_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched QUANT_FP_INT_PATTERN. Excluding.")
+        return True
+    if QUANT_GGUF_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched QUANT_GGUF_PATTERN. Excluding.")
+        return True
+
+    # Enhanced logging for BASE_MODEL_PREFIX_PATTERN
+    # ---- START DETAILED CHAR LOGGING ----
+    if tag_lower_original_form.startswith("base_model"): # Condition uses underscore
+        char_details = [(char, ord(char)) for char in tag_lower_original_form[:20]] # Log first 20 chars
+        logger.debug(f"CHAR_DEBUG for '{tag_lower_original_form}': {char_details}")
+    # ---- END DETAILED CHAR LOGGING ----
+    match_result = BASE_MODEL_PREFIX_PATTERN.match(tag_lower_original_form)
+    logger.debug(f"DEBUG_REGEX_CHECK: Pattern='{BASE_MODEL_PREFIX_PATTERN.pattern}', String='{tag_lower_original_form}', MatchResult={bool(match_result)}")
+
+    if is_problematic_tag_for_logging: # This log is mostly for focus
+        logger.debug(f"DEBUG_FOCUS:    Attempting match with BASE_MODEL_PREFIX_PATTERN ('{BASE_MODEL_PREFIX_PATTERN.pattern}') on '{tag_lower_original_form}'. Match object: {match_result}")
+    
+    if match_result: # Use the stored match_result
+        if is_problematic_tag_for_logging:
+            logger.debug(f"DEBUG_FOCUS:    SUCCESS: Tag '{original_tag_for_logging}' matched BASE_MODEL_PREFIX_PATTERN. Excluding.")
+        else:
+            logger.debug(f"Tag '{original_tag_for_logging}' matched BASE_MODEL_PREFIX_PATTERN. Excluding.")
+        return True # Exclude if pattern matches
+    elif is_problematic_tag_for_logging: # Explicitly log if it's a problematic tag but didn't match
+        logger.debug(f"DEBUG_FOCUS:    FAILURE: Tag '{original_tag_for_logging}' (processed as '{tag_lower_original_form}') did NOT match BASE_MODEL_PREFIX_PATTERN ('{BASE_MODEL_PREFIX_PATTERN.pattern}'). Not excluding based on this rule.")
+
+    if DIFFUSER_PREFIX_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched DIFFUSER_PREFIX_PATTERN. Excluding.")
+        return True
+    if VERSION_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched VERSION_PATTERN. Excluding.")
+        return True
+    if PREFIX_COLON_PATTERN.match(tag_lower_original_form):
+        logger.debug(f"Tag '{original_tag_for_logging}' matched PREFIX_COLON_PATTERN. Excluding.")
+        return True
+
+    # Numeric check with length consideration
+    if NUMERIC_LIKE_PATTERN.match(tag_lower_original_form) and len(tag_lower_original_form) < 6:
+        logger.debug(f"Tag '{original_tag_for_logging}' matched NUMERIC_LIKE_PATTERN and length < 6. Excluding.")
+        return True
+
+    if '/' in tag_str and not any(kw in tag_lower_original_form for kw in ["to-", "-to-", "2", "classification", "detection", "generation", "answering"]):
+        parts = tag_str.split('/')
+        if len(parts) == 2:
+            author_part_normalized = parts[0].lower().strip().replace(" ", "-").replace("_", "-").replace(":", "-")
+            if author_part_normalized in NORMALIZED_EXCLUDED_KEYWORDS:
+                 logger.debug(f"Excluding '{original_tag_for_logging}' due to author part '{parts[0]}' (normalized: '{author_part_normalized}') being in excluded keywords.")
+                 return True
+    
+    logger.debug(f"Tag '{original_tag_for_logging}' not excluded by any rule.")
+    return False
+
+
 # --- Synchronization Logic ---
 
 
@@ -94,7 +284,7 @@ async def sync_hf_models(
     """Synchronizes HF models from PostgreSQL to Neo4j."""
     logger.info("Starting HFModel synchronization...")
     models_synced = 0
-    query = "SELECT hf_model_id, hf_author, hf_sha, hf_last_modified, hf_downloads, hf_likes, hf_tags, hf_pipeline_tag, hf_library_name, hf_readme_content, hf_dataset_links FROM hf_models ORDER BY hf_model_id"
+    query = "SELECT hf_model_id, hf_author, hf_sha, hf_last_modified, hf_downloads, hf_likes, hf_tags, hf_pipeline_tag, hf_library_name, hf_readme_content, hf_dataset_links, hf_readme_tasks FROM hf_models ORDER BY hf_model_id"
     models_to_process: List[Dict[str, Any]] = []
 
     try:
@@ -103,26 +293,84 @@ async def sync_hf_models(
             query, batch_size=batch_size
         ):
             model_data = dict(model_record)
-            # Ensure tags are loaded as list if stored as JSON string
-            if isinstance(model_data.get("hf_tags"), str):
-                try:
-                    model_data["hf_tags"] = json.loads(model_data["hf_tags"])
-                except json.JSONDecodeError:
-                    logger.warning(
-                        f"Could not decode hf_tags JSON for model {model_data.get('hf_model_id')}"
-                    )
-                    model_data["hf_tags"] = None
+            model_id_for_logs = model_data.get('hf_model_id') # For logging
 
-            # Prepare data for Neo4j
-            # The neo4j_repo.save_hf_models_batch expects the ID key in the dictionary to be 'model_id' (lowercase)
-            # which it then uses for the 'modelId' (camelCase) property in Cypher.
+            all_potential_task_strings: Set[str] = set()
+
+            # 1. Process hf_tags
+            raw_hf_tags = model_data.get("hf_tags")
+            if isinstance(raw_hf_tags, str):
+                try:
+                    raw_hf_tags = json.loads(raw_hf_tags)
+                except json.JSONDecodeError:
+                    logger.warning(f"Model {model_id_for_logs}: hf_tags is a string but not valid JSON: '{str(raw_hf_tags)[:200]}'.")
+                    if not (raw_hf_tags.startswith('[') and raw_hf_tags.endswith(']')):
+                        raw_hf_tags = [raw_hf_tags] 
+                    else:
+                        raw_hf_tags = [] 
+            
+            if isinstance(raw_hf_tags, list):
+                for item_from_raw_list in raw_hf_tags:
+                    if isinstance(item_from_raw_list, str) and item_from_raw_list.startswith('[') and item_from_raw_list.endswith(']'):
+                        try:
+                            inner_list = json.loads(item_from_raw_list)
+                            if isinstance(inner_list, list):
+                                for tag_in_inner_list in inner_list:
+                                    if isinstance(tag_in_inner_list, str):
+                                        all_potential_task_strings.add(tag_in_inner_list)
+                                    else:
+                                        logger.debug(f"Model {model_id_for_logs}: Non-string item '{str(tag_in_inner_list)[:100]}' in nested hf_tags list skipped.")
+                            else: # Parsed, but not a list
+                                if isinstance(item_from_raw_list, str): all_potential_task_strings.add(item_from_raw_list)
+                        except json.JSONDecodeError:
+                            if isinstance(item_from_raw_list, str): all_potential_task_strings.add(item_from_raw_list) 
+                    elif isinstance(item_from_raw_list, str):
+                        all_potential_task_strings.add(item_from_raw_list)
+                    else:
+                        logger.debug(f"Model {model_id_for_logs}: Non-string item '{str(item_from_raw_list)[:100]}' in hf_tags list skipped.")
+            
+            # 2. Process hf_readme_tasks
+            raw_readme_tasks = model_data.get("hf_readme_tasks")
+            parsed_readme_tasks_list: List[str] = []
+            if isinstance(raw_readme_tasks, str):
+                try:
+                    content = json.loads(raw_readme_tasks)
+                    if isinstance(content, list):
+                        parsed_readme_tasks_list = [str(item) for item in content if isinstance(item, str)]
+                except json.JSONDecodeError:
+                    logger.warning(f"Model {model_id_for_logs}: Could not decode hf_readme_tasks JSON: {raw_readme_tasks[:200]}")
+            elif isinstance(raw_readme_tasks, list):
+                parsed_readme_tasks_list = [str(item) for item in raw_readme_tasks if isinstance(item, str)]
+            
+            for task_name in parsed_readme_tasks_list:
+                all_potential_task_strings.add(task_name)
+
+            # 3. Process hf_pipeline_tag
+            pipeline_tag_value = model_data.get("hf_pipeline_tag")
+            if isinstance(pipeline_tag_value, str) and pipeline_tag_value.strip():
+                all_potential_task_strings.add(pipeline_tag_value)
+            
+            logger.debug(f"Model {model_id_for_logs}: All potential task strings collected before filtering: {all_potential_task_strings}")
+
+            # 4. Unified Filtering
+            final_task_names_for_neo4j: Set[str] = set()
+            for task_candidate in all_potential_task_strings:
+                logger.debug(f"Model {model_id_for_logs}: PRE-CHECK (unified filter) for task_candidate: Type={type(task_candidate)}, Value='{str(task_candidate)[:200]}'")
+                if not is_likely_not_a_task(task_candidate):
+                    final_task_names_for_neo4j.add(task_candidate)
+                else:
+                    logger.debug(f"Model {model_id_for_logs}: Filtered out (unified filter) '{task_candidate}' by is_likely_not_a_task_POST_CHECK.")
+            
+            logger.debug(f"Model {model_id_for_logs}: Final task names for Neo4j after unified filtering: {final_task_names_for_neo4j}")
+
+            # Prepare model_data for Neo4j, using original and newly filtered task data as appropriate
             model_data_for_neo4j = {
-                "model_id": model_data.get("hf_model_id"), # Key for the repo method
+                "model_id": model_data.get("hf_model_id"),
                 "author": model_data.get("hf_author"),
                 "sha": model_data.get("hf_sha"),
                 "last_modified": model_data.get("hf_last_modified"),
-                "tags": model_data.get("hf_tags") or [],
-                "pipeline_tag": model_data.get("hf_pipeline_tag"),
+                "tags": model_data.get("hf_tags") or [], # Store original hf_tags, not the filtered ones here. Filtering is for relationships.
+                "pipeline_tag": model_data.get("hf_pipeline_tag"), # Store original pipeline_tag
                 "downloads": model_data.get("hf_downloads"),
                 "likes": model_data.get("hf_likes"),
                 "library_name": model_data.get("hf_library_name"),
@@ -130,10 +378,11 @@ async def sync_hf_models(
                 "hf_dataset_links": json.loads(model_data["hf_dataset_links"])
                                     if isinstance(model_data.get("hf_dataset_links"), str)
                                     else (model_data.get("hf_dataset_links") or []),
+                "hf_readme_tasks_for_relation": list(final_task_names_for_neo4j), # THIS IS THE KEY CHANGE FOR RELATIONSHIPS
+                "task_names_for_neo4j": list(final_task_names_for_neo4j) # This is what save_hf_models_batch expects
             }
-            
-            model_data_for_neo4j_cleaned = {k: v for k, v in model_data_for_neo4j.items() if v is not None}
 
+            model_data_for_neo4j_cleaned = {k: v for k, v in model_data_for_neo4j.items() if v is not None}
             models_to_process.append(model_data_for_neo4j_cleaned)
 
             if len(models_to_process) >= NEO4J_WRITE_BATCH_SIZE:

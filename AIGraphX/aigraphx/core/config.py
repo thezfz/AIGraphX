@@ -67,6 +67,9 @@ class Settings(BaseSettings):
         default="intfloat/multilingual-e5-large", alias="SENTENCE_TRANSFORMER_MODEL"
     )
     embedder_device: str = Field(default="cpu", alias="EMBEDDER_DEVICE")
+    sentence_transformers_home: str = Field(
+        default="/app/models_cache", alias="SENTENCE_TRANSFORMERS_HOME"
+    )
 
     # Faiss Settings (Defaults) - Use Field with alias for env var mapping
     # Define the fields once

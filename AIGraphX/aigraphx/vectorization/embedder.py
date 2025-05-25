@@ -40,12 +40,15 @@ class TextEmbedder:
         """Loads the Sentence Transformer model."""
         if self.model is None:
             logger.info(
-                f"Loading Sentence Transformer model: {self.model_name} onto device: {self.device or 'auto'}"
+                f"Loading Sentence Transformer model: {self.model_name} onto device: {self.device or 'auto'} from cache: {settings.sentence_transformers_home}"
             )
             try:
                 # trust_remote_code=True might be needed for some newer models from HF hub
                 self.model = SentenceTransformer(
-                    self.model_name, device=self.device, trust_remote_code=True
+                    self.model_name, 
+                    device=self.device, 
+                    cache_folder=settings.sentence_transformers_home,
+                    trust_remote_code=True
                 )
                 logger.info(f"Model {self.model_name} loaded successfully.")
                 # You can log the embedding dimension if needed

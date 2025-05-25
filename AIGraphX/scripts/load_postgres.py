@@ -12,6 +12,9 @@ from typing import Dict, Any, Optional, Tuple, List
 import psycopg  # Import psycopg
 from psycopg_pool import AsyncConnectionPool  # Import the pool
 from dotenv import load_dotenv
+import yaml  # 新增 PyYAML 导入
+from yaml.scanner import ScannerError # 新增 ScannerError 导入
+import re # 保留 re 以备其他可能的用途，或在此处移除（如果不再需要）
 
 # --- Configuration ---
 # Load .env specifically for the script
@@ -59,6 +62,34 @@ AREA_MAP = {
     # Add other mappings as needed
 }
 
+# --- Known Language Codes for Filtering ---
+KNOWN_LANGUAGE_CODES = frozenset([
+    "aa", "ab", "ae", "af", "ak", "am", "an", "ar", "as", "av", "ay", "az", 
+    "ba", "be", "bg", "bh", "bi", "bm", "bn", "bo", "br", "bs", 
+    "ca", "ce", "ch", "co", "cr", "cs", "cu", "cv", "cy", 
+    "da", "de", "dv", "dz", 
+    "ee", "el", "en", "eo", "es", "et", "eu", 
+    "fa", "ff", "fi", "fj", "fo", "fr", "fy", 
+    "ga", "gd", "gl", "gn", "gu", "gv", 
+    "ha", "he", "hi", "ho", "hr", "ht", "hu", "hy", "hz", 
+    "ia", "id", "ie", "ig", "ii", "ik", "io", "is", "it", "iu", 
+    "ja", "jv", "ka", "kg", "ki", "kj", "kk", "kl", "km", "kn", "ko", "kr", "ks", "ku", "kv", "kw", "ky", 
+    "la", "lb", "lg", "li", "ln", "lo", "lt", "lu", "lv", 
+    "mg", "mh", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", 
+    "na", "nb", "nd", "ne", "ng", "nl", "nn", "no", "nr", "nv", "ny", 
+    "oc", "oj", "om", "or", "os", 
+    "pa", "pi", "pl", "ps", "pt", 
+    "qu", "rm", "rn", "ro", "ru", "rw", 
+    "sa", "sc", "sd", "se", "sg", "si", "sk", "sl", "sm", "sn", "so", "sq", "sr", "ss", "st", "su", "sv", "sw", 
+    "ta", "te", "tg", "th", "ti", "tk", "tl", "tn", "to", "tr", "ts", "tt", "tw", "ty", 
+    "ug", "uk", "ur", "uz", 
+    "ve", "vi", "vo", 
+    "wa", "wo", 
+    "xh", "yi", "yo", 
+    "za", "zh", "zu"
+])
+# --- End Known Language Codes ---
+
 
 def get_area_from_category(primary_category: Optional[str]) -> Optional[str]:
     """Derives the area from the primary ArXiv category."""
@@ -100,6 +131,76 @@ def parse_datetime(datetime_str: Optional[str]) -> Optional[datetime]:
         return dt.astimezone(timezone.utc)
     except (ValueError, TypeError):
         logger.warning(f"Could not parse datetime: {datetime_str}")
+        return None
+
+
+# 新增的辅助函数，用于从 README frontmatter 提取 tasks using PyYAML
+def _extract_tasks_from_readme_yaml(readme_content: Optional[str]) -> Optional[List[str]]:
+    if not readme_content:
+        return None
+    
+    frontmatter_text: Optional[str] = None
+    try:
+        # 使用正则表达式从 README 文本中分离出 YAML frontmatter 部分
+        # (--- 包裹的部分)
+        match = re.search(r"^\s*---\s*\n(.*?)^\s*---\s*\n", readme_content, re.DOTALL | re.MULTILINE)
+        if not match:
+            # logger.debug("No YAML frontmatter found in README.") # Optional: log if no frontmatter
+            return None 
+        frontmatter_text = match.group(1)
+    except Exception as e:
+        logger.warning(f"Regex error extracting frontmatter from README: {e}")
+        return None
+
+    if frontmatter_text is None: # Should be caught by `if not match` but defensive
+        return None
+
+    try:
+        # 解析 YAML frontmatter
+        parsed_yaml = yaml.safe_load(frontmatter_text)
+        
+        if not isinstance(parsed_yaml, dict):
+            # logger.debug("Parsed YAML frontmatter is not a dictionary.") # Optional
+            return None
+
+        tasks_data = parsed_yaml.get("tasks")
+
+        if tasks_data is None:
+            # logger.debug("No 'tasks' key found in YAML frontmatter.") # Optional
+            return None
+        
+        raw_tasks_list: Optional[List[Any]] = None
+        if isinstance(tasks_data, str):
+            # logger.info(f"Found 'tasks' in YAML as a single string: '{tasks_data}'. Wrapping it in a list.")
+            raw_tasks_list = [tasks_data]
+        elif isinstance(tasks_data, list):
+            raw_tasks_list = tasks_data
+        else:
+            logger.warning(f"Found 'tasks' in YAML, but it's not a list or a single string: {type(tasks_data)}. Content: {tasks_data}")
+            return None
+
+        if not raw_tasks_list: # Should not happen if tasks_data was string or list, but defensive
+             return None
+
+        # Filter out non-string items and potential language codes
+        final_tasks: List[str] = []
+        for task_item in raw_tasks_list:
+            if not isinstance(task_item, str):
+                logger.warning(f"Skipping non-string item in 'tasks' list: {task_item} (type: {type(task_item)})")
+                continue
+            
+            if task_item.lower() in KNOWN_LANGUAGE_CODES:
+                logger.info(f"Filtering out potential language code '{task_item}' from 'tasks' list.")
+            else:
+                final_tasks.append(task_item)
+        
+        return final_tasks if final_tasks else None # Return list if not empty, else None
+
+    except ScannerError as e:
+        logger.warning(f"PyYAML ScannerError parsing frontmatter: {e}. Frontmatter text (first 500 chars): \\n{frontmatter_text[:500]}...")
+        return None
+    except Exception as e:
+        logger.warning(f"General error parsing YAML frontmatter: {e}")
         return None
 
 
@@ -170,14 +271,20 @@ async def insert_hf_model(
             # If multiple base models, store as a JSON array of strings
             processed_base_models_json = json.dumps(base_model_values)
             
+    # --- 新增：从 README 提取 tasks using PyYAML ---
+    readme_tasks_list = _extract_tasks_from_readme_yaml(model_data.get("hf_readme_content"))
+    hf_readme_tasks_json = json.dumps(readme_tasks_list) if readme_tasks_list else None
+    # --- 结束新增 ---
+            
     async with conn.cursor() as cur:
         await cur.execute(
             """
             INSERT INTO hf_models (
                 hf_model_id, hf_author, hf_sha, hf_last_modified, hf_downloads,
                 hf_likes, hf_tags, hf_pipeline_tag, hf_library_name,
-                hf_readme_content, hf_dataset_links, hf_base_models
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                hf_readme_content, hf_dataset_links, hf_base_models,
+                hf_readme_tasks 
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (hf_model_id) DO UPDATE SET
                 hf_author = EXCLUDED.hf_author,
                 hf_sha = EXCLUDED.hf_sha,
@@ -190,6 +297,7 @@ async def insert_hf_model(
                 hf_readme_content = EXCLUDED.hf_readme_content,
                 hf_dataset_links = EXCLUDED.hf_dataset_links,
                 hf_base_models = EXCLUDED.hf_base_models,
+                hf_readme_tasks = EXCLUDED.hf_readme_tasks, 
                 updated_at = NOW()
         """,
             (
@@ -209,6 +317,7 @@ async def insert_hf_model(
                 if model_data.get("hf_dataset_links")
                 else None,
                 processed_base_models_json, # Use the newly processed base models
+                hf_readme_tasks_json, # 新增列的数据
             ),
         )
 
@@ -540,14 +649,14 @@ async def main(input_file_path: str, reset_db: bool, reset_checkpoint: bool) -> 
     logger.info(f"Reset Checkpoint: {reset_checkpoint}")
     logger.info(f"Reset Database (ignored by script, handled by tests): {reset_db}")
 
-    pool = None
+    pool: Optional[AsyncConnectionPool] = None # Add type hint
     processed_count = 0
     batch_count = 0
     error_count = 0
     current_batch: List[Tuple[int, Dict[str, Any]]] = []
-    start_line = _load_checkpoint(
-        reset_checkpoint
-    )  # Resetting only affects checkpoint file now
+    start_line = _load_checkpoint(reset_checkpoint)
+    # Initialize i here, it's used in the finally block for checkpointing
+    i = start_line -1 # if start_line is 0, i=-1, so first line is 0+1=1. If start_line is N, means N lines processed, so next line is N.
 
     # reset_db flag is now only informational for logging
     # Database truncation/cleanup is expected to be handled externally (e.g., by test fixtures)
