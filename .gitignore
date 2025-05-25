@@ -173,3 +173,5 @@ AIGraphX_Frontend/.cursorindexingignore
 
 # Generated Markdown Notes Directory
 Backend_Markdown_Notes/
+
+models_cache/
