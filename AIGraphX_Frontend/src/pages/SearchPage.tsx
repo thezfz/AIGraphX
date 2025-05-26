@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../hooks/useDebounce';
+import { Link } from 'react-router-dom';
+import { GlobeAltIcon } from '@heroicons/react/24/outline';
 
 // 导入复用组件和 Hook
 import SearchBar from '../components/search/SearchBar';
@@ -381,22 +383,41 @@ const SearchPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Top Controls Area */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">{pageTitle}</h2>
-        {/* Search Bar */}
-        <div className="mb-4">
-          <SearchBar
-            initialQuery={rawQuery}
-            onSearch={handleSearch}
-            isLoading={isFetching}
-          />
-        </div>
-        {/* Toggles and Sorter */}
-        <div className="flex flex-wrap gap-x-4 gap-y-2 items-center mb-4"> {/* Use flexbox for better alignment */} 
+    <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+      <header className="mb-6">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-800 text-center mb-2">
+          AIGraphX 探索平台
+        </h1>
+        <p className="text-md text-gray-600 text-center">
+          发现、关联和理解 AI 领域的最新进展
+        </p>
+      </header>
+
+      {/* 搜索栏 */}
+      <div className="mb-6">
+        <SearchBar initialQuery={rawQuery} onSearch={handleSearch} />
+      </div>
+
+      {/* 全局图谱跳转入口 - 新增区域 */}
+      <div className="my-6 p-4 bg-indigo-50 rounded-lg shadow hover:shadow-md transition-shadow">
+        <Link to="/global-graph" className="flex items-center text-indigo-700 hover:text-indigo-900 group">
+          <GlobeAltIcon className="h-8 w-8 mr-3 text-indigo-500 group-hover:text-indigo-700 transition-colors" />
+          <div>
+            <h3 className="text-lg font-semibold">探索全局知识图谱</h3>
+            <p className="text-sm text-indigo-600 group-hover:text-indigo-800">
+              可视化所有实体及其关联，发现隐藏的连接。
+            </p>
+          </div>
+        </Link>
+      </div>
+
+      {/* 搜索控制栏: 模式，目标，排序 */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 p-4 bg-gray-50 rounded-lg shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           <SearchModeToggle searchMode={searchMode} onChange={handleModeChange} />
           <TargetSelector searchTarget={searchTarget} onChange={handleTargetChange} />
+        </div>
+        <div className="w-full md:w-auto md:min-w-[200px]">
           <SortDropdown
             options={currentSortOptions}
             selectedOption={sortBy}
@@ -404,8 +425,8 @@ const SearchPage: React.FC = () => {
           />
         </div>
       </div>
-
-      {/* 2. Main Content Area (Filters and Results) - Two Columns */} 
+      
+      {/* 主内容区: 过滤器 + 结果列表 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6"> 
         {/* Left Column: Filters */} 
         <div className="md:col-span-1">
