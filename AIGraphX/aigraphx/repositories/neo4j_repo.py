@@ -971,6 +971,8 @@ class Neo4jRepository:
         Retrieves the neighborhood graph for a given Hugging Face model ID.
         The graph includes the model itself, directly related papers (MENTIONS),
         tasks (HAS_TASK), and potentially other relevant entities and their relationships.
+        If the model has no relationships, it returns a graph with only the model node.
+        Returns None if the model itself is not found.
 
         Args:
             model_id: The modelId of the Hugging Face model.
@@ -986,6 +988,12 @@ class Neo4jRepository:
             return None
 
         # Refined Cypher query
+        # Query to fetch the center model's properties first
+        center_model_query = """
+        MATCH (model:HFModel {modelId: $model_id})
+        RETURN model
+        """
+
         query = """
         MATCH (center_model:HFModel {modelId: $model_id})
 
@@ -1019,7 +1027,7 @@ class Neo4jRepository:
         }
 
         // Combine all distinct nodes and relationships
-        WITH center_model,
+        WITH center_model, // Keep center_model for its properties
              COALESCE(mentioned_papers_nodes, []) AS mentioned_papers_nodes,
              COALESCE(task_nodes, []) AS task_nodes,
              COALESCE(parent_model_nodes, []) AS parent_model_nodes,
@@ -1030,13 +1038,14 @@ class Neo4jRepository:
              COALESCE(has_derived_rels, []) AS has_derived_rels
 
         // Create a single list of all unique nodes involved
-        WITH mentioned_papers_nodes + task_nodes + parent_model_nodes + derived_model_nodes + [center_model] AS all_nodes_intermediate,
+        WITH center_model, // Pass center_model through
+             mentioned_papers_nodes + task_nodes + parent_model_nodes + derived_model_nodes + [center_model] AS all_nodes_intermediate,
              mentions_rels + has_task_rels + is_base_for_rels + has_derived_rels AS all_rels_intermediate
 
 
         // Unwind nodes to format them and collect distinct formatted nodes
         UNWIND all_nodes_intermediate AS n_obj
-        WITH all_rels_intermediate, // Carry this forward first
+        WITH center_model, all_rels_intermediate, // Pass center_model through
              collect(DISTINCT { // Start collecting nodes
                  id: CASE
                        WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
@@ -1066,8 +1075,8 @@ class Neo4jRepository:
 
         // Unwind relationships to format them and collect distinct formatted relationships
         UNWIND all_rels_intermediate AS r_obj
-        WITH final_nodes, r_obj WHERE r_obj IS NOT NULL // Ensure relationship object is not null
-        WITH final_nodes, // Carry this forward
+        WITH center_model, final_nodes, r_obj WHERE r_obj IS NOT NULL // Pass center_model through
+        WITH center_model, final_nodes, // Carry this forward
              collect(DISTINCT { // Start collecting relationships
                  id: toString(elementId(r_obj)),
                  source: CASE
@@ -1088,7 +1097,7 @@ class Neo4jRepository:
                  properties: properties(r_obj)
              }) AS final_relationships
 
-        RETURN final_nodes, final_relationships
+        RETURN center_model, final_nodes, final_relationships
         """
         # The limit_per_relation_type is not directly used in this refined query structure
         # as it aims to fetch the full 1-hop neighborhood identified by the CALL blocks.
@@ -1096,18 +1105,31 @@ class Neo4jRepository:
 
         async with self.driver.session(database=self.db_name) as session:
             try:
-                # Use Query object for parameters
-                result = await session.run(query, {"model_id": model_id}) # Pass model_id directly if that's the only param for Query obj
-                record = await result.single() # Expecting a single row with two lists: nodes and relationships
+                center_model_result = await session.run(center_model_query, {"model_id": model_id})
+                center_model_record = await center_model_result.single()
 
-                if not record or not record["final_nodes"]: # Check if central model or any nodes were found
-                    logger.warning(f"No graph data or no nodes found for model {model_id} after Cypher execution.")
-                    return None
+                if not center_model_record or not center_model_record["model"]:
+                    logger.warning(f"Center model with ID {model_id} not found.")
+                    return None # Model itself not found
 
-                raw_nodes = record["final_nodes"]
-                raw_relationships = record["final_relationships"]
+                center_model_props = dict(center_model_record["model"].items())
+                
+                result = await session.run(query, {"model_id": model_id}) 
+                record = await result.single() 
 
-                # Convert Neo4j specific types in properties to Pydantic-serializable types
+                # Record might be None if the MATCH (center_model:HFModel {modelId: $model_id}) in the main query fails,
+                # but we've already checked for the center model's existence.
+                # If record is None here, it implies something went wrong or the model had absolutely no relations (even to itself in all_nodes_intermediate).
+                # This shouldn't happen if center_model_record was found.
+
+                raw_nodes = []
+                raw_relationships: List[Dict[str, Any]] = [] # Added type hint
+
+                if record and record["final_nodes"]:
+                    raw_nodes = record["final_nodes"]
+                    # Ensure relationships are only taken if nodes were found and processed
+                    raw_relationships = record["final_relationships"] if record["final_relationships"] is not None else []
+
                 final_nodes_list = []
                 for node_data in raw_nodes:
                     if isinstance(node_data.get("properties"), dict):
@@ -1120,12 +1142,37 @@ class Neo4jRepository:
                         rel_data["properties"] = _convert_neo4j_temporal_types(rel_data["properties"])
                     final_relationships_list.append(rel_data)
                 
+                # If final_nodes_list is empty or only contains the center model but relationships are also empty,
+                # ensure we return at least the center model.
+                if not final_nodes_list or (len(final_nodes_list) == 1 and final_nodes_list[0]['id'] == model_id and not final_relationships_list):
+                    # Construct the single node for the center model if not already correctly formatted or if list is empty
+                    center_node_formatted = {
+                        "id": model_id,
+                        "label": center_model_props.get("modelId", model_id), # or other display property
+                        "type": "HFModel", # Assuming labels(center_model_props)[0] would be HFModel
+                        "properties": _convert_neo4j_temporal_types(center_model_props)
+                    }
+                    # Check if final_nodes_list already has this, if not, overwrite.
+                    # This ensures if the query somehow returned an empty final_nodes list despite center_model existing, we fix it.
+                    if not any(n['id'] == model_id for n in final_nodes_list):
+                         final_nodes_list = [center_node_formatted]
+                    # Ensure relationships are empty for a single node graph
+                    final_relationships_list = []
+
+
                 # Ensure the central model node is present, if not, the query might have failed silently for it.
                 # However, the MATCH (center_model:HFModel ...) should ensure it or fail earlier.
                 if not any(node.get('id') == model_id and node.get('type') == 'HFModel' for node in final_nodes_list):
-                    logger.warning(f"Central model node {model_id} not found in the final_nodes list. Data might be incomplete.")
-                    # Optionally, if this is critical, return None or an empty structure.
-                    # For now, proceed with what was returned.
+                    # This case should ideally be covered by the logic above, but as a safeguard:
+                    logger.warning(f"Central model node {model_id} was not in final_nodes; adding it based on initial query.")
+                    center_node_formatted = {
+                        "id": model_id,
+                        "label": center_model_props.get("modelId", model_id), 
+                        "type": "HFModel", 
+                        "properties": _convert_neo4j_temporal_types(center_model_props)
+                    }
+                    final_nodes_list.append(center_node_formatted)
+
 
                 return {"nodes": final_nodes_list, "relationships": final_relationships_list}
 
@@ -1148,6 +1195,8 @@ class Neo4jRepository:
         - HFModels related by DERIVED_FROM (both directions).
         - Papers related by MENTIONS.
         - Tasks related by HAS_TASK.
+        If the model has no relationships, it returns a graph with only the model node.
+        Returns None if the model itself is not found.
 
         Args:
             focus_model_id: The modelId of the Hugging Face model to focus on.
@@ -1160,6 +1209,12 @@ class Neo4jRepository:
         if not self.driver:
             logger.error("Neo4j driver not available for get_radial_focus_graph.")
             return None
+
+        # Query to fetch the center model's properties first
+        center_model_query = """
+        MATCH (model:HFModel {modelId: $focus_model_id})
+        RETURN model
+        """
 
         # Cypher query to get the center model and its 1-hop relevant neighbors
         query = """
@@ -1188,7 +1243,7 @@ class Neo4jRepository:
         }
 
         // Combine all distinct nodes and relationships
-        WITH center_model,
+        WITH center_model, // Keep center_model for its properties
              COALESCE(derived_related_models_nodes, []) AS derived_related_models_nodes,
              COALESCE(mentioned_papers_nodes, []) AS mentioned_papers_nodes,
              COALESCE(task_nodes, []) AS task_nodes,
@@ -1197,12 +1252,13 @@ class Neo4jRepository:
              COALESCE(has_task_rels, []) AS has_task_rels
 
         // Create a single list of all unique nodes involved
-        WITH derived_related_models_nodes + mentioned_papers_nodes + task_nodes + [center_model] AS all_nodes_intermediate,
+        WITH center_model, // Pass center_model through
+             derived_related_models_nodes + mentioned_papers_nodes + task_nodes + [center_model] AS all_nodes_intermediate,
              derived_rels + mentions_rels + has_task_rels AS all_rels_intermediate
 
         // Unwind nodes to format them and collect distinct formatted nodes
         UNWIND all_nodes_intermediate AS n_obj
-        WITH all_rels_intermediate,
+        WITH center_model, all_rels_intermediate, // Pass center_model through
              collect(DISTINCT {
                  id: CASE
                        WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
@@ -1222,8 +1278,8 @@ class Neo4jRepository:
 
         // Unwind relationships to format them and collect distinct formatted relationships
         UNWIND all_rels_intermediate AS r_obj
-        WITH final_nodes, r_obj WHERE r_obj IS NOT NULL
-        WITH final_nodes,
+        WITH center_model, final_nodes, r_obj WHERE r_obj IS NOT NULL // Pass center_model through
+        WITH center_model, final_nodes, // Carry this forward
              collect(DISTINCT {
                  id: toString(elementId(r_obj)),
                  source: CASE
@@ -1256,23 +1312,65 @@ class Neo4jRepository:
                  properties: properties(r_obj)
              }) AS final_relationships
 
-        RETURN final_nodes, final_relationships
+        RETURN center_model, final_nodes, final_relationships
         """
 
         async with self.driver.session(database=self.db_name) as session:
             try:
+                center_model_result = await session.run(center_model_query, {"focus_model_id": focus_model_id})
+                center_model_record = await center_model_result.single()
+
+                if not center_model_record or not center_model_record["model"]:
+                    logger.warning(f"Center model with ID {focus_model_id} not found for radial graph.")
+                    return None # Model itself not found
+
+                center_model_props = dict(center_model_record["model"].items())
+
                 result = await session.run(query, {"focus_model_id": focus_model_id})
                 record = await result.single()
 
-                if not record or not record["final_nodes"]:
-                    logger.warning(f"No graph data or no nodes found for focus model {focus_model_id} in get_radial_focus_graph.")
-                    return None # Return None if center model or its neighborhood is empty
+                raw_nodes = []
+                raw_relationships: List[Dict[str, Any]] = []
 
-                raw_nodes = record["final_nodes"]
-                raw_relationships = record["final_relationships"]
+                if record and record["final_nodes"]:
+                    raw_nodes = record["final_nodes"]
+                    raw_relationships = record["final_relationships"] if record["final_relationships"] is not None else []
                 
-                final_nodes_list = [_convert_neo4j_temporal_types(node_data) for node_data in raw_nodes]
-                final_relationships_list = [_convert_neo4j_temporal_types(rel_data) for rel_data in raw_relationships]
+                final_nodes_list = []
+                for node_data in raw_nodes:
+                    if isinstance(node_data.get("properties"), dict):
+                        node_data["properties"] = _convert_neo4j_temporal_types(node_data["properties"])
+                    final_nodes_list.append(node_data)
+                
+                final_relationships_list = []
+                for rel_data in raw_relationships:
+                    if isinstance(rel_data.get("properties"), dict):
+                        rel_data["properties"] = _convert_neo4j_temporal_types(rel_data["properties"])
+                    final_relationships_list.append(rel_data)
+
+                # If final_nodes_list is empty or only contains the center model but relationships are also empty,
+                # ensure we return at least the center model.
+                if not final_nodes_list or (len(final_nodes_list) == 1 and final_nodes_list[0]['id'] == focus_model_id and not final_relationships_list):
+                    center_node_formatted = {
+                        "id": focus_model_id,
+                        "label": center_model_props.get("modelId", focus_model_id),
+                        "type": "HFModel",
+                        "properties": _convert_neo4j_temporal_types(center_model_props)
+                    }
+                    if not any(n['id'] == focus_model_id for n in final_nodes_list):
+                        final_nodes_list = [center_node_formatted]
+                    final_relationships_list = [] # Ensure relationships are empty
+
+                # Safeguard: Ensure the central model node is always present in the final list
+                if not any(node.get('id') == focus_model_id and node.get('type') == 'HFModel' for node in final_nodes_list):
+                    logger.warning(f"Central model node {focus_model_id} was not in final_nodes for radial; adding it.")
+                    center_node_formatted = {
+                        "id": focus_model_id,
+                        "label": center_model_props.get("modelId", focus_model_id), 
+                        "type": "HFModel", 
+                        "properties": _convert_neo4j_temporal_types(center_model_props)
+                    }
+                    final_nodes_list.append(center_node_formatted)
 
                 return {"nodes": final_nodes_list, "relationships": final_relationships_list}
 
