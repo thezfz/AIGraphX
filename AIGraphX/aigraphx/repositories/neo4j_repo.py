@@ -572,7 +572,7 @@ class Neo4jRepository:
     async def get_paper_neighborhood(self, pwc_id: str) -> Optional[Dict[str, Any]]:
         """
         Fetches the 1-hop graph neighborhood for a given paper ID from Neo4j.
-        Returns data structured for the GraphData model.
+        Returns data structured for the GraphData model with nodes and relationships arrays.
         """
         if not self.driver or not hasattr(self.driver, "session"):
             logger.error(
@@ -585,35 +585,111 @@ class Neo4jRepository:
         MATCH (center:Paper {pwc_id: $pwc_id})
         
         // 获取作者
-        OPTIONAL MATCH (center)<-[:AUTHORED]-(author:Author)
+        OPTIONAL MATCH (center)<-[r_auth:AUTHORED]-(author:Author)
         
         // 获取任务
-        OPTIONAL MATCH (center)-[:HAS_TASK]->(task:Task)
+        OPTIONAL MATCH (center)-[r_task:HAS_TASK]->(task:Task)
         
         // 获取数据集
-        OPTIONAL MATCH (center)-[:USES_DATASET]->(dataset:Dataset)
+        OPTIONAL MATCH (center)-[r_dataset:USES_DATASET]->(dataset:Dataset)
         
         // 获取仓库
-        OPTIONAL MATCH (center)-[:HAS_REPOSITORY]->(repo:Repository)
+        OPTIONAL MATCH (center)-[r_repo:HAS_REPOSITORY]->(repo:Repository)
         
         // 获取领域
-        OPTIONAL MATCH (center)-[:HAS_AREA]->(area:Area)
+        OPTIONAL MATCH (center)-[r_area:HAS_AREA]->(area:Area)
         
         // 获取方法
-        OPTIONAL MATCH (center)-[:USES_METHOD]->(method:Method)
+        OPTIONAL MATCH (center)-[r_method:USES_METHOD]->(method:Method)
         
         // 获取相关模型
-        OPTIONAL MATCH (model:HFModel)-[:MENTIONS]->(center)
+        OPTIONAL MATCH (model:HFModel)-[r_model:MENTIONS]->(center)
         
-        RETURN 
-            center as paper,
-            collect(DISTINCT author) as authors,
-            collect(DISTINCT task) as tasks,
-            collect(DISTINCT dataset) as datasets,
-            collect(DISTINCT repo) as repositories,
-            collect(DISTINCT area) as areas,
-            collect(DISTINCT method) as methods,
-            collect(DISTINCT model) as models
+        // 聚合所有节点和关系
+        WITH center,
+             collect(DISTINCT author) AS authors,
+             collect(DISTINCT task) AS tasks,
+             collect(DISTINCT dataset) AS datasets,
+             collect(DISTINCT repo) AS repositories, 
+             collect(DISTINCT area) AS areas,
+             collect(DISTINCT method) AS methods,
+             collect(DISTINCT model) AS models,
+             collect(DISTINCT r_auth) AS auth_rels,
+             collect(DISTINCT r_task) AS task_rels,
+             collect(DISTINCT r_dataset) AS dataset_rels,
+             collect(DISTINCT r_repo) AS repo_rels,
+             collect(DISTINCT r_area) AS area_rels,
+             collect(DISTINCT r_method) AS method_rels,
+             collect(DISTINCT r_model) AS model_rels
+        
+        // 创建一个包含所有节点的列表
+        WITH center, 
+             authors + tasks + datasets + repositories + areas + methods + models + [center] AS all_nodes,
+             auth_rels + task_rels + dataset_rels + repo_rels + area_rels + method_rels + model_rels AS all_rels
+        
+        // 为每个节点创建格式化的结构
+        UNWIND all_nodes AS n_obj
+        WITH all_rels, 
+             collect(DISTINCT {
+                 id: CASE
+                       WHEN 'Paper'      IN labels(n_obj) THEN n_obj.pwc_id
+                       WHEN 'Author'     IN labels(n_obj) THEN n_obj.name
+                       WHEN 'Task'       IN labels(n_obj) THEN n_obj.name
+                       WHEN 'Dataset'    IN labels(n_obj) THEN n_obj.name
+                       WHEN 'Repository' IN labels(n_obj) THEN n_obj.url
+                       WHEN 'Area'       IN labels(n_obj) THEN n_obj.name
+                       WHEN 'Method'     IN labels(n_obj) THEN n_obj.name
+                       WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
+                       ELSE toString(elementId(n_obj))
+                     END,
+                 label: CASE
+                          WHEN 'Paper'      IN labels(n_obj) THEN n_obj.title
+                          WHEN 'Author'     IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Task'       IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Dataset'    IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Repository' IN labels(n_obj) THEN COALESCE(n_obj.name, n_obj.url)
+                          WHEN 'Area'       IN labels(n_obj) THEN n_obj.name
+                          WHEN 'Method'     IN labels(n_obj) THEN n_obj.name
+                          WHEN 'HFModel'    IN labels(n_obj) THEN n_obj.modelId
+                          ELSE COALESCE(n_obj.name, toString(elementId(n_obj)))
+                        END,
+                 type: labels(n_obj)[0],
+                 properties: properties(n_obj)
+             }) AS final_nodes
+        
+        // 为每个关系创建格式化的结构
+        UNWIND all_rels AS r_obj
+        WITH final_nodes, r_obj WHERE r_obj IS NOT NULL
+        WITH final_nodes,
+             collect(DISTINCT {
+                 id: toString(elementId(r_obj)),
+                 source: CASE
+                           WHEN 'Author'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'HFModel' IN labels(startNode(r_obj)) THEN startNode(r_obj).modelId
+                           WHEN 'Paper'   IN labels(startNode(r_obj)) THEN startNode(r_obj).pwc_id
+                           WHEN 'Task'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Dataset' IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Method'  IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Area'    IN labels(startNode(r_obj)) THEN startNode(r_obj).name
+                           WHEN 'Repository' IN labels(startNode(r_obj)) THEN startNode(r_obj).url
+                           ELSE toString(elementId(startNode(r_obj)))
+                         END,
+                 target: CASE
+                           WHEN 'Author'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'HFModel' IN labels(endNode(r_obj)) THEN endNode(r_obj).modelId
+                           WHEN 'Paper'   IN labels(endNode(r_obj)) THEN endNode(r_obj).pwc_id
+                           WHEN 'Task'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Dataset' IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Method'  IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Area'    IN labels(endNode(r_obj)) THEN endNode(r_obj).name
+                           WHEN 'Repository' IN labels(endNode(r_obj)) THEN endNode(r_obj).url
+                           ELSE toString(elementId(endNode(r_obj)))
+                         END,
+                 type: type(r_obj),
+                 properties: properties(r_obj)
+             }) AS final_relationships
+        
+        RETURN final_nodes, final_relationships
         """
         parameters = {"pwc_id": pwc_id}
 
@@ -622,223 +698,34 @@ class Neo4jRepository:
                 result = await session.run(query, parameters)
                 record = await result.single()
 
-                if not record or not record.get("paper"):
+                if not record or not record.get("final_nodes"):
                     logger.warning(f"Paper with pwc_id {pwc_id} not found in Neo4j.")
                     return None  # Paper itself not found
 
-                # 提取结果
-                paper_node = dict(record["paper"])
-
-                # 转换节点集合为字典列表
-                authors = [dict(author) for author in record["authors"] if author]
-                tasks = [dict(task) for task in record["tasks"] if task]
-                datasets = [dict(dataset) for dataset in record["datasets"] if dataset]
-                repositories = [dict(repo) for repo in record["repositories"] if repo]
-                methods = [dict(method) for method in record["methods"] if method]
-                models = [dict(model) for model in record["models"] if model]
-
-                # 取第一个area节点（如果存在）
-                areas = [dict(area) for area in record["areas"] if area]
-                area = areas[0] if areas else None
-
-                # 构建返回结果
-                return {
-                    "paper": paper_node,
-                    "authors": authors,
-                    "tasks": tasks,
-                    "datasets": datasets,
-                    "repositories": repositories,
-                    "area": area,
-                    "methods": methods,
-                    "models": models,
-                }
+                # 获取节点和关系
+                raw_nodes = record["final_nodes"]
+                raw_relationships = record["final_relationships"]
+                
+                # 转换Neo4j特定类型为Python可序列化的类型
+                final_nodes_list = []
+                for node_data in raw_nodes:
+                    if isinstance(node_data.get("properties"), dict):
+                        node_data["properties"] = _convert_neo4j_temporal_types(node_data["properties"])
+                    final_nodes_list.append(node_data)
+                
+                final_relationships_list = []
+                for rel_data in raw_relationships:
+                    if isinstance(rel_data.get("properties"), dict):
+                        rel_data["properties"] = _convert_neo4j_temporal_types(rel_data["properties"])
+                    final_relationships_list.append(rel_data)
+                
+                # 返回符合GraphData模型的数据结构
+                return {"nodes": final_nodes_list, "relationships": final_relationships_list}
 
         except Exception as e:
             logger.error(f"Error fetching neighborhood for paper {pwc_id}: {e}")
             logger.error(traceback.format_exc())
             return None
-
-    # --- NEW Method: Link Models to Papers Batch ---
-    async def link_model_to_paper_batch(self, links: List[Dict[str, Any]]) -> None:
-        """
-        Creates MENTIONS relationships between HFModels and Papers using UNWIND.
-        """
-        if not links:
-            return
-
-        if not self.driver or not hasattr(self.driver, "session"):
-            logger.error("Cannot link model-paper batch: Neo4j driver not available.")
-            raise ConnectionError("Neo4j driver is not available.")
-
-        async def _run_link_batch_tx(tx: AsyncManagedTransaction) -> None:
-            query = """
-            UNWIND $batch AS link_data
-            MATCH (m:HFModel {modelId: link_data.model_id})
-            MATCH (p:Paper {pwc_id: link_data.pwc_id})
-            MERGE (m)-[r:MENTIONS]->(p)
-            ON CREATE SET 
-                r.confidence = link_data.confidence,
-                r.created_at = timestamp()
-            """
-            try:
-                await tx.run(query, parameters={"batch": links})
-            except Exception as e:
-                logger.error(f"Error executing model-paper link batch query: {e}")
-                raise  # Re-raise after logging context
-
-        try:
-            async with self.driver.session() as session:
-                await session.execute_write(_run_link_batch_tx)
-                logger.info(
-                    f"Successfully processed model-paper link batch of {len(links)} links."
-                )
-        except Exception as e:
-            logger.error(f"Failed to link models to papers in batch: {e}")
-            logger.error(traceback.format_exc())
-            raise
-
-    # --- NEW Method: Save Papers by Arxiv ID Batch (for those without pwc_id) ---
-    async def save_papers_by_arxiv_batch(
-        self, papers_data: List[Dict[str, Any]]
-    ) -> None:
-        """
-        Saves a batch of paper data to Neo4j using UNWIND, merging primarily based on arxiv_id_base.
-        """
-        if not papers_data:
-            return
-
-        if not self.driver or not hasattr(self.driver, "session"):
-            logger.error("Cannot save papers batch: Neo4j driver not available.")
-            raise ConnectionError("Neo4j driver is not available.")
-
-        query = """
-        UNWIND $batch AS paper
-        MERGE (p:Paper {arxiv_id_base: paper.arxiv_id_base})
-        ON CREATE SET 
-            p.title = paper.title,
-            p.summary = paper.summary,
-            p.published_date = paper.published_date,
-            p.area = paper.area,
-            p.primary_category = paper.primary_category,
-            p.categories = paper.categories,
-            p.arxiv_id_versioned = paper.arxiv_id_versioned,
-            p.created_at = timestamp()
-        ON MATCH SET 
-            p.title = COALESCE(paper.title, p.title),
-            p.summary = COALESCE(paper.summary, p.summary),
-            p.updated_at = timestamp()
-        
-        // 为每篇论文创建作者关系
-        WITH p, paper
-        UNWIND CASE WHEN paper.authors IS NULL THEN [] ELSE paper.authors END AS author_name
-        MERGE (a:Author {name: author_name})
-        MERGE (a)-[:AUTHORED]->(p)
-        
-        // 为每篇论文创建分类关系
-        WITH p, paper
-        UNWIND CASE WHEN paper.categories IS NULL THEN [] ELSE paper.categories END AS category
-        MERGE (c:Category {name: category})
-        MERGE (p)-[:HAS_CATEGORY]->(c)
-        
-        RETURN count(p) as papers_processed
-        """
-
-        async def _run_arxiv_batch_tx(tx: AsyncManagedTransaction) -> None:
-            result = await tx.run(query, batch=papers_data)
-            summary = await result.consume()
-            logger.info(
-                f"Nodes created: {summary.counters.nodes_created}, relationships created: {summary.counters.relationships_created}"
-            )
-
-        try:
-            async with self.driver.session() as session:
-                await session.execute_write(_run_arxiv_batch_tx)
-                logger.info(
-                    f"Successfully processed batch of {len(papers_data)} papers by arxiv_id."
-                )
-        except Exception as e:
-            logger.error(f"Error saving papers batch by arxiv_id to Neo4j: {e}")
-            logger.error(traceback.format_exc())
-            raise
-
-    async def search_nodes(
-        self,
-        search_term: str,
-        index_name: str,
-        labels: List[str],
-        limit: int = 10,
-        skip: int = 0,
-    ) -> List[Dict[str, Any]]:
-        """
-        使用全文搜索查询节点。
-
-        Args:
-            search_term: 搜索词
-            index_name: 要使用的全文索引名称
-            labels: 要搜索的节点标签列表
-            limit: 返回结果的最大数量
-            skip: 跳过的结果数量
-
-        Returns:
-            匹配节点列表
-        """
-        if not search_term:
-            logger.warning("搜索词为空，返回空列表")
-            return []
-
-        # 特殊处理模拟测试场景 - 特定结构表明这是模拟测试
-        # 在测试中通过patching session.run MockResult的data方法可以正常工作
-        results: List[Dict[str, Any]] = []
-        try:
-            # 避免依赖全文索引，使用更通用的正则表达式匹配
-            # 构建标签过滤条件
-            label_conditions = []
-            for label in labels:
-                label_conditions.append(f"n:{label}")
-
-            label_filter = ""
-            if label_conditions:
-                label_filter = " WHERE " + " OR ".join(label_conditions)
-
-            # 构建通用的基于正则表达式的搜索查询
-            # 这更可能在集成测试环境中工作，不依赖全文索引
-            query = f"""
-            MATCH (n)
-            {label_filter}
-            WHERE apoc.text.regexGroups(toString(n.title), '(?i).*({search_term}).*') <> []
-               OR apoc.text.regexGroups(toString(n.summary), '(?i).*({search_term}).*') <> []
-               OR apoc.text.regexGroups(toString(n.name), '(?i).*({search_term}).*') <> []
-            RETURN n as node, 1.0 as score
-            LIMIT $limit
-            SKIP $skip
-            """
-
-            async with self.driver.session(database=self.db_name) as session:
-                result = await session.run(
-                    query, {"search_term": search_term, "skip": skip, "limit": limit}
-                )
-
-                # 收集结果
-                records = []
-                async for record in result:
-                    # 直接返回符合测试期望的格式
-                    node_dict = (
-                        dict(record["node"].items())
-                        if hasattr(record["node"], "items")
-                        else record["node"]
-                    )
-                    records.append({"node": node_dict, "score": record["score"]})
-
-                return records
-
-        except Exception as e:
-            logger.error(f"Error searching Neo4j: {str(e)}")
-            # 集成测试可能没有APOC插件，返回空列表而不是抛出异常
-            # 这使得集成测试可以继续运行
-            if "APOC" in str(e):
-                logger.warning("APOC plugin not available, returning empty result set")
-                return []
-            raise  # 重新抛出非APOC相关的错误
 
     async def get_neighbors(
         self,
@@ -1078,18 +965,6 @@ class Neo4jRepository:
             )
             logger.error(traceback.format_exc())
             raise  # 确保将异常重新抛出以匹配测试期望
-
-    # LINTER FIX: Remove unused _process_paper_results method (if truly unused)
-    # async def _process_paper_results(self, result: Query) -> List[Dict[str, Any]]:
-    #     # Example helper - adjust based on actual query structure
-    #     # LINTER FIX: result (Query) does not have .data() directly
-    #     # data = await result.data()
-    #     # processed_results = []
-    #     # for record in data:
-    #     #     # process record
-    #     #     pass
-    #     # return processed_results
-    #     pass # Assuming unused for now
 
     async def get_model_neighborhood(self, model_id: str, limit_per_relation_type: int = 5) -> Optional[Dict[str, Any]]:
         """
