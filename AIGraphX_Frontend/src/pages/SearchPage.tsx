@@ -306,9 +306,6 @@ const SearchPage: React.FC = () => {
     return totalItems ? Math.ceil(totalItems / ITEMS_PER_PAGE) : 0;
   }, [searchResult]);
 
-  // --- 页面标题 ---
-  const pageTitle = searchTarget === 'papers' ? '搜索 AI 论文' : '搜索 AI 模型';
-
   // --- Helper to Update URL Search Params --- 
   const updateSearchParams = (newParams: {
     query?: string;
