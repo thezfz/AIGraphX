@@ -81,15 +81,24 @@ const PaperDetailPage: React.FC = () => {
     },
     physics: {
       enabled: true,
+      solver: 'forceAtlas2Based',
       forceAtlas2Based: {
         gravitationalConstant: -50,
-        centralGravity: 0.01,
-        springLength: 100,
+        centralGravity: 0.015, 
+        springLength: 150,
         springConstant: 0.08,
-        avoidOverlap: 0.5
+        damping: 0.5,
+        avoidOverlap: 0.8,
       },
-      solver: 'forceAtlas2Based',
-      stabilization: { iterations: 1000 }
+      maxVelocity: 50,
+      minVelocity: 0.75,
+      stabilization: {
+        enabled: true,
+        iterations: 1500,
+        updateInterval: 25,
+        onlyDynamicEdges: false,
+        fit: true,
+      },
     },
     interaction: {
       dragNodes: true,

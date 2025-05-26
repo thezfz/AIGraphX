@@ -162,17 +162,24 @@ const ModelDetailPage: React.FC = () => {
     },
     physics: {
       enabled: true,
+      solver: 'forceAtlas2Based', // barnesHut, forceAtlas2Based, hierarchicalRepulsion, repulsion
       forceAtlas2Based: {
-        gravitationalConstant: -60,
-        centralGravity: 0.02,
-        springLength: 120,
-        springConstant: 0.09,
-        avoidOverlap: 1.2,
+        gravitationalConstant: -50, // Default -50. Attracts nodes to each other. Negative values repel.
+        centralGravity: 0.015, // Default 0.01. Attracts nodes to the center (0,0).
+        springLength: 120, // Default 100. The rest length of the springs.
+        springConstant: 0.08, // Default 0.08. Stiffness of the springs.
+        damping: 0.4, // Increased from 0.3
+        avoidOverlap: 0.5, // Default 0. Makes nodes avoid overlapping. 1 is full avoidance.
       },
-      solver: 'forceAtlas2Based',
+      maxVelocity: 50, // Default 50
+      minVelocity: 0.5, // Increased from 0.1
       stabilization: {
-        iterations: 1200,
-      }
+        enabled: true,
+        iterations: 1000, // Max iterations for stabilization
+        updateInterval: 25,
+        onlyDynamicEdges: false,
+        fit: true,
+      },
     },
     interaction: {
       dragNodes: true,
