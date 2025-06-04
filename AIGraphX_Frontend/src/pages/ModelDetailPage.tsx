@@ -392,6 +392,56 @@ const ModelDetailPage: React.FC = () => {
             </div>
           )}
 
+          {/* Related Datasets Section */}
+          {modelDetails.dataset_links && Array.isArray(modelDetails.dataset_links) && modelDetails.dataset_links.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">相关数据集</h3>
+              <div className="bg-gray-50 p-4 rounded-md">
+                <ul className="list-disc list-inside space-y-2">
+                  {modelDetails.dataset_links.map((link, index) => (
+                    <li key={index} className="text-gray-700">
+                      <a 
+                        href={link} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                      >
+                        {link}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Related Papers Section */}
+          {modelDetails.related_papers && Array.isArray(modelDetails.related_papers) && modelDetails.related_papers.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">相关论文</h3>
+              <div className="space-y-3">
+                {modelDetails.related_papers.map((paper) => (
+                  paper.pwc_id && paper.title && ( // Ensure essential fields exist
+                    <div key={paper.pwc_id} className="bg-gray-50 p-4 rounded-md shadow-sm hover:shadow-md transition-shadow">
+                      <Link 
+                        to={`/papers/${encodeURIComponent(paper.pwc_id)}`} 
+                        className="text-blue-700 hover:text-blue-900 font-semibold hover:underline text-md"
+                      >
+                        {paper.title}
+                      </Link>
+                      {paper.published_date && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          发表于: {new Date(paper.published_date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                      )}
+                      {/* You can add more paper details here if available in BasicPaperInfo, e.g., authors */}
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* --- Knowledge Graph Section --- */}
           <div className="mt-6 pt-6 border-t border-gray-200 bg-gray-800 rounded-lg shadow-lg p-4"> {/* 深色背景+圆角+阴影 */}
             <h3 className="text-lg font-semibold text-gray-100 mb-3">知识图谱关联</h3>
@@ -442,28 +492,6 @@ const ModelDetailPage: React.FC = () => {
                   </ReactMarkdown>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* ADDED: Dataset Links Section */}
-          {modelDetails.dataset_links && Array.isArray(modelDetails.dataset_links) && modelDetails.dataset_links.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-700 mb-3">相关数据集</h3>
-              <ul className="list-disc list-inside space-y-1 pl-2">
-                {modelDetails.dataset_links.map((link: string, index: number) => (
-                  <li key={index} className="text-sm">
-                    <a 
-                      href={link} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-blue-600 hover:text-blue-800 hover:underline break-all"
-                      title={link}
-                    >
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
 

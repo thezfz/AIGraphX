@@ -2,7 +2,22 @@ import React, { useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePaperDetail, usePaperGraphData } from '../api/apiQueries';
 import Spinner from '../components/common/Spinner';
-import { DocumentTextIcon, LinkIcon, TagIcon, BeakerIcon, CircleStackIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { 
+  DocumentTextIcon, 
+  LinkIcon, 
+  TagIcon, 
+  BeakerIcon, 
+  CircleStackIcon, 
+  UserGroupIcon,
+  CodeBracketIcon,
+  StarIcon,
+  CheckBadgeIcon,
+  CubeTransparentIcon,
+  ScaleIcon,
+  LanguageIcon,
+  CpuChipIcon
+} from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
 
 // 导入 react-graph-vis 和其 CSS
 import Graph from 'react-graph-vis';
@@ -35,6 +50,13 @@ const PaperDetailPage: React.FC = () => {
       console.log('Paper GRAPH data received:', paperGraphData);
     }
   }, [paperDetails, paperGraphData]);
+
+  const relatedModels = useMemo(() => {
+    if (paperGraphData && paperGraphData.nodes) {
+      return paperGraphData.nodes.filter(node => node.type === 'HFModel');
+    }
+    return [];
+  }, [paperGraphData]);
 
   const graph = useMemo(() => {
     if (!paperGraphData || !paperGraphData.nodes || !paperGraphData.relationships) {
@@ -274,6 +296,79 @@ const PaperDetailPage: React.FC = () => {
                      </div>
                 </div>
               )}
+          </div>
+        )}
+
+        {/* Repositories Section */}
+        {paperDetails.repositories && paperDetails.repositories.length > 0 && (
+          <div className="border-t border-gray-200 pt-6">
+            <h2 className="text-lg font-semibold mb-3 text-gray-800 inline-flex items-center">
+              <CodeBracketIcon className="h-5 w-5 mr-2 text-gray-500" /> 代码仓库
+            </h2>
+            <div className="space-y-4">
+              {paperDetails.repositories.map((repo: any, index: number) => (
+                <div key={index} className="bg-gray-50 p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  {repo.url && (
+                    <div className="mb-2">
+                      <a href={repo.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline font-medium break-all inline-flex items-center">
+                        <LinkIcon className="h-4 w-4 mr-1.5 flex-shrink-0" /> {repo.url}
+                      </a>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                    {typeof repo.stars === 'number' && (
+                      <div className="flex items-center text-gray-700">
+                        <StarIcon className="h-4 w-4 mr-1.5 text-yellow-500 flex-shrink-0" /> Stars: <span className="font-semibold ml-1">{repo.stars.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {typeof repo.is_official === 'boolean' && repo.is_official && (
+                      <div className="flex items-center text-green-700">
+                        <CheckBadgeIcon className="h-4 w-4 mr-1.5 text-green-500 flex-shrink-0" /> 官方实现
+                      </div>
+                    )}
+                    {repo.framework && (
+                      <div className="flex items-center text-gray-700">
+                        <CubeTransparentIcon className="h-4 w-4 mr-1.5 text-purple-500 flex-shrink-0" /> 框架: <span className="font-semibold ml-1">{repo.framework}</span>
+                      </div>
+                    )}
+                    {repo.license && (
+                      <div className="flex items-center text-gray-700">
+                        <ScaleIcon className="h-4 w-4 mr-1.5 text-gray-500 flex-shrink-0" /> 许可证: <span className="font-semibold ml-1">{repo.license}</span>
+                      </div>
+                    )}
+                    {repo.language && (
+                      <div className="flex items-center text-gray-700">
+                        <LanguageIcon className="h-4 w-4 mr-1.5 text-blue-500 flex-shrink-0" /> 语言: <span className="font-semibold ml-1">{repo.language}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Related Models Section */}
+        {relatedModels.length > 0 && (
+          <div className="border-t border-gray-200 pt-6">
+            <h2 className="text-lg font-semibold mb-3 text-gray-800 inline-flex items-center">
+              <CpuChipIcon className="h-5 w-5 mr-2 text-gray-500" /> 相关模型
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {relatedModels.map((modelNode) => (
+                <div key={modelNode.id} className="bg-gray-50 p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <Link
+                    to={`/models/${encodeURIComponent(modelNode.id)}`}
+                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                  >
+                    {modelNode.label || modelNode.id}
+                  </Link>
+                  <p className="text-xs text-gray-500 mt-1">
+                    ID: {modelNode.id}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
