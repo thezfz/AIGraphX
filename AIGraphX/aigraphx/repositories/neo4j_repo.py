@@ -316,7 +316,7 @@ class Neo4jRepository:
         FOREACH (dataset_name IN paper_props.datasets | // Assumes datasets is a list
             MERGE (d:Dataset {name: dataset_name})
             ON CREATE SET d.created_at = timestamp()
-            MERGE (p)-[r_data:USES_DATASET]->(d)
+            MERGE (p)-[r_data:PAPER_USES_DATASET]->(d) // Changed from USES_DATASET
             ON CREATE SET r_data.created_at = timestamp()
         )
 
@@ -504,6 +504,17 @@ class Neo4jRepository:
             ON CREATE SET t.created_at = timestamp()
             MERGE (m)-[r_task:HAS_TASK]->(t)
             ON CREATE SET r_task.created_at = timestamp()
+        )
+
+        // --- ADDED: Merge Dataset and Relationship from hf_dataset_links ---
+        FOREACH (dataset_name IN CASE WHEN model_props.hf_dataset_links IS NOT NULL THEN model_props.hf_dataset_links ELSE [] END |
+            // Ensure dataset_name is a string and not empty before merging
+            FOREACH (ignoreEmpty IN CASE WHEN dataset_name IS NOT NULL AND dataset_name <> '' THEN [1] ELSE [] END |
+                MERGE (d:Dataset {name: dataset_name})
+                ON CREATE SET d.created_at = timestamp()
+                MERGE (m)-[r_dataset:MODEL_USES_DATASET]->(d)  // Changed from USES_DATASET
+                ON CREATE SET r_dataset.created_at = timestamp()
+            )
         )
         """
 

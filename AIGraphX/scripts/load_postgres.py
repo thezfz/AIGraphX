@@ -592,7 +592,7 @@ async def process_batch(
                             conn,
                             paper_id,
                             "dataset",
-                            pwc_entry.get("datasets_used"),  # Assuming field name
+                            pwc_entry.get("datasets"),  # Changed "datasets_used" to "datasets"
                         )
                         await insert_pwc_repositories(
                             conn, paper_id, pwc_entry.get("repositories")
