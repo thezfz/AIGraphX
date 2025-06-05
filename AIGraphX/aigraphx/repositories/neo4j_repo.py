@@ -602,7 +602,7 @@ class Neo4jRepository:
         OPTIONAL MATCH (center)-[r_task:HAS_TASK]->(task:Task)
         
         // 获取数据集
-        OPTIONAL MATCH (center)-[r_dataset:USES_DATASET]->(dataset:Dataset)
+        OPTIONAL MATCH (center)-[r_dataset:PAPER_USES_DATASET]->(dataset:Dataset)
         
         // 获取仓库
         OPTIONAL MATCH (center)-[r_repo:HAS_REPOSITORY]->(repo:Repository)

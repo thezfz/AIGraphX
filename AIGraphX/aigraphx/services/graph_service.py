@@ -82,7 +82,7 @@ class GraphService:
                     start_node_label="Paper",
                     start_node_prop="pwc_id",
                     start_node_val=pwc_id,
-                    relationship_type="USES_DATASET",
+                    relationship_type="PAPER_USES_DATASET",
                     target_node_label="Dataset",
                     direction="OUT",
                     limit=50,
