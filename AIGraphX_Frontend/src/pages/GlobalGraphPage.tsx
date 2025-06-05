@@ -47,11 +47,17 @@ const getNodeColor = (nodeType: string | undefined): string => {
     case 'Task': return 'rgba(75, 192, 192, 1)';    // Green, full opacity
     case 'Dataset': return 'rgba(255, 206, 86, 1)';  // Yellow, full opacity
     case 'Method': return 'rgba(153, 102, 255, 1)'; // Purple, full opacity
+    case 'Repository': return 'rgba(210, 180, 140, 1)'; // Tan
+    case 'Author': return 'rgba(255, 165, 0, 1)';    // Orange
+    case 'Area': return 'rgba(64, 224, 208, 1)';    // Turquoise
+    case 'Framework': return 'rgba(173, 216, 230, 1)'; // Light Blue
+    case 'Category': return 'rgba(250, 128, 114, 1)'; // Salmon Coral
+    // case 'ArxivCategory': return 'rgba(220, 220, 220, 1)'; // Light Grey (if needed later)
     default: return 'rgba(201, 203, 207, 1)';     // Grey, full opacity
   }
 };
 
-const NODE_TYPES_FOR_LEGEND = ['HFModel', 'Paper', 'Task', 'Dataset', 'Method', 'Other'];
+const NODE_TYPES_FOR_LEGEND = ['HFModel', 'Paper', 'Task', 'Dataset', 'Method', 'Repository', 'Author', 'Area', 'Framework', 'Category'];
 
 // 创建可重用的几何体以提高性能
 const nodeGeometry = new THREE.SphereGeometry(1, 12, 6); // Further reduced segments
@@ -188,7 +194,7 @@ const GlobalGraphPage: React.FC = () => {
           <h4 className="font-bold mb-1">图例:</h4>
           {NODE_TYPES_FOR_LEGEND.map(type => (
             <div key={type} className="flex items-center mb-0.5">
-              <span style={{ backgroundColor: getNodeColor(type === 'Other' ? undefined : type), width: '12px', height: '12px', marginRight: '5px', display: 'inline-block', border: '1px solid #ccc' }}></span>
+              <span style={{ backgroundColor: getNodeColor(type), width: '12px', height: '12px', marginRight: '5px', display: 'inline-block', border: '1px solid #ccc' }}></span>
               {type}
             </div>
           ))}
