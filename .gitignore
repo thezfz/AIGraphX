@@ -134,6 +134,7 @@ AIGraphX/test_output.log # Added based on list_dir
 # Cursor AI history - Specify for each project
 AIGraphX/.specstory/
 AIGraphX_Frontend/.specstory/
+AIGraphX/.cursor/
 
 # Frontend specific (AIGraphX_Frontend)
 AIGraphX_Frontend/node_modules/
